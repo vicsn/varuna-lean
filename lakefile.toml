@@ -3,6 +3,10 @@ version = "0.1.0"
 keywords = ["cryptography", "snark", "formal-verification", "varuna"]
 defaultTargets = ["Varuna"]
 
+# `lint.sh --lake-lint` requires a configured driver. Iteration 0 has no
+# extra package lints; the driver is a no-op so the hook can run `--all`.
+lintDriver = "lint"
+
 [leanOptions]
 pp.unicode.fun = true
 autoImplicit = false
@@ -13,3 +17,8 @@ autoImplicit = false
 
 [[lean_lib]]
 name = "Varuna"
+
+[[lean_exe]]
+name = "lint"
+srcDir = "scripts"
+root = "Lint"

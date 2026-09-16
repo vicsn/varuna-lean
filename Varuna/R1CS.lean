@@ -6,7 +6,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 import Varuna.PrimeField
 
 /-!
-# The Varuna SNARK relation: R1CS
+# The Varuna SNARK relation : R1CS
 
 Varuna (Marlin [CHMMVW19], as specified in `varuna-sage-impl/docs/spec.pdf`
 and implemented in snarkVM) proves knowledge of a witness `z` satisfying
@@ -19,7 +19,7 @@ over a prime field — the Hadamard (row-wise) product of the three matrix–
 vector products. snarkVM stores the same relation as a list of sparse
 constraints `(Aᵢ · z)(Bᵢ · z) = (Cᵢ · z)`.
 
-This module is iteration 0 of the formalization: it defines both views and
+This module is iteration 0 of the formalization : it defines both views and
 proves the first sorry-free lemmas the rest of the AHP will sit on.
 
 * **Proven (this commit).** Empty systems are satisfied; a single
@@ -51,6 +51,7 @@ inductive PseudoVar where
   | var (v : Var)
 deriving Repr, DecidableEq, Inhabited
 
+/-- Evaluate a pseudo-variable: the constant 1, or the assigned value. -/
 def PseudoVar.value (pv : PseudoVar) (asg : Assignment) : Int :=
   match pv with
   | .one => 1
@@ -68,10 +69,12 @@ def dotProduct (vec : SparseVector) (asg : Assignment) (p : Nat) : Int :=
   | (coeff, pv) :: rest =>
     add (mul (coeff % (p : Int)) (pv.value asg) p) (dotProduct rest asg p) p
 
+/-- The empty sparse vector dots to 0. -/
 @[simp] theorem dotProduct_nil (asg : Assignment) (p : Nat) :
     dotProduct [] asg p = 0 :=
   rfl
 
+/-- Unfolding a cons cell of a sparse dot product. -/
 theorem dotProduct_cons (coeff : Int) (pv : PseudoVar) (rest : SparseVector)
     (asg : Assignment) (p : Nat) :
     dotProduct ((coeff, pv) :: rest) asg p =
@@ -79,6 +82,7 @@ theorem dotProduct_cons (coeff : Int) (pv : PseudoVar) (rest : SparseVector)
         (dotProduct rest asg p) p :=
   rfl
 
+/-- A sparse dot product is always a field element. -/
 theorem fep_dotProduct (vec : SparseVector) (asg : Assignment) {p : Nat}
     (hp : 0 < p) : Fep p (dotProduct vec asg p) := by
   induction vec with
@@ -94,6 +98,7 @@ structure Constraint where
   c : SparseVector
 deriving Repr, DecidableEq, Inhabited
 
+/-- A constraint holds when the Hadamard identity is true at this row. -/
 def constraintHolds (c : Constraint) (asg : Assignment) (p : Nat) : Prop :=
   mul (dotProduct c.a asg p) (dotProduct c.b asg p) p = dotProduct c.c asg p
 
@@ -102,22 +107,24 @@ def satisfies : List Constraint → Assignment → Nat → Prop
   | [], _, _ => True
   | c :: cs, asg, p => constraintHolds c asg p ∧ satisfies cs asg p
 
-/-- The first proven lemma: an empty constraint system is always satisfied.
-This is the base of the Hadamard characterization (`m = 0`). -/
+/-- An empty constraint list is satisfied by any assignment. -/
 @[simp] theorem satisfies_nil (asg : Assignment) (p : Nat) :
     satisfies [] asg p :=
   trivial
 
+/-- Satisfaction of a cons cell is the head constraint and the tail. -/
 theorem satisfies_cons (c : Constraint) (cs : List Constraint)
     (asg : Assignment) (p : Nat) :
     satisfies (c :: cs) asg p ↔
       constraintHolds c asg p ∧ satisfies cs asg p :=
   Iff.rfl
 
+/-- A singleton list is satisfied iff its unique constraint holds. -/
 theorem satisfies_single (c : Constraint) (asg : Assignment) (p : Nat) :
     satisfies [c] asg p ↔ constraintHolds c asg p := by
   simp [satisfies_cons]
 
+/-- Satisfaction splits over list append. -/
 theorem satisfies_append (cs1 cs2 : List Constraint)
     (asg : Assignment) (p : Nat) :
     satisfies (cs1 ++ cs2) asg p ↔
@@ -128,19 +135,20 @@ theorem satisfies_append (cs1 cs2 : List Constraint)
     rw [List.cons_append, satisfies_cons, satisfies_cons, ih]
     exact and_assoc.symm
 
+/-- A one-term sparse vector `coeff · v`. -/
 def monomial (coeff : Int) (v : Var) : SparseVector :=
   [(coeff, .var v)]
 
-/-- The multiplication constraint `(x)(y) = (out)`. Every Varuna circuit is
-a composition of constraints of this shape (plus linear combinations
-absorbed into the sparse rows). -/
+/-- The multiplication constraint `(x)(y) = (out)`. -/
 def mulConstraint (x y out : Var) : Constraint :=
   { a := monomial 1 x, b := monomial 1 y, c := monomial 1 out }
 
+/-- Evaluating a variable pseudo-var reads the assignment. -/
 theorem PseudoVar.value_var (v : Var) (asg : Assignment) :
     (PseudoVar.var v).value asg = asg v :=
   rfl
 
+/-- Dotting the unit monomial `1 · v` recovers the assigned value. -/
 theorem dotProduct_monomial_one (v : Var) (asg : Assignment) {p : Nat}
     (hp : 2 ≤ p) (hv : Fep p (asg v)) :
     dotProduct (monomial 1 v) asg p = asg v := by
@@ -151,9 +159,7 @@ theorem dotProduct_monomial_one (v : Var) (asg : Assignment) {p : Nat}
   rw [hmul]
   exact add_zero_right hv
 
-/-- A multiplication constraint holds iff the assigned values multiply.
-This is the first non-trivial proven node on the proof map
-(`mulConstraint_holds_iff`). -/
+/-- A multiplication constraint holds iff the assigned values multiply. -/
 theorem mulConstraint_holds_iff (x y out : Var) (asg : Assignment) {p : Nat}
     (hp : 2 ≤ p) (hx : Fep p (asg x)) (hy : Fep p (asg y))
     (hout : Fep p (asg out)) :
@@ -167,47 +173,41 @@ theorem mulConstraint_holds_iff (x y out : Var) (asg : Assignment) {p : Nat}
   · intro h; exact h.symm
   · intro h; exact h.symm
 
-/-- Dense row-dot: `∑_{j < n} M i j * z j`, computed recursively. The
-iteration-1 Mathlib port will replace this with `Matrix.mulVec`. -/
+/-- Dense row-dot `∑_{j < n} M i j * z j`, computed recursively. -/
 def rowDot (M : Nat → Nat → Int) (i : Nat) (z : Assignment) (n p : Nat) : Int :=
   match n with
   | 0 => 0
   | n + 1 =>
     add (rowDot M i z n p) (mul (M i n) (z n) p) p
 
-/-- The Hadamard form used by the Varuna AHP / Marlin indexer:
-`(Az)ᵢ (Bz)ᵢ = (Cz)ᵢ` for every constraint row `i < m`. -/
+/-- Hadamard form of R1CS: `(Az)ᵢ (Bz)ᵢ = (Cz)ᵢ` for every row `i < m`. -/
 def hadamardSat (A B C : Nat → Nat → Int) (z : Assignment)
     (n m p : Nat) : Prop :=
   ∀ i, i < m →
     mul (rowDot A i z n p) (rowDot B i z n p) p = rowDot C i z n p
 
-/-- Empty Hadamard system (`m = 0`). Together with `satisfies_nil` this is
-the agreed base case of the sparse ↔ dense equivalence, which is otherwise
-still open. -/
+/-- The empty Hadamard system (`m = 0`) holds for any matrices and witness. -/
 theorem hadamardSat_zero (A B C : Nat → Nat → Int) (z : Assignment)
     (n p : Nat) : hadamardSat A B C z n 0 p := by
   intro i hi
   exact (Nat.not_lt_zero i hi).elim
 
-/-- Concrete check used by the proof-map caption: over the toy prime `17`,
-the assignment `x=3, y=5, out=15` satisfies `x * y = out`. -/
+/-- Toy prime used by the concrete multiplication check. -/
 def toyPrime : Nat := 17
 
+/-- Toy assignment `x=3, y=5, out=15` for the multiplication check. -/
 def toyAsg : Assignment
   | 0 => 3
   | 1 => 5
   | 2 => 15
   | _ => 0
 
+/-- Every value of the toy assignment is a field element of `𝔽₁₇`. -/
 theorem toy_fep (v : Var) : Fep toyPrime (toyAsg v) := by
   unfold toyAsg toyPrime Fep
   split <;> omega
 
-/-- End-to-end instance of the first proven lemma, at concrete values.
-Proved by reduction (`rfl`) rather than `decide`, so the axiom set
-stays inside the standard classical tier and does not pick up
-`Classical.choice` from the decidability instance. -/
+/-- Concrete instance: `3 * 5 = 15` satisfies the multiplication constraint over `𝔽₁₇`. -/
 theorem toy_mul_holds :
     constraintHolds (mulConstraint 0 1 2) toyAsg toyPrime := by
   refine (mulConstraint_holds_iff 0 1 2 toyAsg
