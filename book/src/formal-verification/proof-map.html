@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Varuna Soundness · Proof Structure Map</title>
+<style>
+:root {
+  --bg: #eef1f7;
+  --surface: #ffffff;
+  --surface-2: #f6f8fc;
+  --ink: #16203a;
+  --muted: #5a6784;
+  --line: #d4dbe8;
+  --accent: #0e8fa3;
+  --c-proven: #2f9e63;
+  --c-hyp: #c9861a;
+  --c-floor: #c2503c;
+  --c-incoming: #0e8fa3;
+  --c-object: #7683a0;
+  --shadow: 0 1px 2px rgba(22,32,58,.06), 0 8px 28px rgba(22,32,58,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0f1e; --surface: #111a2e; --surface-2: #0e1728; --ink: #dde5f4;
+    --muted: #8795ae; --line: #263248; --accent: #2cc3d6;
+    --c-proven: #46b979; --c-hyp: #e0a63c; --c-floor: #e0715b;
+    --c-incoming: #2cc3d6; --c-object: #8695b2;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="light"] {
+  --bg: #eef1f7; --surface: #ffffff; --surface-2: #f6f8fc; --ink: #16203a;
+  --muted: #5a6784; --line: #d4dbe8; --accent: #0e8fa3;
+  --c-proven: #2f9e63; --c-hyp: #c9861a; --c-floor: #c2503c;
+  --c-incoming: #0e8fa3; --c-object: #7683a0;
+}
+:root[data-theme="dark"] {
+  --bg: #0a0f1e; --surface: #111a2e; --surface-2: #0e1728; --ink: #dde5f4;
+  --muted: #8795ae; --line: #263248; --accent: #2cc3d6;
+  --c-proven: #46b979; --c-hyp: #e0a63c; --c-floor: #e0715b;
+  --c-incoming: #2cc3d6; --c-object: #8695b2;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+header.top {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 22px;
+}
+header.top h1 { font-size: 18px; font-weight: 640; margin: 0; letter-spacing: -.01em; }
+header.top p { margin: 3px 0 0; color: var(--muted); font-size: 13px; max-width: 72ch; }
+.state {
+  margin-left: auto; align-self: center;
+  font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
+  background: var(--surface-2); white-space: nowrap;
+}
+.layout { display: grid; grid-template-columns: 1fr 336px; gap: 0; }
+@media (max-width: 1040px) { .layout { grid-template-columns: 1fr; } }
+.stage { min-width: 0; padding: 12px 12px 18px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 6px 12px; }
+.toolbar .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-right: 2px; }
+.chip {
+  font: inherit; font-size: 12.5px; cursor: pointer;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.chip:hover { border-color: var(--accent); }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+.chip:focus-visible, .node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mapwrap { background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+svg.map { display: block; width: 100%; min-width: 0; height: auto; }
+.terr { fill: var(--th); opacity: .5; stroke: var(--ts); stroke-width: 1; stroke-dasharray: 3 5; rx: 16; }
+.terr-label { font-size: 14px; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; fill: var(--ts); }
+.map-title { font-size: 24px; font-weight: 650; fill: var(--ink); letter-spacing: .015em; }
+.edge { fill: none; stroke-width: 2; opacity: .55; }
+.edge.entails { stroke: var(--ink); }
+.edge.discharges { stroke: var(--accent); stroke-dasharray: 7 5; }
+.edge.rests { stroke: var(--c-floor); stroke-dasharray: 1.5 5; stroke-linecap: round; }
+.edge.hot { opacity: 1; stroke-width: 3; }
+.edge.dim { opacity: .05; }
+.node { cursor: pointer; }
+.node .box { fill: var(--nf); stroke: var(--ns); stroke-width: 1.75; rx: 9; filter: drop-shadow(0 1px 1px rgba(0,0,0,.05)); }
+.node .label { font-size: 15.5px; font-weight: 650; fill: var(--ink); dominant-baseline: middle; }
+.node.goal .box { fill: var(--accent); stroke: var(--accent); }
+.node.goal .label { fill: #fff; }
+.node.dim { opacity: .2; }
+.rail { border-left: 1px solid var(--line); padding: 14px 18px 26px; min-width: 0; }
+@media (max-width: 1040px) { .rail { border-left: none; border-top: 1px solid var(--line); } }
+.rail h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 0 0 10px; }
+.legend { display: grid; gap: 9px; margin-bottom: 20px; }
+.legend .row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.legend .swatch { width: 26px; height: 0; border-top-width: 3px; border-top-style: solid; flex: none; }
+.legend .sq { width: 15px; height: 15px; border-radius: 4px; border: 1.75px solid; flex: none; }
+.legend .muted { color: var(--muted); }
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.detail .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: 3px 9px; border-radius: 999px; border: 1px solid; margin-bottom: 10px; }
+.detail .title { font-family: ui-monospace, monospace; font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+.detail .anchor { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); word-break: break-word; margin-bottom: 12px; }
+.detail .role { font-size: 13.5px; margin: 0 0 14px; }
+.detail .conns { display: grid; gap: 7px; }
+.detail .conns .c { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+.detail .conns .verb { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); flex: none; min-width: 100px; }
+.detail .conns .verb.discharges { color: var(--accent); }
+.detail .conns .verb.rests { color: var(--c-floor); }
+.detail .conns .to { font-family: ui-monospace, monospace; }
+.detail .conns .via { font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--muted); }
+.detail .empty { color: var(--muted); font-size: 13px; }
+.detail .hint { font-size: 12.5px; color: var(--muted); margin: 12px 0 0; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Varuna Soundness · Proof Structure Map</h1>
+    <p>
+      How a knowledge-soundness proof of the deployed Varuna verifier is
+      intended to fit together — the theorems, the assumptions they still
+      carry, and what remains outside Lean. Iteration 0 colours only the
+      R1CS relation, and only partially.
+    </p>
+  </div>
+  <div class="state">iteration 0 · partial</div>
+</header>
+
+<div class="layout">
+  <div class="stage">
+    <div class="toolbar" id="filters">
+      <span class="lbl">Show</span>
+      <button class="chip" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" data-f="proven"><span class="dot" style="background:var(--c-proven)"></span>Proven</button>
+      <button class="chip" data-f="hyp"><span class="dot" style="background:var(--c-hyp)"></span>Hypothesis</button>
+      <button class="chip" data-f="floor"><span class="dot" style="background:var(--c-floor)"></span>Out-of-Lean</button>
+      <button class="chip" data-f="object"><span class="dot" style="background:var(--c-object)"></span>Definitions</button>
+    </div>
+    <div class="mapwrap">
+      <svg class="map" id="map" viewBox="0 0 1680 1100" role="img" aria-label="Varuna proof structure map"></svg>
+    </div>
+  </div>
+  <aside class="rail">
+    <h2>Legend</h2>
+    <div class="legend">
+      <div class="row"><span class="swatch" style="border-top-color:var(--ink)"></span>entails — B follows from its incoming input(s)</div>
+      <div class="row"><span class="swatch" style="border-top-color:var(--accent);border-top-style:dashed"></span>discharges — A proves away assumption B</div>
+      <div class="row"><span class="swatch" style="border-top-color:var(--c-floor);border-top-style:dashed"></span>rests on — B is an assumption needed by A</div>
+      <div class="row"><span class="sq" style="border-color:var(--c-proven);background:color-mix(in srgb,var(--c-proven) 11%,var(--surface))"></span>Proven theorem</div>
+      <div class="row"><span class="sq" style="border-color:var(--c-hyp);background:color-mix(in srgb,var(--c-hyp) 11%,var(--surface))"></span>Hypothesis in statement</div>
+      <div class="row"><span class="sq" style="border-color:var(--c-floor);background:color-mix(in srgb,var(--c-floor) 11%,var(--surface))"></span>Out-of-Lean assumption</div>
+      <div class="row"><span class="sq" style="border-color:var(--c-object);background:color-mix(in srgb,var(--c-object) 11%,var(--surface))"></span>Definition — a claim or construction</div>
+      <div class="row"><span class="sq" style="border-color:var(--accent);background:var(--accent)"></span>Top-level result</div>
+    </div>
+    <h2>Detail</h2>
+    <div class="detail" id="detail">
+      <p class="empty">Hover or click a node to see what it is, its Lean anchor, and every theorem it connects to.</p>
+      <p class="hint">The spine runs down the left: accepting proof → FS challenges → PC openings → AHP checks → R1CS. Green nodes are the iteration-0 proof of concept.</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+const SVGNS = "http://www.w3.org/2000/svg";
+const COL = c => 130 + c * 236;
+const ROW = r => 100 + r * 118;
+
+const territories = [
+  { id:'faith', label:'Faithfulness', cells:[[1,0],[2,0]], h:'#b0873a' },
+  { id:'ahp', label:'AHP · PIOPs', cells:[[0,4],[1,4],[0,5],[1,5],[0,6]], h:'#6f7bd6', headroom:28 },
+  { id:'rel', label:'R1CS relation · iteration 0', cells:[[0,7],[1,7],[2,7]], h:'var(--c-proven)', headroom:26 },
+  { id:'pc', label:'Polynomial commitment', cells:[[2,3],[3,3],[2,4]], h:'#a06fb0', labelSide:'right' },
+  { id:'fs', label:'Fiat–Shamir', cells:[[2,1],[3,1],[2,2]], h:'#c15f86', labelSide:'right', headroom:28 },
+  { id:'sz', label:'Schwartz–Zippel', cells:[[3,5],[3,6]], h:'var(--c-incoming)', labelSide:'right' },
+  { id:'floor', label:'Assumptions · outside Lean', cells:[[0,8],[1,8],[2,8],[3,8],[4,8]], h:'var(--c-floor)' },
+];
+
+const nodes = [
+  { id:'rustVerifier', c:0, r:0, w:230, label:'deployed verifier', status:'object',
+    anchor:'snarkVM algorithms/src/snark/varuna (out of Lean)',
+    role:'The Rust verifier validators run. Iteration 7 will put a Lean model of its assembled pairing/MSM equation next to this node; until then it is a definition of the target, not a theorem.' },
+  { id:'pinnedRust', c:1, r:0, w:200, label:'pinned to Rust', status:'hyp',
+    anchor:'Fingerprint / fixtures — not started',
+    role:'Ironwood-style faithfulness: Lean and snarkVM agree on captured proofs. Not started. The Sage test vectors are the first fixture candidates; Sage is single-circuit and is not the deployed system.' },
+  { id:'accept', c:0, r:1, w:210, label:'accepting proof', status:'object',
+    anchor:'Varuna.Verifier.Accepts — not started',
+    role:'The concrete accept condition of the deployed verifier. The premise the soundness spine hangs from.' },
+  { id:'fsTranscript', c:0, r:2, w:210, label:'FS challenges', status:'object',
+    anchor:'Varuna.FiatShamir — not started',
+    role:'α, η, β, δ, γ and the 2025 extra-round challenges, read off the Poseidon transcript. The sponge programming lemmas will be in Lean; identifying Poseidon with a random oracle is a floor.' },
+  { id:'pcOpen', c:0, r:3, w:210, label:'PC openings', status:'hyp',
+    anchor:'Varuna.SonicPC — not started',
+    role:'Sonic-PC openings of the AHP oracles (witness, index, quotient, masks). Binding is a computed break: two distinct openings of one commitment. Hardness of producing that break rests on the pairing floor.' },
+  { id:'ahpEq', c:0, r:4, w:240, label:'AHP verifier eqns', status:'hyp',
+    anchor:'AHPForR1CS::construct_linear_combinations — not started',
+    role:'The three virtual linear combinations snarkVM checks evaluate to zero: rowcheck_zerocheck, lineval_sumcheck, matrix_sumcheck. Iteration 3 states them as polynomial identities.' },
+  { id:'rowcheck', c:1, r:4, label:'rowcheck', status:'hyp',
+    anchor:'Sage Verifier.Round_2_rhs — not started',
+    role:'σ_A σ_B − σ_C = h(α) v_H(α). If this holds for α outside the vanishing set of H, the row-wise products match on the constraint domain.' },
+  { id:'lincheck', c:1, r:5, label:'lincheck', status:'hyp',
+    anchor:'Sage Verifier.Round_4_rhs — not started',
+    role:'Univariate sumcheck: the lincomb of z(β) equals h₁ v_K(β) + β g₁(β) + σ/|K|. Connects the witness polynomial to the matrix–vector products.' },
+  { id:'matrixSC', c:0, r:6, w:230, label:'matrix sumcheck', status:'hyp',
+    anchor:'Sage Verifier.Round_6_rhs — not started',
+    role:'Rational / matrix sumcheck over the sparse row·col·val encoding. This is the holographic step: indexed oracles imply Az, Bz, Cz.' },
+  { id:'indexer', c:1, r:6, label:'indexer oracles', status:'object',
+    anchor:'Varuna.Indexer — not started',
+    role:'Row, column and value polynomials for A, B, C over K_A, K_B, K_C. Iteration 2 proves they recover matrix entries on the nonzero domains.' },
+  { id:'r1csEmpty', c:0, r:7, w:210, label:'empty R1CS', status:'proven',
+    anchor:'Varuna.satisfies_nil · Varuna.hadamardSat_zero',
+    role:'Iteration 0, first proven sliver. An empty sparse constraint list is satisfied by any assignment, and the Hadamard form with m = 0 holds. This is the agreed base case of the sparse ↔ dense equivalence.' },
+  { id:'mulConstraint', c:1, r:7, w:230, label:'mul constraint', status:'proven',
+    anchor:'Varuna.mulConstraint_holds_iff · Varuna.toy_mul_holds',
+    role:'Iteration 0, first non-trivial theorem. The constraint (x)(y)=(out) holds iff the assigned values multiply. A concrete toy instance 3 · 5 = 15 over 𝔽₁₇ is checked. Every later circuit is a composition of rows of this shape.' },
+  { id:'hadamardIff', c:2, r:7, w:250, label:'sparse ↔ Hadamard', status:'hyp',
+    anchor:'satisfies_iff_hadamard — stated in PLAN.md, not proved',
+    role:'The remainder of iteration 0. Sparse snarkVM constraints are equivalent to Az ∘ Bz = Cz for the dense matrices they encode, including duplicate columns and implicit zeros. Not yet in Lean.' },
+  { id:'r1csRel', c:3, r:7, w:220, label:'R1CS relation', status:'object',
+    anchor:'Varuna.satisfies · Varuna.hadamardSat',
+    role:'The SNARK relation itself: knowledge of z such that Az ∘ Bz = Cz, with public prefix x. Definitions are in Lean; the capstone will conclude this predicate (or a computed break).' },
+  { id:'capstone', c:4, r:7, w:250, label:'knowledge soundness', status:'goal',
+    anchor:'Varuna.KnowledgeSoundness — not started',
+    role:'Advertised endpoint: an accepting algebraic/FS adversary yields a computable extractor that returns an R1CS witness or a PC / RO / pairing break. Iteration 8.' },
+  { id:'szBad', c:3, r:5, label:'SZ bad set', status:'hyp',
+    anchor:'Varuna.AHP.szBadSet — not started',
+    role:'The finite set of challenges that make a nonzero AHP residual vanish. Cardinality ≤ degree. Iteration 1 proves the field fact; later iterations instantiate it per PIOP.' },
+  { id:'goodChal', c:3, r:6, w:200, label:'good challenge', status:'hyp',
+    anchor:'exists_accepting_good_challenge — not started',
+    role:'A uniform RO challenge misses the bad set except with probability d/|F|. When proved, this discharges the “sound challenge” hypotheses on the AHP rungs.' },
+  { id:'batching', c:2, r:4, w:250, label:'batching + extra round', status:'hyp',
+    anchor:'VarunaVersion extra IOP round — not started',
+    role:'Multi-circuit / multi-instance batching and the 2025 extra round that blocks adaptive statement selection. Sage does not implement this; snarkVM is the source of truth.' },
+  { id:'sonicPC', c:3, r:3, label:'Sonic PC', status:'object',
+    anchor:'polycommit/sonic_pc — not started',
+    role:'The labeled-polynomial commitment snarkVM uses. Linear combinations include the three AHP virtual commitments that must evaluate to zero.' },
+  { id:'forking', c:3, r:2, label:'forking lemma', status:'hyp',
+    anchor:'Varuna.FiatShamir.extractable_of_prob — not started',
+    role:'Special-soundness extraction from accepting FS transcripts. Must be a computable def (breaks-as-data), not an existential in Prop.' },
+  { id:'poseidonRO', c:2, r:8, w:220, label:'Poseidon = RO', status:'floor',
+    anchor:'modelling boundary, not an axiom',
+    role:'The deployed Poseidon sponge is identified with the programmable random oracle the forking lemmas talk about. The oracle model will be in Lean; the identification will not.' },
+  { id:'pairing', c:3, r:8, w:230, label:'pairing hardness', status:'floor',
+    anchor:'modelling boundary, not an axiom',
+    role:'A Sonic-PC binding break is assumed computationally infeasible because it would break the pairing assumption on BLS12-377. Lean will exhibit the break data; it will not prove hardness.' },
+  { id:'srs', c:1, r:8, label:'SRS / setup', status:'floor',
+    anchor:'modelling boundary, not an axiom',
+    role:'The universal updatable SRS is well-formed and its toxic waste is unknown. Outside the soundness argument proper.' },
+  { id:'bytes', c:4, r:8, w:220, label:'byte encodings', status:'floor',
+    anchor:'modelling boundary, not an axiom',
+    role:'Domain-separator bytes, field/group encodings, and Poseidon parameters. The Lean model is typed and post-decoding, like Ironwood’s fingerprint boundary.' },
+  { id:'vkfaith', c:0, r:8, w:220, label:'index = circuit', status:'floor',
+    anchor:'modelling boundary, not an axiom',
+    role:'The verifying key / index fed to the verifier is the holographic encoding of the circuit the statement claims. Dual of circuit-gadget verification, which is a different project.' },
+];
+
+const edges = [
+  ['rustVerifier', 'pinnedRust', 'entails'],
+  ['rustVerifier', 'accept', 'entails'],
+  ['accept', 'fsTranscript', 'entails'],
+  ['fsTranscript', 'pcOpen', 'entails'],
+  ['pcOpen', 'ahpEq', 'entails'],
+  ['ahpEq', 'rowcheck', 'entails'],
+  ['ahpEq', 'lincheck', 'entails'],
+  ['ahpEq', 'matrixSC', 'entails'],
+  ['indexer', 'matrixSC', 'entails'],
+  ['rowcheck', 'r1csRel', 'entails'],
+  ['lincheck', 'r1csRel', 'entails'],
+  ['matrixSC', 'r1csRel', 'entails'],
+  ['r1csEmpty', 'r1csRel', 'entails', 'satisfies_nil · hadamardSat_zero'],
+  ['mulConstraint', 'r1csRel', 'entails', 'mulConstraint_holds_iff'],
+  ['hadamardIff', 'r1csRel', 'entails'],
+  ['r1csRel', 'capstone', 'entails'],
+  ['szBad', 'goodChal', 'entails'],
+  ['goodChal', 'rowcheck', 'discharges'],
+  ['goodChal', 'lincheck', 'discharges'],
+  ['goodChal', 'matrixSC', 'discharges'],
+  ['sonicPC', 'pcOpen', 'entails'],
+  ['forking', 'fsTranscript', 'entails'],
+  ['batching', 'ahpEq', 'entails'],
+  ['pcOpen', 'pairing', 'rests'],
+  ['fsTranscript', 'poseidonRO', 'rests'],
+  ['forking', 'poseidonRO', 'rests'],
+  ['capstone', 'srs', 'rests'],
+  ['capstone', 'vkfaith', 'rests'],
+  ['capstone', 'bytes', 'rests'],
+  ['capstone', 'hadamardIff', 'rests'],
+  ['pinnedRust', 'bytes', 'rests'],
+];
+
+const edgeRoutes = {
+  'r1csRel:capstone': [{ x: COL(3) + 120, y: ROW(7) }],
+  'rowcheck:r1csRel': [{ x: COL(2) - 40, y: ROW(5) + 40 }],
+  'goodChal:rowcheck': [{ x: COL(2) + 40, y: ROW(5) }],
+  'fsTranscript:poseidonRO': [{ x: COL(2) - 30, y: ROW(5) + 10 }, { x: COL(2) - 10, y: ROW(7) + 20 }],
+  'pcOpen:pairing': [{ x: COL(4) - 20, y: ROW(4) }, { x: COL(4) - 10, y: ROW(7) }],
+};
+
+const statusColor = { proven:'--c-proven', hyp:'--c-hyp', floor:'--c-floor', object:'--c-object', goal:'--accent' };
+const statusName = { proven:'Proven', hyp:'Hypothesis', floor:'Out-of-Lean assumption', object:'Definition', goal:'Top-level' };
+const relPhrase = {
+  'out-entails': ['→', 'entails'],
+  'out-discharges': ['→', 'discharges'],
+  'out-rests': ['→', 'rests on'],
+  'in-entails': ['←', 'follows from'],
+  'in-discharges': ['←', 'discharged by'],
+  'in-rests': ['←', 'relied on by'],
+};
+
+const byId = {};
+nodes.forEach(n => {
+  n.cx = COL(n.c) + (n.dx || 0);
+  n.cy = ROW(n.r);
+  const ch = n.label.length;
+  n.w = n.w || Math.max(150, Math.min(270, ch * 12.4 + 40));
+  n.h = 48;
+  byId[n.id] = n;
+});
+
+const adj = {};
+nodes.forEach(n => { adj[n.id] = []; });
+edges.forEach((e, i) => {
+  adj[e[0]].push({ i, other: e[1], kind: e[2], dir: 'out', via: e[3] });
+  adj[e[1]].push({ i, other: e[0], kind: e[2], dir: 'in', via: e[3] });
+});
+
+const svg = document.getElementById('map');
+function el(tag, attrs) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+const defs = el('defs', {});
+[['entails', 'var(--ink)'], ['discharges', 'var(--accent)'], ['rests', 'var(--c-floor)']].forEach(([k, c]) => {
+  const m = el('marker', { id: 'ar-' + k, viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '7.5', markerHeight: '7.5', orient: 'auto-start-reverse' });
+  m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: c }));
+  defs.appendChild(m);
+});
+svg.appendChild(defs);
+
+const mapTitle = el('text', { x: 840, y: 46, 'text-anchor': 'middle', class: 'map-title' });
+mapTitle.textContent = 'Formal Verification of Varuna';
+svg.appendChild(mapTitle);
+
+const terrLayer = el('g', {});
+const terrLabelLayer = el('g', {});
+const nodeAt = {};
+nodes.forEach(n => { nodeAt[n.c + ',' + n.r] = n; });
+territories.forEach(t => {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  t.cells.forEach(([c, r]) => {
+    const n = nodeAt[c + ',' + r];
+    const cx = n ? n.cx : COL(c), cy = n ? n.cy : ROW(r);
+    const hw = n ? n.w / 2 : 90, hh = n ? n.h / 2 : 23;
+    x0 = Math.min(x0, cx - hw); y0 = Math.min(y0, cy - hh);
+    x1 = Math.max(x1, cx + hw); y1 = Math.max(y1, cy + hh);
+  });
+  const pad = 20;
+  const padRight = t.padRight || pad;
+  const headroom = t.headroom || 14;
+  const g = el('g', {});
+  const rect = el('rect', { x: x0 - pad, y: y0 - pad - headroom, width: (x1 - x0) + pad + padRight, height: (y1 - y0) + pad * 2 + headroom, class: 'terr' });
+  rect.style.setProperty('--th', `color-mix(in srgb, ${t.h} 10%, var(--surface))`);
+  rect.style.setProperty('--ts', t.h);
+  g.appendChild(rect);
+  const labX = (t.labelSide === 'right' ? x1 + padRight - 14 : x0 - pad + 14) + (t.labelDx || 0);
+  const lab = el('text', { x: labX, y: y0 - pad - headroom + 22, class: 'terr-label' });
+  if (t.labelSide === 'right') lab.setAttribute('text-anchor', 'end');
+  lab.style.setProperty('--ts', t.h);
+  lab.textContent = t.label;
+  terrLabelLayer.appendChild(lab);
+  terrLayer.appendChild(g);
+});
+svg.appendChild(terrLayer);
+
+function borderPoint(n, tx, ty) {
+  const dx = tx - n.cx, dy = ty - n.cy;
+  if (dx === 0 && dy === 0) return { x: n.cx, y: n.cy };
+  const hw = n.w / 2 + 3, hh = n.h / 2 + 3;
+  const s = 1 / Math.max(Math.abs(dx) / hw, Math.abs(dy) / hh);
+  return { x: n.cx + dx * s, y: n.cy + dy * s };
+}
+
+const edgeLayer = el('g', {});
+const edgeEls = edges.map((e) => {
+  const a = byId[e[0]], b = byId[e[1]];
+  const route = edgeRoutes[`${e[0]}:${e[1]}`];
+  const first = route?.[0], last = route?.[route.length - 1];
+  const s = borderPoint(a, first?.x ?? b.cx, first?.y ?? b.cy);
+  const t = borderPoint(b, last?.x ?? a.cx, last?.y ?? a.cy);
+  let d;
+  if (route) {
+    d = `M${s.x},${s.y}`;
+    route.forEach((control, i) => {
+      const next = route[i + 1];
+      const end = next ? { x: (control.x + next.x) / 2, y: (control.y + next.y) / 2 } : t;
+      d += ` Q${control.x},${control.y} ${end.x},${end.y}`;
+    });
+  } else {
+    const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
+    let nx = t.y - s.y, ny = -(t.x - s.x);
+    const len = Math.hypot(nx, ny) || 1;
+    const dist = Math.hypot(t.x - s.x, t.y - s.y);
+    const off = Math.min(46, dist * 0.13);
+    d = `M${s.x},${s.y} Q${mx + nx / len * off},${my + ny / len * off} ${t.x},${t.y}`;
+  }
+  const p = el('path', { class: 'edge ' + e[2], d, 'marker-end': `url(#ar-${e[2]})` });
+  edgeLayer.appendChild(p);
+  return p;
+});
+svg.appendChild(edgeLayer);
+svg.appendChild(terrLabelLayer);
+
+const nodeLayer = el('g', {});
+nodes.forEach(n => {
+  const g = el('g', { class: 'node ' + n.status, tabindex: '0', role: 'button', 'data-id': n.id, 'aria-label': `${n.label} — ${statusName[n.status]}` });
+  const cvar = statusColor[n.status];
+  const rect = el('rect', { class: 'box', x: n.cx - n.w / 2, y: n.cy - n.h / 2, width: n.w, height: n.h });
+  if (n.status !== 'goal') {
+    rect.style.setProperty('--nf', `color-mix(in srgb, var(${cvar}) 11%, var(--surface))`);
+    rect.style.setProperty('--ns', `var(${cvar})`);
+  }
+  g.appendChild(rect);
+  const lab = el('text', { class: 'label mono', x: n.cx, y: n.cy, 'text-anchor': 'middle' });
+  lab.textContent = n.label;
+  g.appendChild(lab);
+  nodeLayer.appendChild(g);
+  n._g = g;
+});
+svg.appendChild(nodeLayer);
+
+const detail = document.getElementById('detail');
+let pinned = null, activeFilter = 'all';
+
+function applyFilter() {
+  nodes.forEach(n => n._g.classList.toggle('dim', !(activeFilter === 'all' || n.status === activeFilter)));
+  edgeEls.forEach((p, i) => {
+    const [a, b] = edges[i];
+    p.classList.toggle('dim', !(activeFilter === 'all' || byId[a].status === activeFilter || byId[b].status === activeFilter));
+    p.classList.remove('hot');
+  });
+}
+
+function highlight(id) {
+  const near = new Set([id]);
+  const eidx = new Set();
+  adj[id].forEach(a => { near.add(a.other); eidx.add(a.i); });
+  nodes.forEach(n => n._g.classList.toggle('dim', !near.has(n.id)));
+  edgeEls.forEach((p, i) => { p.classList.toggle('hot', eidx.has(i)); p.classList.toggle('dim', !eidx.has(i)); });
+}
+
+function renderDetail(id) {
+  const n = byId[id];
+  const cvar = statusColor[n.status];
+  const conns = adj[id].slice().sort((a, b) => (a.dir === b.dir ? 0 : a.dir === 'in' ? -1 : 1)).map(a => {
+    const [arrow, word] = relPhrase[a.dir + '-' + a.kind];
+    const via = a.via ? `<span class="via">${a.via}</span>` : '';
+    return `<div class="c"><span class="verb ${a.kind}">${arrow} ${word}</span><span class="to">${byId[a.other].label}</span>${via}</div>`;
+  }).join('');
+  detail.innerHTML = `
+    <div class="badge" style="color:var(${cvar});border-color:var(${cvar})">${statusName[n.status]}</div>
+    <p class="title">${n.label}</p>
+    <p class="anchor">${n.anchor}</p>
+    <p class="role">${n.role}</p>
+    <div class="conns">${conns || '<p class="empty">No connections.</p>'}</div>`;
+}
+
+function clearHi() {
+  nodes.forEach(n => n._g.classList.remove('dim'));
+  edgeEls.forEach(p => { p.classList.remove('hot'); p.classList.remove('dim'); });
+  detail.innerHTML = `<p class="empty">Hover or click a node to see what it is, its Lean anchor, and every theorem it connects to.</p>
+    <p class="hint">The spine runs down the left: accepting proof → FS challenges → PC openings → AHP checks → R1CS. Green nodes are the iteration-0 proof of concept.</p>`;
+}
+
+nodes.forEach(n => {
+  const enter = () => { if (activeFilter !== 'all') return; highlight(n.id); renderDetail(n.id); };
+  const leave = () => {
+    if (activeFilter !== 'all') return;
+    if (pinned) { highlight(pinned); renderDetail(pinned); } else clearHi();
+  };
+  n._g.addEventListener('pointerenter', enter);
+  n._g.addEventListener('pointerleave', leave);
+  n._g.addEventListener('focus', enter);
+  n._g.addEventListener('blur', leave);
+  n._g.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pinned = (pinned === n.id) ? null : n.id;
+    if (pinned) { highlight(pinned); renderDetail(pinned); }
+    else { clearHi(); if (activeFilter !== 'all') applyFilter(); }
+  });
+  n._g.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); n._g.click(); }
+  });
+});
+
+svg.addEventListener('click', () => {
+  pinned = null;
+  clearHi();
+  if (activeFilter !== 'all') applyFilter();
+});
+
+document.getElementById('filters').addEventListener('click', (e) => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  activeFilter = b.dataset.f;
+  pinned = null;
+  document.querySelectorAll('#filters .chip').forEach(c => c.setAttribute('aria-pressed', c === b ? 'true' : 'false'));
+  if (activeFilter === 'all') clearHi();
+  else applyFilter();
+});
+</script>
+</body>
+</html>

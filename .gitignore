@@ -1,0 +1,6 @@
+/.lake
+/.elan
+**/*.olean
+.DS_Store
+.vscode
+.idea
