@@ -5,6 +5,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 
 import Mathlib.Data.Nat.Prime.Basic
 import Mathlib.Data.ZMod.Basic
+import Mathlib.Algebra.Field.ZMod
 
 /-!
 # Mathlib field carrier

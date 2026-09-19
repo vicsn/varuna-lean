@@ -36,8 +36,12 @@ combiners are `1`, selector polynomials lift subdomain residuals to
 the common domain, and the extra round binds instance sums before
 `η_b, η_c`. `inspectBatch` is the computed batch-break.
 
-Every layer above batching (the deployed verifier, the capstone) is on
-the map as a hypothesis, definition, or out-of-Lean floor. See
+**Iteration 7 complete.** The typed accept predicate and modelling
+floors live in `Match.lean`. Toy-field fixtures accept honest zeros
+and reject flipped LC evaluations; the KZG pairing equation is checked
+on a multiplicative `𝔽₁₇` pairing. BLS12-377 captures remain a pin.
+
+The capstone (knowledge soundness) is the remaining spine node. See
 [PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
 
@@ -73,6 +77,7 @@ Varuna/
   SonicPC.lean                      -- labeled polynomials, KZG, binding breaks
   FiatShamir.lean                   -- V2 absorb/squeeze schedule, forks
   Batching.lean                     -- multi-circuit combiners, selectors
+  Match.lean                        -- typed accept, floors, toy fixtures
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan

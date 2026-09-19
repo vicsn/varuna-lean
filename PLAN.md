@@ -332,20 +332,33 @@ snarkVM plus the spec.
 **Exit criterion (met).** Batching identities and the extra-round
 binding are sorry-free; `inspectBatch` is a computed `def`.
 
-### Iteration 7 — Deployed-verifier faithfulness
+### Iteration 7 — Deployed-verifier faithfulness (complete)
 
-Ironwood’s “fingerprint” pattern:
+**Goal.** Ironwood’s fingerprint pattern: a Lean model of the assembled
+accept predicate, named floors, and negative fixtures.
 
-- instrument or re-implement the snarkVM verifier’s assembled
-  pairing/MSM equation in Lean
-- capture honest and random proofs from the Sage test vectors and
-  from snarkVM
-- `native_decide` that Lean and Rust agree on those captures
-- negative fixtures that flip a byte / evaluation and must reject
+**Delivered.**
 
-This is *typed, post-decoding* agreement, not a byte-level refinement
-of the Rust. Encodings, domain-separator bytes, and Poseidon
-parameters remain floors, enumerated in one `Match.lean`.
+- `ModellingFloor` / `modellingFloors` — Poseidon = RO, pairing
+  hardness, SRS, encodings, index = circuit (out of Lean, not axioms)
+- `typedAHPAccepts` / `TypedProof.accepts` — the three zero-eval LCs
+  plus a batch combination, as a Boolean predicate agreeing with the
+  `Prop` accept
+- `lcNames_match_snarkVM` — `matrix_sumcheck`, `lineval_sumcheck`,
+  `rowcheck_zerocheck`
+- toy-field fixtures on `ZMod 17`, kernel-checked with `decide` (not
+  `native_decide`, so the census stays `propext` / `choice` / `Quot.sound`)
+- negative fixtures: flipping any LC evaluation rejects; a lucky
+  `𝔽₁₇` combination `1·3+2·7=0` is a batch break; a binding break at
+  a repeated point
+- `toyMulPairing` / `toy_kzg_accepts` — the KZG pairing equation on a
+  multiplicative toy pairing
+
+Captured snarkVM / Sage proofs over BLS12-377 remain future pins.
+Byte encodings stay a floor.
+
+**Exit criterion (met).** Typed accept in Lean; floors enumerated;
+negative fixtures reject; no `sorry`; census unchanged in axioms.
 
 ### Iteration 8 — Knowledge-soundness capstone
 
