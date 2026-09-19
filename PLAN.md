@@ -87,10 +87,9 @@ General theorems rest only on `propext`, `Classical.choice`,
 MSM/pairing equation, a curve cardinality) may use `native_decide`,
 and that extension of the trusted base is **named** on the census.
 
-`Varuna/TrustBoundary.lean` is the census file. Today it only
-`#print axioms` the iteration-0 lemmas. The Ironwood `assert_axioms` /
-`assert_computable` elaborator is iteration-2 work; until then, CI
-still fails on `sorry` via `lake build --wfail`.
+`Varuna/TrustBoundary.lean` is the census file. `assert_axioms` /
+`assert_computable` in `Varuna/AxiomCheck.lean` make the trusted base a
+build-time property. CI still fails on `sorry` via `lake build --wfail`.
 
 ### 2.3 Modelling boundaries are not axioms
 
@@ -142,11 +141,11 @@ looks finished.
   PC openings bind the oracles       (hypothesis; pairing/SRS floors)
            │
            ▼
-  AHP verifier equations             (hypothesis)
+  AHP verifier equations             (definition + proof)
      rowcheck ──► lincheck ──► matrix sumcheck
            │
            ▼
-  Az ∘ Bz = Cz                       (definition + proof)   ← here
+  Az ∘ Bz = Cz                       (definition + proof)
            │
            ▼
   knowledge-soundness capstone       (goal)
@@ -229,25 +228,30 @@ Column reindexing of the public-input subdomain
 **Exit criterion (met).** Oracle evaluation recovers entries; census
 commands reject `sorryAx`.
 
-### Iteration 3 — AHP PIOPs (algebraic, interactive)
+### Iteration 3 — AHP PIOPs (complete)
 
-Formalize the three checks as *polynomial identities*, first
-interactive (challenges as free variables):
+**Goal.** The three interactive checks as polynomial identities, targeting
+`VarunaVersion.V2` (single-circuit identities; batch selectors are
+iteration 6).
 
-| Check | Sage / snarkVM | Identity (sketch) |
-| --- | --- | --- |
-| Rowcheck | `Round_2_rhs` / `rowcheck_zerocheck` | `σ_A σ_B − σ_C = h(α) v_H(α)` |
-| Univariate sumcheck | `Round_4_rhs` / `lineval_sumcheck` | lincomb of `z(β)` vs `h₁ v_K + X g₁ + σ/\|K\|` |
-| Rational sumcheck | `Round_6_rhs` / `matrix_sumcheck` | sparse row·col·val encoding vs `h₂ v_K` |
+**Delivered.**
 
-Prove each: if the identity holds for a challenge outside a
-computed bad set, then the corresponding matrix/witness claim holds.
-Bad-set cardinality is a `def` (Ironwood `szBadSet`). Completeness
-(honest prover produces accepting oracles) is a sibling theorem, not
-a hypothesis of soundness.
+- `Varuna.SNARKMode` / `maskPoly` — ZK masking parameterized (`mask = 0`
+  for NonZK)
+- `inspectResidual` — Ironwood-style SZ extractor: accepting + no break
+  data implies the residual is identically zero
+- rowcheck: `rowcheckResidual`, honest quotient, `rowcheck_on_domain`
+  (Hadamard on `H`), `rowcheck_extract`
+- univariate / lineval: `honestUnivariate`, `univariate_sum` (`∑ f = |K| σ`),
+  `assignmentPoly` / `linevalPoly`, `univariate_extract`
+- matrix / rational: `matrixAPoly` / `matrixBPoly` matching snarkVM
+  `a(X)`, `b(X)`; `matrix_on_domain` / `matrix_rational`;
+  `matrix_extract`
+- `AHPVerifierChecks.accepts` — the three `LC_WITH_ZERO_EVAL` names
 
-Zero-knowledge masking (`mask_poly`, `SNARKMode::ZK`) is parameterized
-from the start, even if the first proofs set `zk_bound = 0`.
+**Exit criterion (met).** Each identity, at a challenge outside a computed
+bad set (or with `inspectResidual = none`), implies the corresponding
+matrix/witness claim; completeness is a sibling theorem; no `sorry`.
 
 ### Iteration 4 — Polynomial commitment
 

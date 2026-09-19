@@ -4,10 +4,10 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
 import Varuna.AxiomCheck
-import Varuna.Indexer
+import Varuna.AHP
 
 /-!
-# Trust boundary (iterations 0–2)
+# Trust boundary (iterations 0–3)
 
 Ironwood keeps the trusted base of every advertised endpoint as a
 build-time check. `assert_axioms` fails the build if a named theorem
@@ -41,3 +41,19 @@ assert_axioms Varuna.colOracle_eval
 assert_axioms Varuna.valOracle_eval
 assert_axioms Varuna.matrixAt
 assert_computable Varuna.CircuitInfo.maxNonZero
+assert_axioms Varuna.EvalDomain.vanishing_dvd_of_eval_eq_zero
+assert_axioms Varuna.EvalDomain.sum_eval_of_natDegree_lt
+assert_axioms Varuna.inspectResidual_accepts
+assert_axioms Varuna.rowcheck_on_domain
+assert_axioms Varuna.rowcheckResidual_honest
+assert_axioms Varuna.rowcheck_extract
+assert_axioms Varuna.univariateResidual_honest
+assert_axioms Varuna.univariate_sum
+assert_axioms Varuna.honestUnivariate_sum
+assert_axioms Varuna.univariate_extract
+assert_axioms Varuna.matrix_on_domain
+assert_axioms Varuna.matrix_rational
+assert_axioms Varuna.matrixResidual_honest
+assert_axioms Varuna.matrix_extract
+assert_axioms Varuna.accepts_of_residuals_zero
+assert_computable Varuna.lcWithZeroEval

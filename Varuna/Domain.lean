@@ -3,8 +3,12 @@ Copyright (c) 2026 Provable Inc.
 Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
+import Mathlib.Algebra.Polynomial.Div
 import Mathlib.Algebra.Polynomial.Eval.Defs
+import Mathlib.Algebra.Polynomial.Inductions
+import Mathlib.Algebra.Polynomial.Monic
 import Mathlib.Algebra.Polynomial.Roots
+import Mathlib.Algebra.Ring.GeomSum
 import Mathlib.LinearAlgebra.Lagrange
 import Mathlib.RingTheory.RootsOfUnity.PrimitiveRoots
 import Varuna.R1CS
@@ -25,7 +29,7 @@ This module is iteration 1. Extractors later treat a challenge that lands
 in `szBadSet p` as computed break data, not as an existential in `Prop`.
 -/
 
-open Polynomial
+open Finset Polynomial
 
 namespace Varuna
 
@@ -202,6 +206,91 @@ noncomputable def interpolate (values : Nat → F) : F[X] :=
 theorem eval_interpolate (values : Nat → F) {i : Nat} (hi : i < H.n) :
     (H.interpolate values).eval (H.node i) = values i :=
   Lagrange.eval_interpolate_at_node values H.injOn_node (Finset.mem_range.mpr hi)
+
+/-- `v_H` is monic, so polynomial division by it is well-defined. -/
+theorem vanishing_monic : Monic H.vanishing :=
+  monic_X_pow_sub_C (1 : F) H.n_pos.ne'
+
+/-- Remainder degree is strictly less than the domain size. -/
+theorem natDegree_modByVanishing_lt (p : F[X]) :
+    (p %ₘ H.vanishing).natDegree < H.n := by
+  have hdeg := degree_modByMonic_lt p H.vanishing_monic
+  rw [degree_eq_natDegree H.vanishing_ne_zero, natDegree_vanishing] at hdeg
+  by_cases hr : p %ₘ H.vanishing = 0
+  · simpa [hr] using H.n_pos
+  · exact (natDegree_lt_iff_degree_lt hr).2 hdeg
+
+/-- Evaluating the remainder of `p` at a domain node recovers `p` itself. -/
+theorem eval_modByVanishing (p : F[X]) {α : F} (hα : α ∈ H.elements) :
+    (p %ₘ H.vanishing).eval α = p.eval α := by
+  have hdecomp := modByMonic_add_div p H.vanishing
+  have := congrArg (eval α) hdecomp
+  simpa [eval_add, eval_mul, (H.vanishing_eq_zero_iff α).2 hα] using this
+
+/-- A polynomial that vanishes on `H` is a multiple of `v_H`. -/
+theorem vanishing_dvd_of_eval_eq_zero {p : F[X]}
+    (hp : ∀ α ∈ H.elements, p.eval α = 0) : H.vanishing ∣ p := by
+  rw [← modByMonic_eq_zero_iff_dvd H.vanishing_monic]
+  refine eq_zero_of_natDegree_lt_card_of_eval_eq_zero' _ H.elements ?_ ?_
+  · intro α hα
+    rw [H.eval_modByVanishing p hα]
+    exact hp α hα
+  · rw [H.card_elements]
+    exact H.natDegree_modByVanishing_lt p
+
+/-- Geometric sum of powers of domain nodes: `n` if `n ∣ k`, otherwise `0`. -/
+theorem sum_node_pow (k : Nat) :
+    ∑ i ∈ range H.n, H.node i ^ k = if H.n ∣ k then (H.n : F) else 0 := by
+  have hpow : ∀ i ∈ range H.n, H.node i ^ k = (H.ω ^ k) ^ i := by
+    intro i _
+    rw [node, ← pow_mul, mul_comm i k, pow_mul]
+  rw [sum_congr rfl hpow]
+  split_ifs with hdiv
+  · have hω : H.ω ^ k = 1 := (H.hω.pow_eq_one_iff_dvd k).mpr hdiv
+    simp [hω]
+  · have hne : H.ω ^ k ≠ 1 := mt (H.hω.pow_eq_one_iff_dvd k).mp hdiv
+    have hmul := mul_geom_sum (H.ω ^ k) H.n
+    have hrhs : (H.ω ^ k) ^ H.n - 1 = 0 := by
+      rw [← pow_mul, mul_comm k, pow_mul, H.hω.pow_eq_one, one_pow, sub_self]
+    have hzero : (H.ω ^ k - 1) * ∑ i ∈ range H.n, (H.ω ^ k) ^ i = 0 := by
+      rw [hmul, hrhs]
+    exact eq_zero_of_ne_zero_of_mul_left_eq_zero (sub_ne_zero.2 hne) hzero
+
+/-- Evaluating `f` on `H` is the weighted sum of coefficients at multiples of `n`. -/
+theorem sum_eval (f : F[X]) :
+    ∑ i ∈ range H.n, f.eval (H.node i) =
+      ∑ n ∈ f.support, f.coeff n * (if H.n ∣ n then (H.n : F) else 0) := by
+  simp_rw [eval_eq_sum, Polynomial.sum_def]
+  rw [sum_comm]
+  refine sum_congr rfl fun n _ => ?_
+  rw [← mul_sum, H.sum_node_pow]
+
+/-- If `deg f < |H|`, the domain-sum is `|H|` times the constant term. -/
+theorem sum_eval_of_natDegree_lt {f : F[X]} (hdf : f.natDegree < H.n) :
+    ∑ i ∈ range H.n, f.eval (H.node i) = (H.n : F) * f.coeff 0 := by
+  rw [H.sum_eval]
+  have hterm : ∀ n ∈ f.support,
+      f.coeff n * (if H.n ∣ n then (H.n : F) else 0) =
+        if n = 0 then (H.n : F) * f.coeff n else 0 := by
+    intro n hn
+    have hnle : n ≤ f.natDegree := le_natDegree_of_mem_supp n hn
+    have hlt : n < H.n := lt_of_le_of_lt hnle hdf
+    by_cases h0 : n = 0
+    · subst h0
+      simp [dvd_zero, mul_comm]
+    · have hndvd : ¬ H.n ∣ n := fun hdiv =>
+        hlt.not_ge (Nat.le_of_dvd (Nat.pos_of_ne_zero h0) hdiv)
+      simp [h0, hndvd]
+  rw [sum_congr rfl hterm, sum_ite_eq']
+  split_ifs with hmem
+  · simp
+  · have : f.coeff 0 = 0 := notMem_support_iff.mp hmem
+    simp [this]
+
+/-- Honest univariate remainder: `X * g + C σ` with `σ` the constant term. -/
+theorem eval_X_mul_divX_add (p : F[X]) (α : F) :
+    (X * divX p + C (p.coeff 0)).eval α = p.eval α := by
+  simp [X_mul_divX_add]
 
 end EvalDomain
 

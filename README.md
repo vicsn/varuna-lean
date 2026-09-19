@@ -15,9 +15,15 @@ build-time checks rather than prose.
 val interpolants recover sparse matrix entries on the nonzero domain,
 and `assert_axioms` makes the census a build-time check.
 
-Every layer above domains (indexer, AHP PIOPs, polynomial commitments,
-Fiat–Shamir, the deployed verifier) is on the map as a hypothesis,
-definition, or out-of-Lean floor. See [PLAN.md](PLAN.md) and the
+**Iteration 3 complete.** The three AHP identities are in Lean:
+rowcheck (`σ_A σ_B − σ_C = h₀ v_H`), univariate lineval sumcheck
+(`∑ f = |K| σ`), and the rational matrix sumcheck on the sparse
+`a(X)`, `b(X)` encoding. Accepting a challenge yields the algebraic
+claim or Schwartz–Zippel break data (`inspectResidual`).
+
+Every layer above the AHP (polynomial commitments, Fiat–Shamir, the
+deployed verifier) is on the map as a hypothesis, definition, or
+out-of-Lean floor. See [PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
 
 The formalization targets snarkVM’s **`VarunaVersion.V2`**.
@@ -48,6 +54,7 @@ Varuna/
   Field.lean                        -- Mathlib `ZMod p` (iteration 1)
   Domain.lean                       -- EvalDomain, v_H, Lagrange, SZ
   Indexer.lean                      -- holographic row/col/val oracles
+  AHP.lean                          -- rowcheck, lineval, matrix sumcheck
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan
