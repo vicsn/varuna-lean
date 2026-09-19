@@ -360,20 +360,33 @@ Byte encodings stay a floor.
 **Exit criterion (met).** Typed accept in Lean; floors enumerated;
 negative fixtures reject; no `sorry`; census unchanged in axioms.
 
-### Iteration 8 — Knowledge-soundness capstone
+### Iteration 8 — Knowledge-soundness capstone (complete)
 
-Compose iterations 3–7 into a single advertised endpoint:
+**Goal.** Compose iterations 3–7 into a single advertised endpoint.
 
-> If a computationally bounded algebraic (or FS) adversary makes the
-> deployed verifier accept, then a computable extractor returns either
-> an R1CS witness or a PC / RO / pairing break.
+**Delivered.**
 
-State this at a generic field first, then at the BLS12-377 scalar
-field. Census the endpoint in `TrustBoundary`. Wire it as the goal
-node on the proof map.
+- `SoundnessBreak` — residual / batch / fork / collision data
+- `inspectAHP` — the three residual inspectors, in order
+- `ProofView` / `ProofView.inspect` — algebraic V2 transcript plus
+  batch claims
+- `knowledgeSoundness` — if the three LCs accept, the batch sum is
+  zero, inspection returns no break, and the univariate degree bound
+  holds, then Hadamard holds on `H`, the lineval sum identity holds
+  on `Vd`, the matrix identity holds on `K`, and every batch claim
+  is zero
+- `inspectBinding_none_same_point` — two openings of one commitment
+  at the same point with no binding break have equal values
+- floors stay explicit (`knowledgeSoundness_rests_on_floors`)
 
-Zero-knowledge (simulator, mask polynomials) can land in the same
-iteration or a twin PR; it is not on the soundness spine.
+This is the *algebraic* capstone at a generic field. Computational
+rewinding of an FS adversary (probability `d/|F|`) and the BLS12-377
+scalar-field pin remain named gaps: `goodChal` on the proof map, and
+the five modelling floors. Zero-knowledge (simulator) is a twin
+concern, not on this spine.
+
+**Exit criterion (met).** Named endpoint in `TrustBoundary`; sorry-free;
+breaks are `def`s; floors are not axioms.
 
 ---
 

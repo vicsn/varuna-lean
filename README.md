@@ -6,8 +6,8 @@ zkSNARK — the Marlin-based proof system that secures Aleo / snarkVM.
 The approach follows [zcash/ironwood](https://github.com/zcash/ironwood): a
 successful `lake build` *is* the verification; a proof map records what is
 proved, what is still a hypothesis, and what is left outside Lean; and a
-trust-boundary census (stubbed in this first layer) will make those claims
-build-time checks rather than prose.
+trust-boundary census makes those claims build-time checks rather than
+prose.
 
 ## Current status
 
@@ -41,8 +41,13 @@ floors live in `Match.lean`. Toy-field fixtures accept honest zeros
 and reject flipped LC evaluations; the KZG pairing equation is checked
 on a multiplicative `𝔽₁₇` pairing. BLS12-377 captures remain a pin.
 
-The capstone (knowledge soundness) is the remaining spine node. See
-[PLAN.md](PLAN.md) and the
+**Iteration 8 complete.** `knowledgeSoundness` is the advertised
+endpoint: an accepting algebraic V2 transcript with no computed AHP
+or batch break yields the three domain identities (Hadamard on `H`,
+lineval sum, matrix on `K`). Poseidon = RO and pairing hardness stay
+floors.
+
+See [PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
 
 The formalization targets snarkVM’s **`VarunaVersion.V2`**.
@@ -78,6 +83,7 @@ Varuna/
   FiatShamir.lean                   -- V2 absorb/squeeze schedule, forks
   Batching.lean                     -- multi-circuit combiners, selectors
   Match.lean                        -- typed accept, floors, toy fixtures
+  Soundness.lean                    -- knowledge-soundness capstone
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan

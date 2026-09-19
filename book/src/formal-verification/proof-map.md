@@ -16,6 +16,7 @@ Iteration 4 colours Sonic-KZG openings and binding breaks.
 Iteration 5 colours the V2 Fiat–Shamir schedule.
 Iteration 6 colours batching and the extra round.
 Iteration 7 colours the typed accept predicate and toy fixtures.
+Iteration 8 colours the knowledge-soundness capstone.
 
 Statuses, edge verbs, and the iteration plan are in [PLAN.md](../../../PLAN.md).
 This wrapper is intentionally thin: we are not cloning the Ironwood book.

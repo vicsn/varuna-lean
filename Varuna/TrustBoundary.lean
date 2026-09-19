@@ -8,9 +8,10 @@ import Varuna.SonicPC
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
+import Varuna.Soundness
 
 /-!
-# Trust boundary (iterations 0–7)
+# Trust boundary (iterations 0–8)
 
 Ironwood keeps the trusted base of every advertised endpoint as a
 build-time check. `assert_axioms` fails the build if a named theorem
@@ -107,3 +108,9 @@ assert_axioms Varuna.toy_kzg_accepts
 assert_axioms Varuna.toy_binding_break
 assert_computable Varuna.typedAHPAccepts
 assert_computable Varuna.modellingFloors
+assert_axioms Varuna.inspectAHP_none
+assert_axioms Varuna.inspectAHP_eq_none_implies
+assert_axioms Varuna.inspectBinding_none_same_point
+assert_axioms Varuna.knowledgeSoundness
+assert_axioms Varuna.knowledgeSoundness_toy_typed
+assert_axioms Varuna.knowledgeSoundness_rests_on_floors
