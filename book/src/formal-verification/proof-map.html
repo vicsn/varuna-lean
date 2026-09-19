@@ -130,11 +130,12 @@ svg.map { display: block; width: 100%; min-width: 0; height: auto; }
     <p>
       How a knowledge-soundness proof of the deployed Varuna verifier is
       intended to fit together — the theorems, the assumptions they still
-      carry, and what remains outside Lean. Iteration 0 colours only the
-      R1CS relation, and only partially.
+      carry, and what remains outside Lean. Green is proved; the
+      remaining holes are the BLS12-377 pin, computational FS rewinding,
+      and the named floors.
     </p>
   </div>
-  <div class="state">iteration 0 · partial</div>
+  <div class="state">iterations 0–8 · algebraic capstone</div>
 </header>
 
 <div class="layout">
@@ -166,7 +167,7 @@ svg.map { display: block; width: 100%; min-width: 0; height: auto; }
     <h2>Detail</h2>
     <div class="detail" id="detail">
       <p class="empty">Hover or click a node to see what it is, its Lean anchor, and every theorem it connects to.</p>
-      <p class="hint">The spine runs down the left: accepting proof → FS challenges → PC openings → AHP checks → R1CS. Green nodes are the iteration-0 proof of concept.</p>
+      <p class="hint">The spine runs down the left: accepting proof → FS challenges → PC openings → AHP checks → R1CS. Source-pinned snarkVM samples sit in the Faithfulness group at the top.</p>
     </div>
   </aside>
 </div>
@@ -188,11 +189,14 @@ const territories = [
 
 const nodes = [
   { id:'rustVerifier', c:0, r:0, w:230, label:'deployed verifier', status:'object',
-    anchor:'snarkVM algorithms/src/snark/varuna (out of Lean)',
-    role:'The Rust verifier validators run. Iteration 7 will put a Lean model of its assembled pairing/MSM equation next to this node; until then it is a definition of the target, not a theorem.' },
+    anchor:'snarkVM/ submodule · Varuna.snarkVMPin',
+    role:'The Rust verifier validators run, pinned as a git submodule. Iteration 7 puts a typed Lean model of its accept predicate next to this node; assembled BLS12-377 MSM coefficients are still outside Lean.' },
+  { id:'spotCheck', c:2, r:0, w:220, label:'source-pinned samples', status:'proven',
+    anchor:'Varuna.sample_selector_eval · Varuna.sample_lcWithZeroEval',
+    role:'Spot checks against the pinned snarkVM tree: LC names, V2 squeeze counts, selector scale |H_i|/|H|, four-term matrix b, padding at ω^0=1, KZG pairing equation, toy-field decide fixtures. Not an Ironwood MSM fingerprint.' },
   { id:'pinnedRust', c:1, r:0, w:200, label:'pinned to Rust', status:'hyp',
     anchor:'Varuna.toy_typed_proof_accepts · Varuna.lcNames_match_snarkVM',
-    role:'Iteration 7. Typed post-decoding agreement: LC names match snarkVM, toy-field fixtures accept zeros and reject flips. Captured BLS12-377 proofs from snarkVM/Sage are still a future pin. Byte encodings remain a floor.' },
+    role:'Iteration 7. Typed post-decoding agreement plus SpotCheck samples. Captured BLS12-377 proofs / assembled MSM coefficients from snarkVM remain a future pin. Byte encodings remain a floor.' },
   { id:'accept', c:0, r:1, w:210, label:'accepting proof', status:'proven',
     anchor:'Varuna.TypedProof.accepts · Varuna.typedAHPAccepts_iff',
     role:'Iteration 7. Typed accept: the three zero-eval LCs vanish and the batch combination has no live claim. Boolean predicate agrees with the Prop. Byte-level encodings stay a floor.' },
@@ -243,7 +247,7 @@ const nodes = [
     role:'A uniform RO challenge misses the bad set except with probability d/|F|. When proved, this discharges the “sound challenge” hypotheses on the AHP rungs.' },
   { id:'batching', c:2, r:4, w:250, label:'batching + extra round', status:'proven',
     anchor:'Varuna.inspectBatch_accepts · Varuna.selector_mul_vanishing',
-    role:'Iteration 6. Multi-circuit combiners (first of each family is 1), selector polynomials lifting subdomain residuals to the common domain, and the V2 extra round: α does not see prepare_third sums; η_b, η_c do. Sage is single-circuit; snarkVM is the source of truth.' },
+    role:'Iteration 6. Multi-circuit combiners (first of each family is 1), snarkVM selectors s = (v_H/v_{H_i})·(|H_i|/|H|), and the V2 extra round: α does not see prepare_third sums; η_b, η_c do. Sage is single-circuit; snarkVM is the source of truth.' },
   { id:'sonicPC', c:3, r:3, label:'Sonic PC', status:'proven',
     anchor:'Varuna.kzgCheck · Varuna.LinearCombination.eval_add',
     role:'Iteration 4. Labeled polynomials, degree bounds, and linear combinations including the three AHP virtual commitments that must evaluate to zero. Pairing groups are abstract; BLS12-377 is a later pin.' },
@@ -269,6 +273,8 @@ const nodes = [
 
 const edges = [
   ['rustVerifier', 'pinnedRust', 'entails'],
+  ['rustVerifier', 'spotCheck', 'entails'],
+  ['spotCheck', 'pinnedRust', 'entails'],
   ['rustVerifier', 'accept', 'entails'],
   ['accept', 'fsTranscript', 'entails'],
   ['fsTranscript', 'pcOpen', 'entails'],

@@ -151,6 +151,10 @@ def indexSet : Finset Nat :=
 def node (i : Nat) : F :=
   H.ω ^ i
 
+/-- The 0-th node is `1`, matching snarkVM `elements` (starts at `F::one()`). -/
+@[simp] theorem node_zero : H.node 0 = 1 :=
+  pow_zero _
+
 /-- Distinct indices below `n` give distinct nodes. -/
 theorem injOn_node : Set.InjOn H.node H.indexSet := by
   intro i hi j hj hij

@@ -50,7 +50,7 @@ structure MatrixEntry (F : Type*) [Field F] where
 structure CircuitInfo where
   /-- Public inputs after padding, including the constant-`1` slot. -/
   numPublicInputs : Nat
-  /-- Public and private variables (the assignment length, unpadded). -/
+  /-- Public and private variables (snarkVM `num_public_and_private_variables`). -/
   numVariables : Nat
   /-- Number of constraints (unpadded). -/
   numConstraints : Nat
@@ -60,6 +60,10 @@ structure CircuitInfo where
   numNonZeroB : Nat
   /-- Nonzeros in `C`. -/
   numNonZeroC : Nat
+
+/-- snarkVM `CircuitInfo::num_public_and_private_variables`. -/
+abbrev CircuitInfo.numPublicAndPrivateVariables (info : CircuitInfo) : Nat :=
+  info.numVariables
 
 /-- Largest nonzero count among `A, B, C`. -/
 def CircuitInfo.maxNonZero (info : CircuitInfo) : Nat :=
@@ -126,7 +130,8 @@ theorem valOracle_eval (H_K : EvalDomain F) (value : Nat → F)
     (valOracle H_K value).eval (H_K.node k) = value k :=
   H_K.eval_interpolate value hk
 
-/-- Padding entry used by snarkVM: row `1`, column `1`, value `0`. -/
+/-- Padding used by snarkVM `matrix_evals`: field elements `1` (row/col node 0)
+and value `0`. Index `0` is `ω^0 = 1`. -/
 def padEntry : MatrixEntry F :=
   ⟨0, 0, 0⟩
 

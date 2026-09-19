@@ -9,9 +9,10 @@ import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
 import Varuna.Soundness
+import Varuna.SpotCheck
 
 /-!
-# Trust boundary (iterations 0–8)
+# Trust boundary (iterations 0–8 + snarkVM samples)
 
 Ironwood keeps the trusted base of every advertised endpoint as a
 build-time check. `assert_axioms` fails the build if a named theorem
@@ -114,3 +115,19 @@ assert_axioms Varuna.inspectBinding_none_same_point
 assert_axioms Varuna.knowledgeSoundness
 assert_axioms Varuna.knowledgeSoundness_toy_typed
 assert_axioms Varuna.knowledgeSoundness_rests_on_floors
+assert_computable Varuna.snarkVMPin
+assert_axioms Varuna.snarkVMPin_length
+assert_axioms Varuna.sample_lcWithZeroEval
+assert_axioms Varuna.sample_v2_second_round_squeeze
+assert_axioms Varuna.sample_prepareThird_eta_squeezes
+assert_axioms Varuna.sample_first_circuit_combiner
+assert_axioms Varuna.sample_etaA_is_one
+assert_axioms Varuna.EvalDomain.node_zero
+assert_axioms Varuna.sample_padEntry_indices
+assert_axioms Varuna.selectorPoly_eval
+assert_axioms Varuna.sample_selector_self
+assert_axioms Varuna.matrixBPoly_four_terms
+assert_axioms Varuna.sample_kzg_equation
+assert_axioms Varuna.sample_toy_vanishing_at_one
+assert_axioms Varuna.sample_toy_size_ratio
+assert_computable Varuna.queryChallengeNames

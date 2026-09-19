@@ -296,11 +296,25 @@ noncomputable def matrixAPoly (H_K : EvalDomain F) (vRC : F) (rowColVal : Nat �
     F[X] :=
   C vRC * valOracle H_K rowColVal
 
-/-- `b(X)` in snarkVM: `|R| |C| (α − row(X)) (β − col(X))`. -/
+/-- `b(X)` in snarkVM: `|R| |C| (αβ − α col − β row + row_col)`.
+The product form `(α − row)(β − col)` agrees with that expansion; the
+deployed LC uses a committed `row_col` interpolant in place of `row*col`. -/
 noncomputable def matrixBPoly (H_R H_C H_K : EvalDomain F) (α β : F)
     (rowIdx colIdx : Nat → Nat) : F[X] :=
   C (H_R.sizeAsField * H_C.sizeAsField) *
     (C α - rowOracle H_R H_K rowIdx) * (C β - colOracle H_C H_K colIdx)
+
+/-- The product form expands to snarkVM's four-term `b` LC. -/
+theorem matrixBPoly_four_terms (H_R H_C H_K : EvalDomain F) (α β : F)
+    (rowIdx colIdx : Nat → Nat) :
+    matrixBPoly H_R H_C H_K α β rowIdx colIdx =
+      C (H_R.sizeAsField * H_C.sizeAsField) *
+        (C (α * β) - C α * colOracle H_C H_K colIdx -
+          C β * rowOracle H_R H_K rowIdx +
+          rowOracle H_R H_K rowIdx * colOracle H_C H_K colIdx) := by
+  unfold matrixBPoly
+  simp [C_mul]
+  ring
 
 /-- Residual of `a − b (X g + σ) = h v_K` (single matrix, selector `= 1`). -/
 noncomputable def matrixResidual (K : EvalDomain F) (a b : F[X])

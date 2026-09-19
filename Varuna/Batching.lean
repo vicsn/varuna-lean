@@ -190,15 +190,21 @@ theorem nested_domain_card_dvd (H Hi : EvalDomain F) (hle : Hi.n ≤ H.n) :
     Hi.n ∣ H.n :=
   powTwo_dvd_of_le Hi.hn H.hn hle
 
-/-- Selector `s_{H,H_i}(X) = ∑_{k < |H|/|H_i|} (X^{|H_i|})^k`.
-Equals `v_H / v_{H_i}` when ` | H_i | ` divides ` | H | `. -/
-noncomputable def selectorPoly (H Hi : EvalDomain F) : F[X] :=
+/-- Geometric quotient `(X^{|H|} - 1) / (X^{|H_i|} - 1)`. -/
+noncomputable def selectorGeom (H Hi : EvalDomain F) : F[X] :=
   ∑ i ∈ range (H.n / Hi.n), (X ^ Hi.n) ^ i
+
+/-- snarkVM `H.selector_polynomial(H_i) = (v_H / v_{H_i}) * (|H_i| / |H|)`.
+The size ratio is required so the selector is `1` on `H_i` and `0` on
+`H \ H_i` (see `snarkVM/.../ahp/selectors.rs`). -/
+noncomputable def selectorPoly (H Hi : EvalDomain F) : F[X] :=
+  C (Hi.sizeAsField * H.sizeInv) * selectorGeom H Hi
 
 /-- On equal domains the selector is `1`. -/
 theorem selectorPoly_self (H : EvalDomain F) : selectorPoly H H = 1 := by
-  unfold selectorPoly
-  rw [Nat.div_self H.n_pos, sum_range_one, pow_zero]
+  unfold selectorPoly selectorGeom
+  rw [Nat.div_self H.n_pos, sum_range_one, pow_zero, H.mul_sizeInv]
+  simp
 
 /-- `X^n - 1` divides `X^m - 1` when `n` divides `m`. -/
 theorem vanishing_dvd_of_card_dvd (H Hi : EvalDomain F) (hdvd : Hi.n ∣ H.n) :
@@ -206,30 +212,55 @@ theorem vanishing_dvd_of_card_dvd (H Hi : EvalDomain F) (hdvd : Hi.n ∣ H.n) :
   unfold EvalDomain.vanishing
   convert dvd_pow_sub_one_of_dvd (r := (X : F[X])) hdvd using 1 <;> simp
 
-/-- The selector lifts a subdomain vanishing polynomial to the common domain. -/
-theorem selector_mul_vanishing (H Hi : EvalDomain F) (hdvd : Hi.n ∣ H.n) :
-    selectorPoly H Hi * Hi.vanishing = H.vanishing := by
+/-- The unscaled geometric quotient times `v_{H_i}` is `v_H`. -/
+theorem selectorGeom_mul_vanishing (H Hi : EvalDomain F) (hdvd : Hi.n ∣ H.n) :
+    selectorGeom H Hi * Hi.vanishing = H.vanishing := by
   have hdiv : Hi.n * (H.n / Hi.n) = H.n := Nat.mul_div_cancel' hdvd
-  unfold selectorPoly EvalDomain.vanishing
+  unfold selectorGeom EvalDomain.vanishing
   have hgeom := geom_sum_mul ((X : F[X]) ^ Hi.n) (H.n / Hi.n)
   rw [← pow_mul, hdiv] at hgeom
   convert hgeom using 2 <;> simp
 
-/-- A residual that is a multiple of `v_{H_i}` lifts to a multiple of `v_H`. -/
+/-- The deployed selector times `v_{H_i}` is `(|H_i|/|H|) v_H`. -/
+theorem selector_mul_vanishing (H Hi : EvalDomain F) (hdvd : Hi.n ∣ H.n) :
+    selectorPoly H Hi * Hi.vanishing =
+      C (Hi.sizeAsField * H.sizeInv) * H.vanishing := by
+  unfold selectorPoly
+  rw [mul_assoc, selectorGeom_mul_vanishing H Hi hdvd]
+
+/-- A residual that is a multiple of `v_{H_i}` lifts with the snarkVM scale. -/
 theorem lift_residual (H Hi : EvalDomain F) (hdvd : Hi.n ∣ H.n) (h f : F[X])
     (hf : f = h * Hi.vanishing) :
-    selectorPoly H Hi * f = h * H.vanishing := by
+    selectorPoly H Hi * f =
+      C (Hi.sizeAsField * H.sizeInv) * h * H.vanishing := by
   rw [hf, mul_left_comm, selector_mul_vanishing H Hi hdvd]
+  ring
 
-/-- Honest two-circuit rowcheck batching : combiners `1, ν` and selectors. -/
+/-- Honest two-circuit rowcheck batching with snarkVM selectors. -/
 theorem batched_rowcheck_two (H H1 H2 : EvalDomain F)
     (hd1 : H1.n ∣ H.n) (hd2 : H2.n ∣ H.n)
     (h1 f1 h2 f2 : F[X]) (ν : F)
     (hf1 : f1 = h1 * H1.vanishing) (hf2 : f2 = h2 * H2.vanishing) :
     selectorPoly H H1 * f1 + C ν * (selectorPoly H H2 * f2) =
-      (h1 + C ν * h2) * H.vanishing := by
+      (C (H1.sizeAsField * H.sizeInv) * h1 +
+        C ν * C (H2.sizeAsField * H.sizeInv) * h2) * H.vanishing := by
   rw [lift_residual H H1 hd1 h1 f1 hf1, lift_residual H H2 hd2 h2 f2 hf2]
   ring
+
+/-- Point evaluation matches snarkVM `evaluate_selector_polynomial`. -/
+theorem selectorPoly_eval (H Hi : EvalDomain F) (hdvd : Hi.n ∣ H.n) {α : F}
+    (hα : Hi.vanishing.eval α ≠ 0) :
+    (selectorPoly H Hi).eval α =
+      H.vanishing.eval α * Hi.sizeAsField /
+        (Hi.vanishing.eval α * H.sizeAsField) := by
+  have hgeom := congrArg (eval α) (selectorGeom_mul_vanishing H Hi hdvd)
+  simp only [eval_mul] at hgeom
+  have hdiv : (selectorGeom H Hi).eval α =
+      H.vanishing.eval α / Hi.vanishing.eval α :=
+    (eq_div_iff_mul_eq hα).2 hgeom
+  unfold selectorPoly
+  simp [eval_mul, eval_C, hdiv, EvalDomain.sizeInv, EvalDomain.sizeAsField]
+  field_simp
 
 /-- Polynomial weighted sum of residuals (circuit-level batching). -/
 noncomputable def weightedSumPoly : List F → List (F[X]) → F[X]

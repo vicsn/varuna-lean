@@ -1,3 +1,6 @@
 [submodule "protocol-docs"]
 	path = protocol-docs
 	url = git@github.com:ProvableHQ/protocol-docs.git
+[submodule "snarkVM"]
+	path = snarkVM
+	url = git@github.com:ProvableHQ/snarkVM.git

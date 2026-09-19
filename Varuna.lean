@@ -14,5 +14,6 @@ import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
 import Varuna.Soundness
+import Varuna.SpotCheck
 import Varuna.AxiomCheck
 import Varuna.TrustBoundary

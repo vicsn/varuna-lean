@@ -39,7 +39,11 @@ the common domain, and the extra round binds instance sums before
 **Iteration 7 complete.** The typed accept predicate and modelling
 floors live in `Match.lean`. Toy-field fixtures accept honest zeros
 and reject flipped LC evaluations; the KZG pairing equation is checked
-on a multiplicative `𝔽₁₇` pairing. BLS12-377 captures remain a pin.
+on a multiplicative `𝔽₁₇` pairing. `SpotCheck.lean` pins the
+`snarkVM/` submodule and kernel-checks source samples (LC names, V2
+squeeze counts, selector scale, four-term matrix `b`, padding at
+`ω^0 = 1`, KZG pairing equation). Ironwood-style BLS12-377 MSM
+captures are still a pin.
 
 **Iteration 8 complete.** `knowledgeSoundness` is the advertised
 endpoint: an accepting algebraic V2 transcript with no computed AHP
@@ -84,10 +88,12 @@ Varuna/
   Batching.lean                     -- multi-circuit combiners, selectors
   Match.lean                        -- typed accept, floors, toy fixtures
   Soundness.lean                    -- knowledge-soundness capstone
+  SpotCheck.lean                    -- source-pinned samples vs snarkVM
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan
 protocol-docs/                      -- algorithm spec (git submodule)
+snarkVM/                            -- deployed verifier (git submodule)
 book/src/formal-verification/
   proof-map.md                      -- thin wrapper
   proof-map.html                    -- interactive dependency map
@@ -100,7 +106,7 @@ book/src/formal-verification/
 | [`protocol-docs`](https://github.com/ProvableHQ/protocol-docs) (submodule) | Algorithm identities, including V2 batching |
 | [`varuna-sage-impl/docs/spec.pdf`](https://github.com/ProvableHQ/varuna-sage-impl/blob/main/docs/spec.pdf) | Protocol specification |
 | [`varuna-sage-impl`](https://github.com/ProvableHQ/varuna-sage-impl) | SageMath reference (single-circuit R1CS, ZK) |
-| `snarkVM/algorithms/src/snark/varuna/` | Deployed Rust implementation (`VarunaVersion.V2`) |
+| [`snarkVM`](https://github.com/ProvableHQ/snarkVM) (submodule, pin in `Varuna.snarkVMPin`) | Deployed Rust implementation (`VarunaVersion.V2`); `SpotCheck.lean` samples |
 | [Marlin](https://eprint.iacr.org/2019/1047) | Underlying AHP |
 | [`mathlib4` v4.33.0](https://github.com/leanprover-community/mathlib4/releases/tag/v4.33.0) | Field, polynomials, roots of unity |
 

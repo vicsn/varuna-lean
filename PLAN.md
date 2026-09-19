@@ -91,6 +91,11 @@ and that extension of the trusted base is **named** on the census.
 `assert_computable` in `Varuna/AxiomCheck.lean` make the trusted base a
 build-time property. CI still fails on `sorry` via `lake build --wfail`.
 
+Toy-field samples in `Match.lean` / `SpotCheck.lean` use kernel `decide`,
+not `native_decide`, so the census stays those three axioms. Correspondence
+with snarkVM is source-pinned samples (`Varuna.snarkVMPin`), not captured
+BLS12-377 MSM coefficients.
+
 ### 2.3 Modelling boundaries are not axioms
 
 Hash-as-RO, pairing-as-hardness, “the verifying key is the index of
@@ -322,9 +327,12 @@ snarkVM plus the spec.
 - `weightedSum` / `inspectBatch` — accepting combination with no break
   data implies every claim is zero
 - `selectorPoly` / `selector_mul_vanishing` / `lift_residual` —
-  `s_{H,H_i} v_{H_i} = v_H` when `|H_i|` divides `|H|` (nested FFT
-  domains); a subdomain residual lifts to the common domain
+  snarkVM `s = (v_H / v_{H_i}) · (|H_i|/|H|)` when `|H_i|` divides
+  `|H|`; times `v_{H_i}` this is `(|H_i|/|H|) v_H`. A subdomain
+  residual lifts with that scale (the unscaled geometric quotient
+  is `selectorGeom`)
 - `batched_rowcheck_two` — honest two-circuit rowcheck combination
+  with the snarkVM scale on each selector
 - extra round: `alpha_independent_of_prepareThird` (`α` ignores later
   instance sums) and `prepareThird_challenge_eq` (`η_b, η_c` see those
   sums)
@@ -353,9 +361,17 @@ accept predicate, named floors, and negative fixtures.
   a repeated point
 - `toyMulPairing` / `toy_kzg_accepts` — the KZG pairing equation on a
   multiplicative toy pairing
+- `SpotCheck.lean` — source-pinned samples against the `snarkVM/`
+  submodule (`Varuna.snarkVMPin`): V2 squeeze counts, first combiners
+  `= 1`, `η_A = 1`, vanishing `X^n-1`, padding at `ω^0 = 1`,
+  selector point-eval matching `evaluate_selector_polynomial`,
+  four-term matrix `b` LC, KZG pairing equation. This is **not**
+  Ironwood’s MSM/`native_decide` fingerprint of a BLS12-377 proof.
 
 Captured snarkVM / Sage proofs over BLS12-377 remain future pins.
-Byte encodings stay a floor.
+Byte encodings stay a floor. The selector scale `|H_i|/|H|` was a
+real mismatch found by sampling `ahp/selectors.rs`; Lean now matches
+the deployed formula.
 
 **Exit criterion (met).** Typed accept in Lean; floors enumerated;
 negative fixtures reject; no `sorry`; census unchanged in axioms.
@@ -430,8 +446,8 @@ quoting them.
 | `ProvableHQ/varuna-sage-impl` `docs/spec.pdf` | Human protocol spec |
 | `ProvableHQ/varuna-sage-impl` Sage PIOPs | Executable identities for rowcheck / sumchecks |
 | `ProvableHQ/protocol-docs` (`protocol-docs/` submodule) | Algorithm identities (rowcheck, lincheck, matrix sumcheck), including VarunaVersion V2 batching |
-| `ProvableHQ/snarkVM` `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V2`) |
-| `ProvableHQ/snarkVM` `algorithms/src/polycommit/sonic_pc/` | PC interface |
+| `ProvableHQ/snarkVM` submodule (`Varuna.snarkVMPin`) `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V2`); sampled in `SpotCheck.lean` |
+| `ProvableHQ/snarkVM` `algorithms/src/polycommit/sonic_pc/` and `kzg10/` | PC interface and pairing check |
 | `leanprover-community/mathlib4` tag `v4.33.0` | Field, `Polynomial`, roots of unity, Lagrange |
 | Sage / snarkVM test vectors | Iteration-7 fixtures |
 
