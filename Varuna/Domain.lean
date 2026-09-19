@@ -186,6 +186,23 @@ theorem eval_lagrange_of_ne {i j : Nat} (hij : i ≠ j) (hj : j < H.n) :
     (H.lagrange i).eval (H.node j) = 0 :=
   Lagrange.eval_basis_of_ne hij (Finset.mem_range.mpr hj)
 
+/-- Lagrange evaluation on a domain node is the Kronecker delta. -/
+theorem eval_lagrange_node_ite {i j : Nat} (_hi : i < H.n) (hj : j < H.n) :
+    (H.lagrange i).eval (H.node j) = if i = j then 1 else 0 := by
+  by_cases h : i = j
+  · subst h
+    simpa using H.eval_lagrange_self hj
+  · simp [h, H.eval_lagrange_of_ne h hj]
+
+/-- Unique interpolant of a table on the domain nodes (snarkVM LDE). -/
+noncomputable def interpolate (values : Nat → F) : F[X] :=
+  Lagrange.interpolate H.indexSet H.node values
+
+/-- The interpolant recovers the table at every domain node. -/
+theorem eval_interpolate (values : Nat → F) {i : Nat} (hi : i < H.n) :
+    (H.interpolate values).eval (H.node i) = values i :=
+  Lagrange.eval_interpolate_at_node values H.injOn_node (Finset.mem_range.mpr hi)
+
 end EvalDomain
 
 /-- Univariate Schwartz–Zippel: a polynomial has at most `natDegree` roots. -/

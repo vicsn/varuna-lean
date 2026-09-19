@@ -208,16 +208,26 @@ land when the indexer consumes both.
 **Exit criterion (met).** Vanishing iff, Schwartz–Zippel bound, Mathlib
 pin, no `sorry`.
 
-### Iteration 2 — Holographic indexer
+### Iteration 2 — Holographic indexer (complete)
 
-Port the Sage/snarkVM indexer:
+**Goal.** Sparse matrices become oracles that recover entries on `K`.
 
-- sparse `A, B, C` → row / col / val polynomials over `K_A, K_B, K_C`
-- matrix-polynomial identity the rational sumcheck consumes
-- circuit id / `CircuitInfo` (constraint, variable, nonzero counts)
+**Delivered.**
 
-Prove: evaluating the indexed oracles at domain points recovers the
-matrix entries. This is the “holography” in AHP-for-R1CS.
+- `Varuna.CircuitInfo` matching snarkVM (public inputs, variables,
+  constraints, nonzero counts)
+- `rowOracle` / `colOracle` / `valOracle` interpolants on the nonzero
+  domain, with `*_eval` recovering the stored table at each `K`-node
+- `holographicEval_at_nodes` — the snarkVM identity
+  `M(a,b)=∑_k val(k) L^R_row(k)(a) L^C_col(k)(b)` at domain nodes
+- `assert_axioms` / `assert_computable` elaborator; TrustBoundary is
+  now a build-time census rather than `#print axioms`
+
+Column reindexing of the public-input subdomain
+(`reindex_by_subdomain`) is named for the batching layer.
+
+**Exit criterion (met).** Oracle evaluation recovers entries; census
+commands reject `sorryAx`.
 
 ### Iteration 3 — AHP PIOPs (algebraic, interactive)
 
@@ -360,11 +370,10 @@ system: it is the readable PIOP, snarkVM is the verifier of record.
 ## 7. Build, CI, and documentation scope
 
 - `lake build --wfail` is the verifier. CI runs it
-  (`.github/workflows/lean.yml`).
-- Iteration 1 adds Mathlib cache (`lake exe cache get`) and a
-  toolchain pin that matches a Mathlib `rev`.
-- Iteration 2 adds the `assert_axioms` elaborator and a census
-  script.
+  (`.github/workflows/lean.yml`) and fetches the Mathlib cache.
+- Mathlib is pinned at tag `v4.33.0` (toolchain `v4.33.0`).
+- `assert_axioms` / `assert_computable` in `Varuna/AxiomCheck.lean`
+  bound the census; `sorryAx` fails the build.
 - We are **not** cloning the Ironwood book (mdBook, proof journey,
   glossary, CI-checks essay). The proof map plus this plan plus a
   short README are the documentation for now.

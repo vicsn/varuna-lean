@@ -11,10 +11,9 @@ build-time checks rather than prose.
 
 ## Current status
 
-**Iteration 1 complete.** Mathlib `v4.33.0` is pinned. Evaluation
-domains, `v_H(α) = 0 ↔ α ∈ H`, Lagrange basis, and univariate
-Schwartz–Zippel (`szBadSet`) are in Lean. The R1CS relation from
-iteration 0 remains the statement the SNARK is about.
+**Iteration 2 complete.** The holographic indexer is in Lean: row / col /
+val interpolants recover sparse matrix entries on the nonzero domain,
+and `assert_axioms` makes the census a build-time check.
 
 Every layer above domains (indexer, AHP PIOPs, polynomial commitments,
 Fiat–Shamir, the deployed verifier) is on the map as a hypothesis,
@@ -48,7 +47,9 @@ Varuna/
   R1CS.lean                         -- SNARK relation, sparse ↔ Hadamard
   Field.lean                        -- Mathlib `ZMod p` (iteration 1)
   Domain.lean                       -- EvalDomain, v_H, Lagrange, SZ
-  TrustBoundary.lean                -- axiom-census stub
+  Indexer.lean                      -- holographic row/col/val oracles
+  AxiomCheck.lean                   -- assert_axioms / assert_computable
+  TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan
 protocol-docs/                      -- algorithm spec (git submodule)
 book/src/formal-verification/

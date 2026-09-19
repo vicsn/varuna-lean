@@ -7,4 +7,6 @@ import Varuna.PrimeField
 import Varuna.R1CS
 import Varuna.Field
 import Varuna.Domain
+import Varuna.Indexer
+import Varuna.AxiomCheck
 import Varuna.TrustBoundary
