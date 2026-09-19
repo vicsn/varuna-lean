@@ -303,14 +303,34 @@ an adversary) remains iteration 8. Here the break data is computed.
 **Exit criterion (met).** V2 schedule in Lean; a message is in the
 prefix before its challenge; forks/collisions are `def`s; no `sorry`.
 
-### Iteration 6 — Batching
+### Iteration 6 — Batching (complete)
 
-Multi-circuit and multi-instance batching, with the extra IOP round
-that prevents adaptive statement selection after seeing verifier
+**Goal.** Multi-circuit / multi-instance batching, with the extra IOP
+round that prevents adaptive statement selection after seeing verifier
 randomness. Soundness must not silently assume a single circuit.
 
 Sage does not implement batching; the source of truth here is
 snarkVM plus the spec.
+
+**Delivered.**
+
+- `BatchCombiners` / `circuitCombiners` / `instanceCombiners` — first
+  combiner of each family is `1` (not squeezed), matching snarkVM
+  `sample_batch_combiners`
+- `MatrixCombiners.ofEtaBC` / `DeltaCombiners.first` — `η_A = 1`,
+  first-circuit `δ_A = 1`
+- `weightedSum` / `inspectBatch` — accepting combination with no break
+  data implies every claim is zero
+- `selectorPoly` / `selector_mul_vanishing` / `lift_residual` —
+  `s_{H,H_i} v_{H_i} = v_H` when `|H_i|` divides `|H|` (nested FFT
+  domains); a subdomain residual lifts to the common domain
+- `batched_rowcheck_two` — honest two-circuit rowcheck combination
+- extra round: `alpha_independent_of_prepareThird` (`α` ignores later
+  instance sums) and `prepareThird_challenge_eq` (`η_b, η_c` see those
+  sums)
+
+**Exit criterion (met).** Batching identities and the extra-round
+binding are sorry-free; `inspectBatch` is a computed `def`.
 
 ### Iteration 7 — Deployed-verifier faithfulness
 

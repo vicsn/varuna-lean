@@ -31,7 +31,12 @@ absorb-then-squeeze (`α` only in the second squeeze; extra
 `prepare_third` round), with forks and RO collisions as computed data
 (`inspectFork`, `inspectCollision`). Poseidon = RO remains a floor.
 
-Every layer above Fiat–Shamir (batching, the deployed verifier) is on
+**Iteration 6 complete.** Multi-circuit batching is in Lean: first
+combiners are `1`, selector polynomials lift subdomain residuals to
+the common domain, and the extra round binds instance sums before
+`η_b, η_c`. `inspectBatch` is the computed batch-break.
+
+Every layer above batching (the deployed verifier, the capstone) is on
 the map as a hypothesis, definition, or out-of-Lean floor. See
 [PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
@@ -67,6 +72,7 @@ Varuna/
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck
   SonicPC.lean                      -- labeled polynomials, KZG, binding breaks
   FiatShamir.lean                   -- V2 absorb/squeeze schedule, forks
+  Batching.lean                     -- multi-circuit combiners, selectors
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan

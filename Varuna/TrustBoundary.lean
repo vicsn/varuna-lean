@@ -6,9 +6,10 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 import Varuna.AxiomCheck
 import Varuna.SonicPC
 import Varuna.FiatShamir
+import Varuna.Batching
 
 /-!
-# Trust boundary (iterations 0–5)
+# Trust boundary (iterations 0–6)
 
 Ironwood keeps the trusted base of every advertised endpoint as a
 build-time check. `assert_axioms` fails the build if a named theorem
@@ -78,3 +79,16 @@ assert_axioms Varuna.before_length
 assert_computable Varuna.inspectFork
 assert_computable Varuna.inspectCollision
 assert_computable Varuna.squeezeN
+assert_axioms Varuna.circuitCombiners_head
+assert_axioms Varuna.etaA_eq_one
+assert_axioms Varuna.inspectBatch_accepts
+assert_axioms Varuna.inspectBatch_some
+assert_axioms Varuna.nested_domain_card_dvd
+assert_axioms Varuna.selector_mul_vanishing
+assert_axioms Varuna.lift_residual
+assert_axioms Varuna.batched_rowcheck_two
+assert_axioms Varuna.alpha_independent_of_prepareThird
+assert_axioms Varuna.prepareThird_challenge_eq
+assert_axioms Varuna.extraRound_iff_V2
+assert_computable Varuna.inspectBatch
+assert_computable Varuna.weightedSum

@@ -11,5 +11,6 @@ import Varuna.Indexer
 import Varuna.AHP
 import Varuna.SonicPC
 import Varuna.FiatShamir
+import Varuna.Batching
 import Varuna.AxiomCheck
 import Varuna.TrustBoundary
