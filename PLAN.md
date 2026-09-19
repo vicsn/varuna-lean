@@ -276,17 +276,32 @@ is a floor.
 **Exit criterion (met).** Binding is a computed `def`; completeness and
 the forgery reduction are sorry-free; census extended.
 
-### Iteration 5 — Fiat–Shamir and the deployed transcript
+### Iteration 5 — Fiat–Shamir and the deployed transcript (complete)
 
-- Poseidon sponge as a random oracle (the identification
-  Poseidon = RO is a floor; the *programming / forking* lemmas are
-  in Lean)
-- challenge schedule matching snarkVM’s `VarunaVersion.V2` (including
-  the 2025 extra round)
-- round-by-round: a message is in the transcript prefix before its
-  challenge is drawn
+**Goal.** The V2 absorb/squeeze schedule, with forks and collisions as
+computed data.
 
-Forking / special soundness extractors are computable `def`s.
+**Delivered.**
+
+- `VarunaVersion` (`V1` / `V2`); the formalization targets `V2`
+- `FSMessage` / `Transcript` / `RO` — Poseidon identified with a
+  programmable random oracle is a floor
+- `squeezeN` — successive squeezes re-absorb the previous challenge
+- `V2Challenge` / `V2Transcript` — absorb then squeeze: combiners, `α`
+  only, extra `prepareThird` (`η_b, η_c` delayed), `β`, `δ`, `γ`
+- `challenge_eq_ro` / `alpha_prefix_isPrefix` — each challenge is a
+  function of the prefix *before* that squeeze; `α` is a prefix of
+  prepare-third and of `β`
+- `inspectFork` — two oracles that disagree at a shared prefix
+  (programming / rewind); `inspectCollision` — two prefixes, one RO
+- `hasPrepareThird_V2` / `v2_secondRound_lt_v1` — V2 has the extra
+  round and squeezes one second-round challenge instead of three
+
+Forking as a *probabilistic* special-soundness extractor (rewinding
+an adversary) remains iteration 8. Here the break data is computed.
+
+**Exit criterion (met).** V2 schedule in Lean; a message is in the
+prefix before its challenge; forks/collisions are `def`s; no `sorry`.
 
 ### Iteration 6 — Batching
 

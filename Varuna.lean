@@ -10,5 +10,6 @@ import Varuna.Domain
 import Varuna.Indexer
 import Varuna.AHP
 import Varuna.SonicPC
+import Varuna.FiatShamir
 import Varuna.AxiomCheck
 import Varuna.TrustBoundary

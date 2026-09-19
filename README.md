@@ -26,8 +26,13 @@ linear combinations (including the three zero-eval LCs), honest opening
 completeness, and binding as computed break data
 (`pairingBreak_of_double_opening`).
 
-Every layer above the PC (Fiat–Shamir, the deployed verifier) is on the
-map as a hypothesis, definition, or out-of-Lean floor. See
+**Iteration 5 complete.** The V2 Fiat–Shamir schedule is in Lean:
+absorb-then-squeeze (`α` only in the second squeeze; extra
+`prepare_third` round), with forks and RO collisions as computed data
+(`inspectFork`, `inspectCollision`). Poseidon = RO remains a floor.
+
+Every layer above Fiat–Shamir (batching, the deployed verifier) is on
+the map as a hypothesis, definition, or out-of-Lean floor. See
 [PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
 
@@ -61,6 +66,7 @@ Varuna/
   Indexer.lean                      -- holographic row/col/val oracles
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck
   SonicPC.lean                      -- labeled polynomials, KZG, binding breaks
+  FiatShamir.lean                   -- V2 absorb/squeeze schedule, forks
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan
