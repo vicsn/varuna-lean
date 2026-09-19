@@ -9,8 +9,8 @@ property rather than a comment.
 
 The interactive map is [`book/src/formal-verification/proof-map.html`](book/src/formal-verification/proof-map.html).
 Open that file in a browser. Nodes are coloured **proven / hypothesis /
-out-of-Lean / definition / goal**. The first iteration colours only the
-R1CS relation green, and only partially.
+out-of-Lean / definition / goal**. Iteration 0 colours the R1CS relation,
+including the sparse ↔ Hadamard equivalence.
 
 ---
 
@@ -35,7 +35,8 @@ iterations:
 - multi-circuit / multi-instance batching, including the extra IOP
   round added in 2025 to stop adaptive statement selection
 - optional zero-knowledge (masking polynomials)
-- GR1CS as the longer-term constraint language; R1CS first
+
+The constraint language is R1CS (`Az ∘ Bz = Cz`).
 
 **Non-goals (separate projects).**
 
@@ -145,7 +146,7 @@ looks finished.
      rowcheck ──► lincheck ──► matrix sumcheck
            │
            ▼
-  Az ∘ Bz = Cz                       (definition + partial proof)   ← here
+  Az ∘ Bz = Cz                       (definition + proof)   ← here
            │
            ▼
   knowledge-soundness capstone       (goal)
@@ -160,31 +161,29 @@ own claims, `lake build --wfail` green, proof-map statuses updated,
 census extended. Do not mark a node `proven` until a named Lean
 declaration exists.
 
-### Iteration 0 — R1CS relation (this commit, partial)
+### Iteration 0 — R1CS relation (complete)
 
 **Goal.** A Lean carrier for the statement Varuna is *about*.
 
 **Delivered.**
 
-- `Varuna.PrimeField` — `[0, p)` add/mul
-- `Varuna.R1CS` — sparse constraints, Hadamard predicate
+- `Varuna.PrimeField` — `[0, p)` add/mul, including distributivity
+- `Varuna.R1CS` — sparse constraints, Hadamard predicate, dense matrices
 - `satisfies_nil`, `satisfies_append`
 - `mulConstraint_holds_iff` — `(x)(y)=(out) ↔ assigned product`
 - `hadamardSat_zero` — empty matrix system
-- `toy_mul_holds` — `3 * 5 = 15` over `𝔽₁₇`
+- `coeffOf_duplicate`, `coeffOf_eq_zero_of_not_mem` — duplicate columns
+  and implicit zeros
+- `satisfies_iff_hadamard` — sparse list ↔ `Az ∘ Bz = Cz`
+- formatted public-input convention: `formatPublicInput` prepends `1`,
+  `formattedPublicInputAdmissible` requires `|x| = 2^k`, `padZeros`
+  matches snarkVM input padding
+- `toy_mul_holds` / `formatted_toy_holds` — `3 * 5 = 15` over `𝔽₁₇`
 - `TrustBoundary` stub printing those axioms
-- proof map with the full spine drawn and this layer coloured
+- proof map with the full spine drawn and this layer coloured `proven`
 
-**Left open inside this layer (still `hyp` on the map).**
-
-- general sparse-row ↔ dense-row inner-product lemma (duplicate
-  columns, implicit zeros)
-- `satisfies cs asg p ↔ hadamardSat (toMatrix cs) …`
-- formatted public-input convention (`|x| = 2^k`, constant-`1` slot)
-- GR1CS (sum of rank-1 products)
-
-**Exit criterion for “iteration 0 complete”.** The iff above, no
-`sorry`, census lists it.
+**Exit criterion (met).** `satisfies cs asg p ↔ hadamardSat (toMatrix cs) …`
+with no `sorry`, and the census lists it.
 
 ### Iteration 1 — Mathlib carrier, domains, vanishing
 
@@ -250,7 +249,7 @@ structure”, not “the pairing is hard”.
 - Poseidon sponge as a random oracle (the identification
   Poseidon = RO is a floor; the *programming / forking* lemmas are
   in Lean)
-- challenge schedule matching snarkVM’s `VarunaVersion` (including
+- challenge schedule matching snarkVM’s `VarunaVersion.V2` (including
   the 2025 extra round)
 - round-by-round: a message is in the transcript prefix before its
   challenge is drawn
@@ -296,12 +295,6 @@ node on the proof map.
 Zero-knowledge (simulator, mask polynomials) can land in the same
 iteration or a twin PR; it is not on the soundness spine.
 
-### Iteration 9 — GR1CS, lookups, remaining deployed surface
-
-- Garuda/Pari GR1CS as a drop-in relation replacing R1CS
-- lookup arguments if they remain in the deployed pipeline
-- any leftover `VarunaVersion` branches
-
 ---
 
 ## 5. Proof-map discipline
@@ -324,9 +317,9 @@ Statuses:
 | `goal` | Advertised capstone |
 
 A node moves to `proven` only when its `anchor` field names a real
-declaration. Iteration 0 sets `mulConstraint` and `r1csEmpty` to
-`proven`, leaves `hadamardIff` as `hyp`, and leaves the rest of the
-spine as `object` / `hyp` / `floor` / `goal`.
+declaration. Iteration 0 sets `mulConstraint`, `r1csEmpty`, and
+`hadamardIff` to `proven`, and leaves the rest of the spine as
+`object` / `hyp` / `floor` / `goal`.
 
 A later `book/validate-proof-journey.py` (Ironwood has one) should
 check that every `proven` anchor exists in the Lean sources and that
@@ -343,7 +336,8 @@ quoting them.
 | --- | --- |
 | `ProvableHQ/varuna-sage-impl` `docs/spec.pdf` | Human protocol spec |
 | `ProvableHQ/varuna-sage-impl` Sage PIOPs | Executable identities for rowcheck / sumchecks |
-| `ProvableHQ/snarkVM` `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching |
+| `ProvableHQ/protocol-docs` (`protocol-docs/` submodule) | Algorithm identities (rowcheck, lincheck, matrix sumcheck), including VarunaVersion V2 batching |
+| `ProvableHQ/snarkVM` `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V2`) |
 | `ProvableHQ/snarkVM` `algorithms/src/polycommit/sonic_pc/` | PC interface |
 | ePrint 2019/1047 (Marlin) | AHP theory |
 | Sage / snarkVM test vectors | Iteration-7 fixtures |
@@ -374,9 +368,9 @@ system: it is the readable PIOP, snarkVM is the verifier of record.
 2. **Finish iteration 0** — sparse ↔ Hadamard iff, formatted inputs.
 3. **Mathlib + domains + SZ.**
 4. **Indexer holography.**
-5. **AHP rowcheck**, then lincheck, then matrix sumcheck.
+5. **AHP rowcheck**, then lincheck, then matrix sumcheck (V2).
 6. **PC binding** as a computed break.
-7. **Fiat–Shamir schedule** + extra batching round.
+7. **Fiat–Shamir schedule** for `VarunaVersion.V2` + extra batching round.
 8. **snarkVM fixtures** (faithfulness).
 9. **Knowledge-soundness capstone** + full census.
 
@@ -384,12 +378,18 @@ system: it is the readable PIOP, snarkVM is the verifier of record.
 
 ## 9. What you are trusting after iteration 0
 
-Almost everything. The Lean kernel has checked that
+The Lean kernel has checked that
 
 - `satisfies []` is true
 - a multiplication constraint is exactly multiplication
 - the empty Hadamard system holds
-- one toy assignment satisfies one constraint
+- sparse constraints are `Az ∘ Bz = Cz` for the dense matrices they
+  encode (duplicate columns add; missing columns are zero), once
+  variable indices are in range and the assignment is formatted
+- formatted public inputs prepend the constant-`1` slot and are
+  admissible iff their length is a power of two
+- one toy assignment satisfies one constraint, including in the
+  formatted view
 
 It has **not** checked Varuna, Marlin, the AHP, the PC, Fiat–Shamir,
 or the Rust verifier. The proof map is there so that sentence stays

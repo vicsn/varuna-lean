@@ -1,0 +1,3 @@
+[submodule "protocol-docs"]
+	path = protocol-docs
+	url = git@github.com:ProvableHQ/protocol-docs.git

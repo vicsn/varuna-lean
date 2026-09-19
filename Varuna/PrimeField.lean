@@ -80,4 +80,73 @@ theorem mul_one_mod_left {x : Int} {p : Nat} (hp : 2 ≤ p) (hx : Fep p x) :
     mul ((1 : Int) % p) x p = x := by
   rw [emod_one_of_two_le hp, mul_one_left hp hx]
 
+/-- Reducing the left factor modulo `p` does not change a field product. -/
+theorem mul_emod_left (a z : Int) (p : Nat) :
+    mul (a % (p : Int)) z p = mul a z p := by
+  unfold mul
+  rw [Int.mul_emod, Int.emod_emod, ← Int.mul_emod]
+
+/-- Field addition of already-reduced residues agrees with addition of the originals. -/
+theorem add_emod_add (x y : Int) (p : Nat) :
+    add (x % (p : Int)) (y % (p : Int)) p = add x y p := by
+  unfold add
+  rw [← Int.add_emod]
+
+/-- Reducing the left factor does not change an integer product modulo `p`. -/
+theorem mul_emod_eq (a z : Int) (p : Nat) :
+    (a * z) % (p : Int) = (a % (p : Int) * z) % (p : Int) := by
+  rw [Int.mul_emod a z (p : Int), Int.mul_emod (a % (p : Int)) z (p : Int),
+    Int.emod_emod]
+
+/-- Modular multiplication distributes over integer addition of coefficients. -/
+theorem mul_add_coeff (a b z : Int) (p : Nat) :
+    mul ((a + b) % (p : Int)) z p =
+      add (mul (a % (p : Int)) z p) (mul (b % (p : Int)) z p) p := by
+  unfold mul add
+  calc
+    ((a + b) % (p : Int) * z) % (p : Int)
+        = ((a + b) * z) % (p : Int) := (mul_emod_eq (a + b) z p).symm
+    _ = (a * z + b * z) % (p : Int) := by rw [Int.add_mul]
+    _ = ((a * z) % (p : Int) + (b * z) % (p : Int)) % (p : Int) :=
+      Int.add_emod _ _ _
+    _ = ((a % (p : Int) * z) % (p : Int) +
+            (b % (p : Int) * z) % (p : Int)) % (p : Int) := by
+          rw [mul_emod_eq a z p, mul_emod_eq b z p]
+
+/-- Left-distributivity of modular multiplication over integer addition. -/
+theorem mul_add_left (a b z : Int) (p : Nat) :
+    mul (a + b) z p = add (mul a z p) (mul b z p) p := by
+  rw [← mul_emod_left (a + b) z p, mul_add_coeff, mul_emod_left, mul_emod_left]
+
+/-- Modular addition is commutative. -/
+theorem add_comm (x y : Int) (p : Nat) : add x y p = add y x p := by
+  unfold add
+  rw [Int.add_comm]
+
+/-- Modular addition is associative. -/
+theorem add_assoc (x y z : Int) (p : Nat) :
+    add (add x y p) z p = add x (add y z p) p := by
+  unfold add
+  rw [Int.emod_add_emod, Int.add_emod_emod, Int.add_assoc]
+
+/-- Left-commutation lemma for three modular addends. -/
+theorem add_left_comm (x y z : Int) (p : Nat) :
+    add x (add y z p) p = add y (add x z p) p := by
+  rw [← add_assoc, add_comm x y, add_assoc]
+
+/-- Right-commutation lemma for three modular addends. -/
+theorem add_right_comm (x y z : Int) (p : Nat) :
+    add (add x y p) z p = add (add x z p) y p := by
+  rw [add_assoc, add_comm y z, ← add_assoc]
+
+/-- Adding zero on the left is a no-op on a field element. -/
+theorem add_zero_left {x : Int} {p : Nat} (hx : Fep p x) : add 0 x p = x := by
+  unfold add
+  rw [Int.zero_add, hx.emod_eq]
+
+/-- Multiplying by zero on the left yields zero. -/
+theorem mul_zero_left (z : Int) (p : Nat) : mul 0 z p = 0 := by
+  unfold mul
+  rw [Int.zero_mul, Int.zero_emod]
+
 end Varuna
