@@ -185,19 +185,28 @@ declaration exists.
 **Exit criterion (met).** `satisfies cs asg p ↔ hadamardSat (toMatrix cs) …`
 with no `sorry`, and the census lists it.
 
-### Iteration 1 — Mathlib carrier, domains, vanishing
+### Iteration 1 — Mathlib carrier, domains, vanishing (complete)
 
-Adopt Mathlib (`lean-toolchain` + `rev` pin, `lake exe cache get`).
-Rephrase the field as `ZMod p` with `Fact p.Prime`.
+**Goal.** Algebraic facts every later PIOP lemma quotes.
 
-- evaluation domains (powers of two, as in snarkVM `EvaluationDomain`)
-- vanishing polynomial `v_H`, Lagrange basis
-- `v_H(α) = 0 ↔ α ∈ H` for a subgroup domain
-- Schwartz–Zippel: a nonzero polynomial of degree `d` has at most `d`
-  roots
+**Delivered.**
 
-These are the algebraic facts every later PIOP lemma quotes. Pin the
-Mathlib revision the way Ironwood pins `v4.30.0`.
+- Mathlib pin `v4.33.0` (toolchain `leanprover/lean4:v4.33.0`), `lake-manifest.json`
+- `Varuna.Field` — `Fp p := ZMod p` with `Fact p.Prime` (toy `𝔽₁₇`)
+- `Varuna.EvalDomain` — multiplicative subgroup of size `2^k` with
+  primitive generator, matching snarkVM `EvaluationDomain`
+- `v_H(X) = X^{|H|} - 1` and `v_H(α) = 0 ↔ α ∈ H`
+- Lagrange basis: `1` at one node, `0` at the others
+- `schwartzZippel_card` / `szBadSet` — at most `deg` roots; a miss is
+  not a root
+- formatted public-input `PowTwo` ↔ core `Nat.isPowerOfTwo`
+
+The R1CS relation remains on the iteration-0 integer carrier; AHP
+identities from here on are over a Mathlib `Field`. A bridge lemma can
+land when the indexer consumes both.
+
+**Exit criterion (met).** Vanishing iff, Schwartz–Zippel bound, Mathlib
+pin, no `sorry`.
 
 ### Iteration 2 — Holographic indexer
 
@@ -339,7 +348,7 @@ quoting them.
 | `ProvableHQ/protocol-docs` (`protocol-docs/` submodule) | Algorithm identities (rowcheck, lincheck, matrix sumcheck), including VarunaVersion V2 batching |
 | `ProvableHQ/snarkVM` `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V2`) |
 | `ProvableHQ/snarkVM` `algorithms/src/polycommit/sonic_pc/` | PC interface |
-| ePrint 2019/1047 (Marlin) | AHP theory |
+| `leanprover-community/mathlib4` tag `v4.33.0` | Field, `Polynomial`, roots of unity, Lagrange |
 | Sage / snarkVM test vectors | Iteration-7 fixtures |
 
 The Sage implementation is single-circuit R1CS with ZK and without

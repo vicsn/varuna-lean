@@ -3,33 +3,27 @@ Copyright (c) 2026 Provable Inc.
 Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
-import Varuna.R1CS
+import Varuna.Domain
 
 /-!
-# Trust boundary (iteration 0)
+# Trust boundary (iterations 0–1)
 
 Ironwood keeps the trusted base of every advertised endpoint as a
 build-time check (`assert_axioms` / `assert_computable` in
 `Zcash/TrustBoundary.lean`). This file is the corresponding census for
 Varuna, in stub form.
 
-Iteration 0 pins the proven R1CS lemmas by importing them into the
-default `lake build` target and printing their axiom set. A later
-iteration will replace `#print axioms` with an `assert_axioms` elaborator
-that fails the build on `sorry` or unexpected axioms.
+A later iteration will replace `#print axioms` with an `assert_axioms`
+elaborator that fails the build on `sorry` or unexpected axioms.
 
-Recorded axiom sets after `lake build` (iteration 0 complete):
+Recorded axiom sets after `lake build` :
 
-* `satisfies_nil`, `hadamardSat_zero`, `unformat_formatPublicInput`,
-  `formatPublicInput_nil_admissible` — no axioms
-* `satisfies_append`, `satisfies_iff_hadamard`,
-  `assignmentOf_format_zero` — `propext`
-* `mulConstraint_holds_iff`, `formatted_toy_iff` — `propext`, `Quot.sound`
-* `toy_mul_holds`, `formatted_toy_holds` — `propext`, `Classical.choice`,
-  `Quot.sound` (`omega` on the concrete assignment)
-
-All of these sit inside the standard classical tier. None mention
-`sorryAx`.
+* iteration 0 R1CS lemmas — `propext` / `Classical.choice` / `Quot.sound`
+  as listed previously; none mention `sorryAx`
+* `EvalDomain.vanishing_eq_zero_iff`, `schwartzZippel_card`,
+  `card_szBadSet_le_natDegree`, `eval_ne_zero_of_notMem_szBadSet`,
+  `EvalDomain.eval_lagrange_self` — `propext`, `Classical.choice`,
+  `Quot.sound`
 -/
 
 #print axioms Varuna.satisfies_nil
@@ -43,3 +37,8 @@ All of these sit inside the standard classical tier. None mention
 #print axioms Varuna.toy_mul_holds
 #print axioms Varuna.formatted_toy_holds
 #print axioms Varuna.formatted_toy_iff
+#print axioms Varuna.EvalDomain.vanishing_eq_zero_iff
+#print axioms Varuna.schwartzZippel_card
+#print axioms Varuna.card_szBadSet_le_natDegree
+#print axioms Varuna.eval_ne_zero_of_notMem_szBadSet
+#print axioms Varuna.EvalDomain.eval_lagrange_self

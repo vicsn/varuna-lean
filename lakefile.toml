@@ -3,17 +3,21 @@ version = "0.1.0"
 keywords = ["cryptography", "snark", "formal-verification", "varuna"]
 defaultTargets = ["Varuna"]
 
-# `lint.sh --lake-lint` requires a configured driver. Iteration 0 has no
-# extra package lints; the driver is a no-op so the hook can run `--all`.
+# `lint.sh --lake-lint` requires a configured driver. No extra package
+# lints yet; the driver is a no-op so the hook can run `--all`.
 lintDriver = "lint"
 
 [leanOptions]
 pp.unicode.fun = true
 autoImplicit = false
 
-# Iteration 0 is self-contained Lean 4: the R1CS relation does not yet need
-# Mathlib. Iteration 1 (evaluation domains, vanishing polynomials, AHP)
-# switches the carrier to Mathlib `ZMod p` / `Polynomial`. See PLAN.md.
+# Iteration 1 switches the AHP carrier to Mathlib `ZMod p` / `Polynomial`.
+# Pin matches Mathlib's `v4.33.0` tag (Lean 4.33). See PLAN.md.
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.33.0"
 
 [[lean_lib]]
 name = "Varuna"

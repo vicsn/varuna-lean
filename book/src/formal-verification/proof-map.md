@@ -9,9 +9,8 @@ Open the interactive map:
 
 The spine runs down the left: accepting proof → Fiat–Shamir challenges →
 polynomial-commitment openings → AHP checks → R1CS. Iteration 0 colours
-the R1CS relation: `satisfies_nil`, `mulConstraint_holds_iff`,
-`hadamardSat_zero`, and the sparse ↔ Hadamard equivalence
-`satisfies_iff_hadamard` (including formatted public inputs).
+the R1CS relation. Iteration 1 colours evaluation-domain vanishing
+(`v_H(α)=0 ↔ α∈H`) and the Schwartz–Zippel bad-set bound.
 
 Statuses, edge verbs, and the iteration plan are in [PLAN.md](../../../PLAN.md).
 This wrapper is intentionally thin: we are not cloning the Ironwood book.
