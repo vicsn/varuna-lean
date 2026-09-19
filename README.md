@@ -21,9 +21,14 @@ rowcheck (`σ_A σ_B − σ_C = h₀ v_H`), univariate lineval sumcheck
 `a(X)`, `b(X)` encoding. Accepting a challenge yields the algebraic
 claim or Schwartz–Zippel break data (`inspectResidual`).
 
-Every layer above the AHP (polynomial commitments, Fiat–Shamir, the
-deployed verifier) is on the map as a hypothesis, definition, or
-out-of-Lean floor. See [PLAN.md](PLAN.md) and the
+**Iteration 4 complete.** Sonic-KZG is in Lean: labeled polynomials,
+linear combinations (including the three zero-eval LCs), honest opening
+completeness, and binding as computed break data
+(`pairingBreak_of_double_opening`).
+
+Every layer above the PC (Fiat–Shamir, the deployed verifier) is on the
+map as a hypothesis, definition, or out-of-Lean floor. See
+[PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
 
 The formalization targets snarkVM’s **`VarunaVersion.V2`**.
@@ -55,6 +60,7 @@ Varuna/
   Domain.lean                       -- EvalDomain, v_H, Lagrange, SZ
   Indexer.lean                      -- holographic row/col/val oracles
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck
+  SonicPC.lean                      -- labeled polynomials, KZG, binding breaks
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan

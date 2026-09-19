@@ -12,6 +12,7 @@ polynomial-commitment openings → AHP checks → R1CS. Iteration 0 colours
 the R1CS relation. Iteration 1 colours evaluation-domain vanishing
 and Schwartz–Zippel. Iteration 2 colours the holographic indexer.
 Iteration 3 colours rowcheck, lineval, and the matrix sumcheck.
+Iteration 4 colours Sonic-KZG openings and binding breaks.
 
 Statuses, edge verbs, and the iteration plan are in [PLAN.md](../../../PLAN.md).
 This wrapper is intentionally thin: we are not cloning the Ironwood book.

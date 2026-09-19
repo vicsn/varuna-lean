@@ -253,19 +253,28 @@ iteration 6).
 bad set (or with `inspectResidual = none`), implies the corresponding
 matrix/witness claim; completeness is a sibling theorem; no `sorry`.
 
-### Iteration 4 — Polynomial commitment
+### Iteration 4 — Polynomial commitment (complete)
 
-Model Sonic PC as used by snarkVM (`polycommit/sonic_pc`):
+**Goal.** Sonic PC as used by snarkVM (`polycommit/sonic_pc`).
 
-- labeled polynomials, degree bounds
-- linear combinations (the three `LC_WITH_ZERO_EVAL` names)
-- opening / batch-opening
-- binding as a *computed* break (two distinct openings)
+**Delivered.**
 
-Pairing-group arithmetic can stay abstract (`Pairing` typeclass) with
-the BLS12-377 instantiation as a later concrete pin. The hardness
-statement is a floor: Lean proves “PC forgery ⇒ pairing break
-structure”, not “the pairing is hard”.
+- `LabeledPolynomial` / `PolynomialInfo` with degree and hiding bounds
+- `LCTerm` / `LinearCombination` matching snarkVM, including
+  `lcWithZeroEval` / `isZeroEval`
+- abstract bilinear `Pairing` and KZG `kzgCheck`
+  (`e(C − v g, h) = e(w, βh − z h)`)
+- `kzgCheck_honest` — completeness for `C = p(β)·g` on a well-formed SRS
+- `inspectBinding` / `pairingBreak_of_double_opening` — two distinct
+  openings of one commitment yield a pairing-product identity with
+  nonzero scalar (PC forgery ⇒ pairing-break *structure*)
+- `kzgCheck_batch` — bilinearity of a two-claim `ξ`-combination
+
+BLS12-377 remains a later concrete pin. Hardness of the pairing break
+is a floor.
+
+**Exit criterion (met).** Binding is a computed `def`; completeness and
+the forgery reduction are sorry-free; census extended.
 
 ### Iteration 5 — Fiat–Shamir and the deployed transcript
 

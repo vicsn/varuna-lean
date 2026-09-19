@@ -4,10 +4,10 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
 import Varuna.AxiomCheck
-import Varuna.AHP
+import Varuna.SonicPC
 
 /-!
-# Trust boundary (iterations 0–3)
+# Trust boundary (iterations 0–4)
 
 Ironwood keeps the trusted base of every advertised endpoint as a
 build-time check. `assert_axioms` fails the build if a named theorem
@@ -57,3 +57,9 @@ assert_axioms Varuna.matrixResidual_honest
 assert_axioms Varuna.matrix_extract
 assert_axioms Varuna.accepts_of_residuals_zero
 assert_computable Varuna.lcWithZeroEval
+assert_axioms Varuna.LinearCombination.eval_add
+assert_axioms Varuna.kzgCheck_honest
+assert_axioms Varuna.pairingBreak_of_double_opening
+assert_axioms Varuna.inspectBinding_of_double_check
+assert_axioms Varuna.kzgCheck_batch
+assert_computable Varuna.LinearCombination.empty
