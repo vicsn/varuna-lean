@@ -7,6 +7,7 @@ import Varuna.AxiomCheck
 import Varuna.SonicPC
 import Varuna.Algebraic
 import Varuna.Lineval
+import Varuna.Composition
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -153,3 +154,8 @@ assert_axioms Varuna.sum_matrixAtAlpha_mul
 assert_axioms Varuna.linevalTarget_eq_mzPoly
 assert_axioms Varuna.linevalEval_eq_residual
 assert_axioms Varuna.sum_linevalPoly
+assert_axioms Varuna.v2_chain
+assert_axioms Varuna.v2_chain_nonZK
+assert_axioms Varuna.shifted_witness_accepts
+assert_axioms Varuna.xIsZero_false
+assert_axioms Varuna.xIsZero_shifted
