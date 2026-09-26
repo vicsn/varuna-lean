@@ -18,6 +18,7 @@ import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Selectors
 import Varuna.Probability
+import Varuna.FSBound
 import Varuna.Match
 import Varuna.Soundness
 import Varuna.Composition

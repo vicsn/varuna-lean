@@ -12,6 +12,7 @@ import Varuna.MatrixSumcheck
 import Varuna.Composition
 import Varuna.Selectors
 import Varuna.Probability
+import Varuna.FSBound
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -206,3 +207,6 @@ assert_axioms Varuna.card_hits_le
 assert_axioms Varuna.ahp_error
 assert_axioms Varuna.tapes
 assert_axioms Varuna.hitsB
+assert_axioms Varuna.fs_query_charge
+assert_axioms Varuna.fsHits_of_bad
+assert_axioms Varuna.fs_break_count
