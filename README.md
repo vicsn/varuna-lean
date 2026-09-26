@@ -97,6 +97,7 @@ snarkVM/                            -- deployed verifier (git submodule)
 book/src/formal-verification/
   proof-map.md                      -- thin wrapper
   proof-map.html                    -- interactive dependency map
+  security-analysis.md              -- security-analysis plan vs Lean coverage
 ```
 
 ## Sources of truth

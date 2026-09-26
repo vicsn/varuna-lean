@@ -20,4 +20,6 @@ source-pinned snarkVM samples (`SpotCheck.lean`).
 Iteration 8 colours the knowledge-soundness capstone.
 
 Statuses, edge verbs, and the iteration plan are in [PLAN.md](../../../PLAN.md).
+How each item of the security-analysis plan is (or is not) covered is in
+[security-analysis.md](security-analysis.md).
 This wrapper is intentionally thin: we are not cloning the Ironwood book.
