@@ -18,7 +18,9 @@ snarkVM V2 never commits `ẑ_M`. The three zero-evaluation LCs are chained :
    with `η_A = 1` and the fourth-round claims standing in for `M̂(α, β)`.
 3. `matrix_sumcheck` proves those claims.
 
-Composing the first two (the claims are hypotheses `hτ` here) gives
+Composing the first two gives the result below. The claims enter as
+hypotheses `hτ`; `matrix_sumcheck_value` discharges each from an accepting
+matrix sumcheck (` | K | σ = M̂(α, β)`).
 
 \[
   (A z + e) \circ B z = C z \quad\text{on } R, \qquad e = \sum_{c \in C} s(c).

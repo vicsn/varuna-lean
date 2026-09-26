@@ -7,6 +7,7 @@ import Varuna.AxiomCheck
 import Varuna.SonicPC
 import Varuna.Algebraic
 import Varuna.Lineval
+import Varuna.MatrixSumcheck
 import Varuna.Composition
 import Varuna.Selectors
 import Varuna.FiatShamir
@@ -170,3 +171,8 @@ assert_axioms Varuna.sum_selectorPoly_mul
 assert_axioms Varuna.weightedSum_map_sub
 assert_axioms Varuna.sum_weightedSum
 assert_axioms Varuna.batchedSumcheck_extract
+assert_axioms Varuna.EvalDomain.lagrangeClosed_mul
+assert_axioms Varuna.EvalDomain.lagrange_eq_closed
+assert_axioms Varuna.EvalDomain.eval_lagrange_off
+assert_axioms Varuna.matrix_term
+assert_axioms Varuna.matrix_sumcheck_value
