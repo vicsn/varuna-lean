@@ -27,6 +27,7 @@ import Varuna.Soundness
 import Varuna.Composition
 import Varuna.Bridge
 import Varuna.Endpoint
+import Varuna.Fingerprint
 import Varuna.SpotCheck
 import Varuna.ProofSize
 import Varuna.AxiomCheck
