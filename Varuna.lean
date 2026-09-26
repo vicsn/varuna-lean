@@ -26,5 +26,6 @@ import Varuna.Soundness
 import Varuna.Composition
 import Varuna.Bridge
 import Varuna.SpotCheck
+import Varuna.ProofSize
 import Varuna.AxiomCheck
 import Varuna.TrustBoundary

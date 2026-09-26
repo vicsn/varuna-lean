@@ -16,6 +16,7 @@ import Varuna.FSBound
 import Varuna.Statement
 import Varuna.PublicInput
 import Varuna.Bridge
+import Varuna.ProofSize
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -236,3 +237,10 @@ assert_axioms Varuna.cast_rowDot1
 assert_axioms Varuna.fieldDot_eq_sum
 assert_axioms Varuna.constraintEntry_getElem
 assert_axioms Varuna.satisfies_of_rows
+assert_axioms Varuna.ProofShape.g1_eq
+assert_axioms Varuna.ProofShape.fr_eq
+assert_axioms Varuna.spec_single_proof
+assert_axioms Varuna.spec_batch_commitments
+assert_axioms Varuna.spec_batch_scalars_iff
+assert_computable Varuna.ProofShape.g1
+assert_computable Varuna.ProofShape.fr
