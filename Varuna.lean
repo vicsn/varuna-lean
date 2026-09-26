@@ -13,6 +13,7 @@ import Varuna.Lineval
 import Varuna.MatrixSumcheck
 import Varuna.SonicPC
 import Varuna.Algebraic
+import Varuna.OpeningBatch
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Selectors

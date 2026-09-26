@@ -6,6 +6,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 import Varuna.AxiomCheck
 import Varuna.SonicPC
 import Varuna.Algebraic
+import Varuna.OpeningBatch
 import Varuna.Lineval
 import Varuna.MatrixSumcheck
 import Varuna.Composition
@@ -187,3 +188,9 @@ assert_axioms Varuna.natDegree_X_mul_add_C_lt
 assert_computable Varuna.inspectDegree
 assert_computable Varuna.degreeDefect
 assert_computable Varuna.exceedsBound
+assert_axioms Varuna.toPoly_combineCoeffs
+assert_axioms Varuna.evalCoeffs_combineCoeffs
+assert_axioms Varuna.batchedOpening_extract
+assert_axioms Varuna.inspectOpening_break_of_root
+assert_axioms Varuna.acrossPoints_extract
+assert_computable Varuna.combineCoeffs
