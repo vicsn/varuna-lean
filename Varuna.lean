@@ -14,6 +14,7 @@ import Varuna.SonicPC
 import Varuna.Algebraic
 import Varuna.FiatShamir
 import Varuna.Batching
+import Varuna.Selectors
 import Varuna.Match
 import Varuna.Soundness
 import Varuna.Composition

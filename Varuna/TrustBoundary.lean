@@ -8,6 +8,7 @@ import Varuna.SonicPC
 import Varuna.Algebraic
 import Varuna.Lineval
 import Varuna.Composition
+import Varuna.Selectors
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -159,3 +160,8 @@ assert_axioms Varuna.v2_chain_nonZK
 assert_axioms Varuna.shifted_witness_accepts
 assert_axioms Varuna.xIsZero_false
 assert_axioms Varuna.xIsZero_shifted
+assert_axioms Varuna.elements_subset_of_dvd
+assert_axioms Varuna.selectorPoly_eval_of_mem
+assert_axioms Varuna.selectorPoly_eval_of_not_mem
+assert_axioms Varuna.selectorPoly_eval_indicator
+assert_axioms Varuna.batchedZerocheck_extract
