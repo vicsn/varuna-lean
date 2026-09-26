@@ -19,6 +19,7 @@ import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Selectors
 import Varuna.Probability
+import Varuna.Degree
 import Varuna.FSBound
 import Varuna.Statement
 import Varuna.Match

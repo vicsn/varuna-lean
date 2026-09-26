@@ -12,6 +12,7 @@ import Varuna.MatrixSumcheck
 import Varuna.Composition
 import Varuna.Selectors
 import Varuna.Probability
+import Varuna.Degree
 import Varuna.FSBound
 import Varuna.Statement
 import Varuna.PublicInput
@@ -244,3 +245,7 @@ assert_axioms Varuna.spec_batch_commitments
 assert_axioms Varuna.spec_batch_scalars_iff
 assert_computable Varuna.ProofShape.g1
 assert_computable Varuna.ProofShape.fr
+assert_axioms Varuna.natDegree_rowcheckResidual_le
+assert_axioms Varuna.natDegree_univariateResidual_le
+assert_axioms Varuna.natDegree_matrixResidual_le
+assert_axioms Varuna.ahp_error_concrete
