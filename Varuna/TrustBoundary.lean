@@ -165,3 +165,8 @@ assert_axioms Varuna.selectorPoly_eval_of_mem
 assert_axioms Varuna.selectorPoly_eval_of_not_mem
 assert_axioms Varuna.selectorPoly_eval_indicator
 assert_axioms Varuna.batchedZerocheck_extract
+assert_axioms Varuna.sum_range_node
+assert_axioms Varuna.sum_selectorPoly_mul
+assert_axioms Varuna.weightedSum_map_sub
+assert_axioms Varuna.sum_weightedSum
+assert_axioms Varuna.batchedSumcheck_extract

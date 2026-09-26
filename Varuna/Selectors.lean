@@ -94,4 +94,78 @@ theorem batchedZerocheck_extract [DecidableEq F] {H : EvalDomain F} {ws : List F
   have hzero := hall _ hmem
   rwa [eval_mul, selectorPoly_eval_of_mem (hdvd c hc) hxi, one_mul] at hzero
 
+/-! ## Batched sumcheck -/
+
+/-- Summing over the indices `0 .. n-1` is summing over the domain elements. -/
+theorem sum_range_node [DecidableEq F] (H : EvalDomain F) (f : F → F) :
+    ∑ i ∈ range H.n, f (H.node i) = ∑ x ∈ H.elements, f x := by
+  have hinj : Set.InjOn H.node ↑(range H.n) := H.injOn_node
+  have himage : (range H.n).image H.node = H.elements := by
+    refine eq_of_subset_of_card_le ?_ ?_
+    · intro x hx
+      obtain ⟨i, _, rfl⟩ := mem_image.mp hx
+      exact H.ω_pow_mem i
+    · rw [card_image_of_injOn hinj, card_range, H.card_elements]
+  rw [← himage, sum_image hinj]
+
+/-- The selector turns a sum over `H` into a sum over `H_i`. -/
+theorem sum_selectorPoly_mul [DecidableEq F] {H Hi : EvalDomain F} (hdvd : Hi.n ∣ H.n)
+    (f : F[X]) :
+    ∑ x ∈ H.elements, (selectorPoly H Hi * f).eval x = ∑ x ∈ Hi.elements, f.eval x := by
+  have hterm : ∀ x ∈ H.elements,
+      (selectorPoly H Hi * f).eval x = if x ∈ Hi.elements then f.eval x else 0 := by
+    intro x hx
+    rw [eval_mul, selectorPoly_eval_indicator hdvd hx]
+    split_ifs <;> simp
+  rw [sum_congr rfl hterm, ← sum_filter, filter_mem_eq_inter,
+    inter_eq_right.mpr (elements_subset_of_dvd hdvd)]
+
+/-- A weighted sum of differences is the difference of weighted sums. -/
+theorem weightedSum_map_sub {α : Type*} (g h : α → F) :
+    ∀ (ws : List F) (cs : List α),
+      weightedSum ws (cs.map fun c => g c - h c) =
+        weightedSum ws (cs.map g) - weightedSum ws (cs.map h)
+  | [], _ => by simp
+  | _ :: _, [] => by simp
+  | w :: ws, c :: cs => by
+    simp only [List.map_cons, weightedSum_cons, weightedSum_map_sub g h ws cs]
+    ring
+
+/-- Summing weighted sums over a finite set commutes with the combination. -/
+theorem sum_weightedSum {α β : Type*} (s : Finset β) (g : β → α → F) :
+    ∀ (ws : List F) (cs : List α),
+      ∑ x ∈ s, weightedSum ws (cs.map (g x)) = weightedSum ws (cs.map fun c =>
+        ∑ x ∈ s, g x c)
+  | [], _ => by simp
+  | _ :: _, [] => by simp
+  | w :: ws, c :: cs => by
+    simp only [List.map_cons, weightedSum_cons, sum_add_distrib, ← mul_sum,
+      sum_weightedSum s g ws cs]
+
+/-- Per-circuit sum claims `Σ_{x ∈ H_i} f_i(x) − σ_i` for circuits `(H_i, f_i, σ_i)`. -/
+noncomputable def batchedSumClaims (cs : List (EvalDomain F × F[X] × F)) : List F :=
+  cs.map fun c => ∑ x ∈ c.1.elements, c.2.1.eval x - c.2.2
+
+/-- Batched sumcheck soundness. If the selector-lifted combination sums over
+`H` to the combined claim and the combination of per-circuit discrepancies is
+not lucky, every circuit's sum over its own domain is its claim. -/
+theorem batchedSumcheck_extract [DecidableEq F] {H : EvalDomain F} {ws : List F}
+    {cs : List (EvalDomain F × F[X] × F)} (hdvd : ∀ c ∈ cs, c.1.n ∣ H.n)
+    (hsum : ∑ x ∈ H.elements,
+        (weightedSumPoly ws (cs.map fun c => selectorPoly H c.1 * c.2.1)).eval x =
+      weightedSum ws (cs.map fun c => c.2.2))
+    (hnone : inspectBatch ws (batchedSumClaims cs) = none) :
+    ∀ c ∈ cs, ∑ x ∈ c.1.elements, c.2.1.eval x = c.2.2 := by
+  have hlift : ∀ c ∈ cs, ∑ x ∈ H.elements, (selectorPoly H c.1 * c.2.1).eval x =
+      ∑ x ∈ c.1.elements, c.2.1.eval x := fun c hc => sum_selectorPoly_mul (hdvd c hc) _
+  simp only [eval_weightedSumPoly, List.map_map, Function.comp_def] at hsum
+  have hswap := sum_weightedSum H.elements (fun x c => (selectorPoly H c.1 * c.2.1).eval x) ws cs
+  rw [hswap, List.map_congr_left hlift] at hsum
+  have hws : weightedSum ws (batchedSumClaims cs) = 0 := by
+    rw [batchedSumClaims, weightedSum_map_sub, hsum, sub_self]
+  have hz := inspectBatch_accepts hws hnone
+  intro c hc
+  exact sub_eq_zero.mp (hz _ (List.mem_map_of_mem
+    (f := fun c : EvalDomain F × F[X] × F => ∑ x ∈ c.1.elements, c.2.1.eval x - c.2.2) hc))
+
 end Varuna
