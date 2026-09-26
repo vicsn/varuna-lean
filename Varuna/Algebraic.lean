@@ -198,4 +198,137 @@ theorem inspectOpening_honest [DecidableEq F] (p q : List F) (z : F) :
     inspectOpening p q z (evalCoeffs p z) = none :=
   (inspectOpening_eq_none_iff p q z _).2 rfl
 
+/-! ## Degree bounds
+
+Sonic/Marlin enforce `deg p ≤ d` with a shifted commitment `C̃` to
+`X^{D-d} p` and the check `e(C̃, h) = e(C, [τ^{D-d}] h)`, where `D` is the
+SRS degree. snarkVM folds this pairing into the batched check (Gabizon19
+§3); the algebraic content is the same. An algebraic prover can only
+represent `C̃` over `D + 1` powers, so a polynomial above degree `d`
+cannot be shifted into range without a trapdoor break. -/
+
+/-- Multiply by `X^m`. -/
+def shiftCoeffsBy (m : Nat) (l : List F) : List F :=
+  List.replicate m 0 ++ l
+
+/-- `X^m · l`. -/
+theorem toPoly_shiftCoeffsBy (m : Nat) (l : List F) :
+    toPoly (shiftCoeffsBy m l) = X ^ m * toPoly l := by
+  induction m with
+  | zero => simp [shiftCoeffsBy]
+  | succ m ih =>
+    simp only [shiftCoeffsBy, List.replicate_succ, List.cons_append, toPoly_cons, C_0,
+      zero_add] at ih ⊢
+    rw [ih]
+    ring
+
+/-- Coefficients of a list polynomial are the list entries. -/
+theorem coeff_toPoly : ∀ (l : List F) (i : Nat), (toPoly l).coeff i = l.getD i 0
+  | [], i => by simp
+  | a :: l, 0 => by simp
+  | a :: l, i + 1 => by simp [coeff_X_mul, coeff_toPoly l i]
+
+/-- Whether some coefficient above degree `d` is nonzero. -/
+def exceedsBound [DecidableEq F] (p : List F) (d : Nat) : Bool :=
+  (p.drop (d + 1)).any (· ≠ 0)
+
+/-- No nonzero coefficient above `d` means degree at most `d`. -/
+theorem natDegree_toPoly_le [DecidableEq F] {p : List F} {d : Nat}
+    (h : exceedsBound p d = false) : (toPoly p).natDegree ≤ d := by
+  rw [natDegree_le_iff_coeff_eq_zero]
+  intro N hN
+  rw [coeff_toPoly, List.getD_eq_getElem?_getD]
+  have hNd : d + 1 ≤ N := by exact_mod_cast hN
+  cases hget : p[N]? with
+  | none => rfl
+  | some a =>
+    have hdrop : (p.drop (d + 1))[N - (d + 1)]? = some a := by
+      rw [List.getElem?_drop, Nat.add_sub_cancel' hNd, hget]
+    have hmem : a ∈ p.drop (d + 1) := List.mem_of_getElem? hdrop
+    unfold exceedsBound at h
+    have := List.any_eq_false.mp h a hmem
+    simpa using this
+
+/-- A nonzero coefficient above `d` is witnessed at some index. -/
+theorem exists_coeff_of_exceedsBound [DecidableEq F] {p : List F} {d : Nat}
+    (h : exceedsBound p d = true) : ∃ N, d < N ∧ p.getD N 0 ≠ 0 := by
+  unfold exceedsBound at h
+  obtain ⟨a, ha, hne⟩ := List.any_eq_true.mp h
+  obtain ⟨j, hj, hja⟩ := List.getElem_of_mem ha
+  refine ⟨d + 1 + j, by omega, ?_⟩
+  have : p[d + 1 + j]? = some a := by
+    rw [← List.getElem?_drop, List.getElem?_eq_getElem hj, hja]
+  rw [List.getD_eq_getElem?_getD, this]
+  simpa using hne
+
+/-- Degree defect `p̃ − X^{D-d} p`: vanishes at `τ` exactly when the shifted check holds. -/
+def degreeDefect (p pShift : List F) (D d : Nat) : List F :=
+  addCoeffs pShift (scaleCoeffs (-1) (shiftCoeffsBy (D - d) p))
+
+/-- The degree defect denotes `p̃ − X^{D-d} p`. -/
+theorem toPoly_degreeDefect (p pShift : List F) (D d : Nat) :
+    toPoly (degreeDefect p pShift D d) = toPoly pShift - X ^ (D - d) * toPoly p := by
+  rw [degreeDefect, toPoly_addCoeffs, toPoly_scaleCoeffs, toPoly_shiftCoeffsBy, C_neg, C_1]
+  ring
+
+/-- Inspect a degree-bound claim: exceeding the bound is returned as break data. -/
+def inspectDegree [DecidableEq F] (p pShift : List F) (D d : Nat) : Option (TrapdoorBreak F) :=
+  if exceedsBound p d then some ⟨degreeDefect p pShift D d⟩ else none
+
+/-- No break reported means the representation respects the bound. -/
+theorem natDegree_le_of_inspectDegree [DecidableEq F] {p pShift : List F} {D d : Nat}
+    (h : inspectDegree p pShift D d = none) : (toPoly p).natDegree ≤ d := by
+  unfold inspectDegree at h
+  split_ifs at h with hb
+  exact natDegree_toPoly_le (Bool.eq_false_iff.mpr hb)
+
+/-- Sonic/Marlin degree-bound pairing check with `shiftH = [τ^{D-d}] h`. -/
+def degreeCheck (e : Pairing F G1 G2 GT) (vk : VerifyingKey G1 G2) (shiftH : G2)
+    (cm cmShift : G1) : Prop :=
+  e.pair cmShift vk.h = e.pair cm shiftH
+
+/-- Degree-bound soundness under the algebraic restriction: if the shifted
+check accepts, the shifted representation lives in the SRS range, and the
+representation exceeds the bound, inspection returns a genuine trapdoor break. -/
+theorem inspectDegree_break [DecidableEq F] (e : Pairing F G1 G2 GT) (vk : VerifyingKey G1 G2)
+    {τ : F} (hgh : e.pair vk.g vk.h ≠ 0) {D d : Nat} (hdD : d ≤ D) (p pShift : List F)
+    (hlen : pShift.length ≤ D + 1)
+    (hc : degreeCheck e vk ((τ ^ (D - d)) • vk.h) (represent vk.g τ p)
+      (represent vk.g τ pShift)) {b : TrapdoorBreak F}
+    (hb : inspectDegree p pShift D d = some b) : b.holds τ := by
+  unfold inspectDegree at hb
+  split_ifs at hb with hex
+  cases hb
+  refine ⟨?_, ?_⟩
+  · obtain ⟨N, hN, hne⟩ := exists_coeff_of_exceedsBound hex
+    intro h0
+    have hcoeff := congrArg (fun q => q.coeff (D - d + N)) h0
+    have hpS : pShift.getD (D - d + N) 0 = 0 := by
+      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega)]
+      rfl
+    simp only [toPoly_degreeDefect, coeff_sub, coeff_X_pow_mul', coeff_zero] at hcoeff
+    rw [if_pos (by omega), Nat.add_sub_cancel_left, coeff_toPoly, coeff_toPoly, hpS, zero_sub,
+      neg_eq_zero] at hcoeff
+    exact hne hcoeff
+  · unfold degreeCheck represent at hc
+    rw [e.map_smul_left, e.map_smul_right, e.map_smul_left, smul_smul] at hc
+    have h0 : (evalCoeffs pShift τ - τ ^ (D - d) * evalCoeffs p τ) • e.pair vk.g vk.h = 0 := by
+      rw [sub_smul, hc, sub_self]
+    have hs := eq_zero_of_smul_eq_zero h0 hgh
+    rw [toPoly_degreeDefect]
+    simp only [eval_sub, eval_mul, eval_pow, eval_X, eval_toPoly]
+    exact hs
+
+/-- A degree bound `deg g₁ ≤ |C| − 2` gives the lineval remainder bound
+`deg (X g₁ + σ) < | C | ` that `univariate_sum` and `knowledgeSoundness` take. -/
+theorem natDegree_X_mul_add_C_lt {g : F[X]} {n : Nat} (hn : 2 ≤ n) (hg : g.natDegree ≤ n - 2)
+    (σ : F) : (X * g + C σ).natDegree < n := by
+  have hX : (X * g).natDegree ≤ n - 1 := by
+    calc (X * g).natDegree ≤ (X : F[X]).natDegree + g.natDegree := natDegree_mul_le
+      _ ≤ 1 + (n - 2) := by gcongr; exact natDegree_X_le
+      _ ≤ n - 1 := by omega
+  calc (X * g + C σ).natDegree ≤ max (X * g).natDegree (C σ).natDegree := natDegree_add_le _ _
+    _ ≤ n - 1 := by rw [natDegree_C]; exact max_le hX (Nat.zero_le _)
+    _ < n := by omega
+
 end Varuna

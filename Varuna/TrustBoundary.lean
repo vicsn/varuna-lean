@@ -176,3 +176,14 @@ assert_axioms Varuna.EvalDomain.lagrange_eq_closed
 assert_axioms Varuna.EvalDomain.eval_lagrange_off
 assert_axioms Varuna.matrix_term
 assert_axioms Varuna.matrix_sumcheck_value
+assert_axioms Varuna.toPoly_shiftCoeffsBy
+assert_axioms Varuna.coeff_toPoly
+assert_axioms Varuna.natDegree_toPoly_le
+assert_axioms Varuna.exists_coeff_of_exceedsBound
+assert_axioms Varuna.toPoly_degreeDefect
+assert_axioms Varuna.natDegree_le_of_inspectDegree
+assert_axioms Varuna.inspectDegree_break
+assert_axioms Varuna.natDegree_X_mul_add_C_lt
+assert_computable Varuna.inspectDegree
+assert_computable Varuna.degreeDefect
+assert_computable Varuna.exceedsBound
