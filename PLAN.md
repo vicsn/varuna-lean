@@ -93,8 +93,9 @@ build-time property. CI still fails on `sorry` via `lake build --wfail`.
 
 Toy-field samples in `Match.lean` / `SpotCheck.lean` use kernel `decide`,
 not `native_decide`, so the census stays those three axioms. Correspondence
-with snarkVM is source-pinned samples (`Varuna.snarkVMPin`), not captured
-BLS12-377 MSM coefficients.
+with snarkVM is source-pinned samples (`Varuna.snarkVMPin`) and one captured
+V2 proof (`Fingerprint.lean`), which is also kernel `decide`, over the
+BLS12-377 scalar field. The group-level MSM / pairing assembly is not captured.
 
 ### 2.3 Modelling boundaries are not axioms
 
@@ -368,7 +369,8 @@ accept predicate, named floors, and negative fixtures.
   four-term matrix `b` LC, KZG pairing equation. This is **not**
   Ironwood’s MSM/`native_decide` fingerprint of a BLS12-377 proof.
 
-Captured snarkVM / Sage proofs over BLS12-377 remain future pins.
+A captured snarkVM proof followed later (`Fingerprint.lean`, below);
+captured Sage proofs remain future pins.
 Byte encodings stay a floor. The selector scale `|H_i|/|H|` was a
 real mismatch found by sampling `ahp/selectors.rs`; Lean now matches
 the deployed formula.
@@ -433,10 +435,28 @@ adversary, hardness, byte encodings) or does not claim (zero knowledge).
   inputs; `reindex_by_subdomain` and `ẑ = x̂` on the input subdomain
 - `ProofSize.lean`: proof element counts from snarkVM's `Proof`
 
-**Not done.** An Ironwood-style captured-proof fingerprint (needs prover
-instrumentation, since the verifier sees only combined openings); one
-theorem composing the PC reductions with `v2_chain`; concrete residual
-degrees in `ahp_error`.
+**Delivered in a second pass** (listed as not done after the first):
+
+- `Degree.lean`: residual degrees from degree bounds on the prover's
+  polynomials; `ahp_error_concrete` is `ahp_error` with them plugged in
+- `Endpoint.lean`: `V2Endpoint.sound` composes the `h₀` opening reduction
+  (`value_correct_of_inspect_none`), the three matrix sumchecks
+  (`matrix_sumcheck_value`), and `v2_chain` into one theorem;
+  `sound_nonZK` ends at `satisfies`
+- `Fingerprint.lean`: one honest snarkVM V2 hiding-mode proof, captured on
+  the prover side with test-only instrumentation (`fixtures/fingerprint/`,
+  with provenance). Kernel `decide` over `ZMod q` checks that every
+  coefficient snarkVM assembles for the three zero-eval LCs is Lean's
+  formula, that each LC vanishes, and that the scalar forms are the model's
+  definitions. It also pins `row(γ) col(γ) ≠ row_col(γ)`: the Lean
+  `matrixBPoly` and the deployed `b` agree only on `K`
+
+**Still open.** The endpoint takes the other openings (`ẑ`, `h₁`, `g₁`,
+matrix witnesses) as evaluations of the committed polynomials, and the
+matrix residuals as identities (the `γ` step is `matrix_extract`); each
+reduces like `h₀`. It uses one `K` for all matrices; the selector-batched
+matrix sumcheck (`batchedSumcheck_extract`) is not composed in. The
+fingerprint covers the zero-eval LC layer, not the MSM / pairing assembly.
 
 ---
 

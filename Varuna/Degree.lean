@@ -10,11 +10,11 @@ import Varuna.Probability
 
 `ahp_error` takes the residual degrees `d_R, d_L, d_M` as inputs. This file
 computes them from degree bounds on the prover's polynomials, so the
-composed error `(d_R + d_L + d_M) | S | ^2` out of ` | S | ^3` is stated for the
+composed error `(d_R + d_L + d_M) S.card ^ 2` out of `S.card ^ 3` is stated for the
 actual residual constructors (`ahp_error_concrete`).
 
 The bounds are the generic polynomial-degree facts : a product's degree is at
-most the sum, a difference's at most the max, and `v_H` has degree ` | H | `.
+most the sum, a difference's at most the max, and `v_H` has degree `H.n`.
 -/
 
 set_option linter.unusedSectionVars false
@@ -65,7 +65,7 @@ theorem natDegree_matrixResidual_le (K : EvalDomain F) {a b g h : F[X]} {σ : F}
   · exact natDegree_mul_le.trans (add_le_add hh (le_of_eq K.natDegree_vanishing))
 
 /-- Composed single-instance AHP error with the concrete residual degrees
-plugged in. Over `S^3`, at most `(d_R + d_L + d_M) | S | ^2` challenge triples
+plugged in. Over `S^3`, at most `(d_R + d_L + d_M) S.card ^ 2` challenge triples
 break, where the degrees are the bounds above. -/
 theorem ahp_error_concrete [DecidableEq F] (S : Finset F)
     (H K : EvalDomain F) {zA zB zC h0 f : F[X]} {w : UnivariateWitness F} {a b g h : F[X]} {σ : F}

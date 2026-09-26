@@ -26,7 +26,7 @@ Either change below closes the gap, and either needs a new `VarunaVersion`, sinc
 
 S1 should be round-by-round knowledge soundness, because step 3 then costs $Q \cdot \varepsilon_{\text{round}}$. Each Varuna check is a polynomial identity at a fresh challenge, so the RBR doomed state is "some residual is nonzero", and the bad challenges are its roots. Lean provides this per check as computed data: [`inspectResidual`](../../../Varuna/AHP.lean#L56), [`inspectResidual_accepts`](../../../Varuna/AHP.lean#L68), and the three extractors [`rowcheck_extract`](../../../Varuna/AHP.lean#L155), [`univariate_extract`](../../../Varuna/AHP.lean#L272), [`matrix_extract`](../../../Varuna/AHP.lean#L379). [`ahp_error`](../../../Varuna/Probability.lean#L191) gives the adaptive union bound across $\alpha, \beta, \gamma$.
 
-### 1.2 S1 error of the unbatched AHP, including ZK (Partial)
+### 1.2 S1 error of the unbatched AHP, including ZK (Lean)
 
 The spec (lines 444–452) gives $\frac{2|R|}{|\mathbb F\setminus R|} + \frac{2|C|}{|\mathbb F\setminus C|} + \frac{3|K|}{|\mathbb F|}$.
 
@@ -35,7 +35,9 @@ Lean proves the shape of the bound over any finite challenge set $S$:
 - [`card_filter_inspectResidual_le`](../../../Varuna/Probability.lean#L41): a residual of degree $d$ has at most $d$ bad challenges in $S$.
 - [`ahp_error`](../../../Varuna/Probability.lean#L191): an adaptive prover breaks on at most $(d_R + d_L + d_M)\,|S|^2$ of the $|S|^3$ triples.
 
-$S$ is where snarkVM's 252-bit AHP challenges enter (`crypto_hash/poseidon.rs:473-476`). Masked witnesses are covered, since the residuals are over arbitrary polynomials. Still open: the concrete degrees are inputs, not instantiated. They should include the ZK bound $b$ (`deg h_0 ≤ 2|R| + 2b − 2`, `second.rs:66`). The combiner terms are 1.3.
+- [`ahp_error_concrete`](../../../Varuna/Degree.lean#L70): the same bound with the residual degrees computed from degree bounds on the prover's polynomials, by [`natDegree_rowcheckResidual_le`](../../../Varuna/Degree.lean#L30), [`natDegree_univariateResidual_le`](../../../Varuna/Degree.lean#L43), and [`natDegree_matrixResidual_le`](../../../Varuna/Degree.lean#L55). For example, the rowcheck residual has degree at most $\max(\deg z_A + \deg z_B,\ \deg z_C,\ \deg h_0 + |R|)$.
+
+$S$ is where snarkVM's 252-bit AHP challenges enter (`crypto_hash/poseidon.rs:473-476`). Masked witnesses are covered, since the residuals are over arbitrary polynomials. ZK enters through the input bounds, which carry the query bound $b$ (e.g. `deg h_0 ≤ 2|R| + 2b − 2`, `second.rs:66`). The combiner terms are 1.3.
 
 ### 1.3 S1 error of each AHP batching step (Lean)
 
@@ -64,16 +66,18 @@ S2 is RBR knowledge soundness, charged per oracle query. [`fs_query_charge`](../
 Under the algebraic restriction, every PC step either gives the polynomial fact S1 uses or a computed trapdoor break:
 
 - an accepted opening with a wrong value: [`inspectOpening_break`](../../../Varuna/Algebraic.lean#L180)
-- a violated degree bound: [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L293)
+- a violated degree bound: [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L302)
 - a batched opening: [`batchedOpening_extract`](../../../Varuna/OpeningBatch.lean#L61) per point, [`acrossPoints_extract`](../../../Varuna/OpeningBatch.lean#L90) across points
 
-Still open: one theorem composing these with [`v2_chain`](../../../Varuna/Composition.lean#L83).
+[`V2Endpoint.sound`](../../../Varuna/Endpoint.lean#L120) composes the opening reduction with the AHP in one theorem. A no-break opening of the rowcheck quotient $h_0$ ([`value_correct_of_inspect_none`](../../../Varuna/Algebraic.lean#L205)), the three matrix sumchecks with their degree bounds ([`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151)), and [`v2_chain`](../../../Varuna/Composition.lean#L83) give $(Az + e) \circ Bz = Cz$ on $R$. [`V2Endpoint.sound_nonZK`](../../../Varuna/Endpoint.lean#L161) ends at the R1CS relation.
+
+Still open: the endpoint takes the other openings ($\hat z$, $h_1$, $g_1$, the matrix witnesses) as evaluations of the committed polynomials. It also takes the matrix residuals as identities, since the $\gamma$ step is [`matrix_extract`](../../../Varuna/AHP.lean#L379). Each of these reduces the same way as $h_0$. It uses one $K$ for all three matrices, so the selector-batched sumcheck ([`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152)) is not composed in.
 
 ### 2.4 Properties of SonicPCS (Lean; hiding and SE excluded)
 
 - **Extractability:** from the algebraic restriction, named as the floor `algebraicAdversary` ([`ModellingFloor`](../../../Varuna/Match.lean#L33)).
 - **Evaluation binding:** [`inspectOpening_break`](../../../Varuna/Algebraic.lean#L180) and [`pairingBreak_of_double_opening`](../../../Varuna/SonicPC.lean#L352); hardness is the `pairingHardness` floor.
-- **Degree bounds:** [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L293). [`natDegree_X_mul_add_C_lt`](../../../Varuna/Algebraic.lean#L324) turns $\deg g_1 \le |C|-2$ (`third.rs:60`) into `hdeg`.
+- **Degree bounds:** [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L302). [`natDegree_X_mul_add_C_lt`](../../../Varuna/Algebraic.lean#L333) turns $\deg g_1 \le |C|-2$ (`third.rs:60`) into `hdeg`.
 - **Hiding** (ZK only) and **simulation extractability** ([SE-KZG], [WM]): excluded, since Ironwood claims neither. Note that padding makes proofs non-unique (`varuna-padding.tex:256`), which matters for [WM]'s unique-response condition.
 
 ### 2.5 Loss from batching SonicPCS openings (Lean)
@@ -106,7 +110,12 @@ Ironwood makes no ZK claim. As deployed, ZK mode uses hiding commitments with bo
 5. **Public input and reindexing (Lean).** [`reindexBySubdomain`](../../../Varuna/PublicInput.lean#L34), [`reindex_witness_mod_ne_zero`](../../../Varuna/PublicInput.lean#L46), [`assignment_at_input_position`](../../../Varuna/PublicInput.lean#L73): $\hat z$ equals the verifier's $\hat x$ at every input position, given canonical generators (`hgen`).
 6. **Index = circuit (floor, now precise).** The hypotheses `hidx*` of [`satisfies_of_rows`](../../../Varuna/Bridge.lean#L96) state exactly what the floor assumes.
 7. **Completeness (Lean).** [`rowcheckResidual_honest`](../../../Varuna/AHP.lean#L127), [`univariateResidual_honest`](../../../Varuna/AHP.lean#L200), [`matrixResidual_honest`](../../../Varuna/AHP.lean#L342), [`kzgCheck_honest`](../../../Varuna/SonicPC.lean#L259), [`accepts_of_residuals_zero`](../../../Varuna/AHP.lean#L401).
-8. **Lean vs snarkVM (Partial).** [`sample_selector_eval`](../../../Varuna/SpotCheck.lean#L139) and the rest of [`SpotCheck.lean`](../../../Varuna/SpotCheck.lean) sample the pinned tree, and the finding above was confirmed by running snarkVM. There is still no Ironwood-style captured-proof fingerprint: the verifier sees only combined openings, so a capture needs prover instrumentation.
+8. **Lean vs snarkVM (Lean fingerprint).** [`Fingerprint.lean`](../../../Varuna/Fingerprint.lean) re-checks one captured snarkVM V2 hiding-mode proof ([`fixtures/fingerprint`](../../../fixtures/fingerprint/PROVENANCE.md), from the pinned tree with test-only instrumentation). The verifier sees only combined openings, so the capture is on the prover side, re-assembled in the verifier's LC shape. Kernel `decide` over the BLS12-377 scalar field checks three things:
+   - every coefficient snarkVM assembles equals Lean's formula ([`matrix_coeffs`](../../../Varuna/Fingerprint.lean#L203), [`lineval_coeffs`](../../../Varuna/Fingerprint.lean#L195), [`rowcheck_coeffs`](../../../Varuna/Fingerprint.lean#L189));
+   - each LC vanishes, both as snarkVM assembled it and in Lean's scalar form ([`matrix_vanishes`](../../../Varuna/Fingerprint.lean#L231), [`matrix_model`](../../../Varuna/Fingerprint.lean#L244));
+   - the scalar forms are the model ([`linevalEval_eq_scalar`](../../../Varuna/Fingerprint.lean#L87), [`matrixTerm_eq_scalar`](../../../Varuna/Fingerprint.lean#L97)).
+
+   The fixture uses unequal $|K_M|$, so the selector scale is exercised ([`selB_ne_one`](../../../Varuna/Fingerprint.lean#L263)). It also shows $\mathrm{row}(\gamma)\,\mathrm{col}(\gamma) \ne \mathrm{row\_col}(\gamma)$ ([`product_form_differs`](../../../Varuna/Fingerprint.lean#L267)): Lean's `matrixBPoly` agrees with the deployed $b$ only on $K$, which is all [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151) uses. [`SpotCheck.lean`](../../../Varuna/SpotCheck.lean) samples the source, and the finding above was confirmed by running snarkVM. Not covered: the group-level MSM / pairing assembly and byte encodings (a floor).
 
 ## Summary
 
@@ -114,12 +123,12 @@ Ironwood makes no ZK claim. As deployed, ZK mode uses hiding commitments with bo
 | --- | --- | --- |
 | Mask-sum finding | Lean + PoC | `v2_chain`, `shifted_witness_accepts` |
 | 1.1 S1 notion | Lean | `inspectResidual`, `ahp_error` |
-| 1.2 Unbatched error | Partial | `card_filter_inspectResidual_le`, `ahp_error` |
+| 1.2 Unbatched error | Lean | `ahp_error_concrete`, `card_filter_inspectResidual_le` |
 | 1.3 AHP batching error | Lean | `batchedZerocheck_extract`, `batchedSumcheck_extract` |
 | 1.4 Assumptions | Lean | `TrustBoundary.lean` |
 | 2.1 Primitive P | Partial | `represent`, `ProofView` |
 | 2.2 S2 | Partial | `fs_query_charge`, `fs_break_count` |
-| 2.3 Compilation | Partial | `inspectOpening_break`, `inspectDegree_break` |
+| 2.3 Compilation | Partial | `V2Endpoint.sound`, `inspectOpening_break`, `inspectDegree_break` |
 | 2.4 PCS properties | Lean (hiding, SE excluded) | `inspectOpening_break`, `inspectDegree_break` |
 | 2.5 PC batching loss | Lean | `batchedOpening_extract`, `acrossPoints_extract` |
 | 3 Fiat–Shamir | Lean | `v2Init_injective`, `fs_query_charge` |

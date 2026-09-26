@@ -42,8 +42,7 @@ and reject flipped LC evaluations; the KZG pairing equation is checked
 on a multiplicative `𝔽₁₇` pairing. `SpotCheck.lean` pins the
 `snarkVM/` submodule and kernel-checks source samples (LC names, V2
 squeeze counts, selector scale, four-term matrix `b`, padding at
-`ω^0 = 1`, KZG pairing equation). Ironwood-style BLS12-377 MSM
-captures are still a pin.
+`ω^0 = 1`, KZG pairing equation).
 
 **Iteration 8 complete.** `knowledgeSoundness` is the advertised
 endpoint: an accepting algebraic V2 transcript with no computed AHP
@@ -59,7 +58,12 @@ the verifier never checks: in ZK mode a prover can prove `5 · 1 = 0`
 yields the R1CS relation (`satisfies_of_rows`). The PC layer is proved
 under an algebraic adversary (trapdoor breaks), probabilities are counted
 per challenge and per oracle query, and the Fiat–Shamir prefix binds the
-public inputs. See
+public inputs. `V2Endpoint.sound` composes the `h₀` opening reduction,
+the matrix sumchecks, and `v2_chain` in one theorem; `ahp_error_concrete`
+states the AHP error with concrete residual degrees. `Fingerprint.lean`
+is the Ironwood-style fingerprint. It kernel-checks a captured snarkVM V2
+proof: every coefficient of the three zero-eval LCs is Lean's formula,
+and each LC vanishes over the BLS12-377 scalar field. See
 [security-analysis.md](book/src/formal-verification/security-analysis.md).
 
 See [PLAN.md](PLAN.md) and the
@@ -104,17 +108,23 @@ Varuna/
   Batching.lean                     -- multi-circuit combiners, selectors
   Selectors.lean                    -- selector = indicator; batched checks
   Probability.lean                  -- bad-challenge counts, adaptive union bound
+  Degree.lean                       -- concrete residual degrees in ahp_error
   FSBound.lean                      -- Fiat–Shamir query charging
   Statement.lean                    -- init_sponge binds the public inputs
   Match.lean                        -- typed accept, floors, toy fixtures
   Soundness.lean                    -- knowledge-soundness capstone
   Composition.lean                  -- V2 chain and the mask-sum shift
   Bridge.lean                       -- Int R1CS ↔ ZMod p; satisfies from rows
+  Endpoint.lean                     -- PC reduction + matrix sumchecks + v2_chain
+  Fingerprint.lean                  -- captured snarkVM proof vs Lean LC formulas
+  Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
   ProofSize.lean                    -- proof element counts vs the spec
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan
+fixtures/fingerprint/               -- captured V2 proof, capture patch, provenance
+scripts/fingerprint_to_lean.py      -- fixture → Fingerprint/Capture.lean
 protocol-docs/                      -- algorithm spec (git submodule)
 snarkVM/                            -- deployed verifier (git submodule)
 book/src/formal-verification/
@@ -130,7 +140,7 @@ book/src/formal-verification/
 | [`protocol-docs`](https://github.com/ProvableHQ/protocol-docs) (submodule) | Algorithm identities, including V2 batching |
 | [`varuna-sage-impl/docs/spec.pdf`](https://github.com/ProvableHQ/varuna-sage-impl/blob/main/docs/spec.pdf) | Protocol specification |
 | [`varuna-sage-impl`](https://github.com/ProvableHQ/varuna-sage-impl) | SageMath reference (single-circuit R1CS, ZK) |
-| [`snarkVM`](https://github.com/ProvableHQ/snarkVM) (submodule, pin in `Varuna.snarkVMPin`) | Deployed Rust implementation (`VarunaVersion.V2`); `SpotCheck.lean` samples |
+| [`snarkVM`](https://github.com/ProvableHQ/snarkVM) (submodule, pin in `Varuna.snarkVMPin`) | Deployed Rust implementation (`VarunaVersion.V2`); `SpotCheck.lean` samples, `Fingerprint.lean` captured proof |
 | [Marlin](https://eprint.iacr.org/2019/1047) | Underlying AHP |
 | [`mathlib4` v4.33.0](https://github.com/leanprover-community/mathlib4/releases/tag/v4.33.0) | Field, polynomials, roots of unity |
 
