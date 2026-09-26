@@ -6,6 +6,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 import Varuna.AxiomCheck
 import Varuna.SonicPC
 import Varuna.Algebraic
+import Varuna.Lineval
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -145,3 +146,10 @@ assert_computable Varuna.inspectOpening
 assert_computable Varuna.openingDefect
 assert_computable Varuna.evalCoeffs
 assert_computable Varuna.represent
+assert_axioms Varuna.eval_matrixAtAlpha
+assert_axioms Varuna.mzRow_eq_dense
+assert_axioms Varuna.mzPoly_eval_node
+assert_axioms Varuna.sum_matrixAtAlpha_mul
+assert_axioms Varuna.linevalTarget_eq_mzPoly
+assert_axioms Varuna.linevalEval_eq_residual
+assert_axioms Varuna.sum_linevalPoly

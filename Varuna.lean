@@ -9,6 +9,7 @@ import Varuna.Field
 import Varuna.Domain
 import Varuna.Indexer
 import Varuna.AHP
+import Varuna.Lineval
 import Varuna.SonicPC
 import Varuna.Algebraic
 import Varuna.FiatShamir

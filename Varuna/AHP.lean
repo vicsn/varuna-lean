@@ -259,17 +259,6 @@ theorem eval_assignmentPoly (Xdom : EvalDomain F) (xPoly w : F[X]) (β : F) :
       xPoly.eval β + Xdom.vanishing.eval β * w.eval β := by
   simp [assignmentPoly, eval_add, eval_mul]
 
-/-- Lineval polynomial: `∑_M η_M σ_M · z` plus an optional ZK mask. -/
-noncomputable def linevalPoly (mode : SNARKMode) (mask z : F[X])
-    (ηA ηB ηC σA σB σC : F) : F[X] :=
-  maskPoly mode mask + C (ηA * σA + ηB * σB + ηC * σC) * z
-
-/-- V2 lineval LC at `β` is the univariate check on `linevalPoly`. -/
-noncomputable def linevalEval (mode : SNARKMode) (mask : F[X])
-    (Cdom : EvalDomain F) (z : F[X]) (ηA ηB ηC σA σB σC : F)
-    (w : UnivariateWitness F) (β : F) : F :=
-  univariateEval Cdom (linevalPoly mode mask z ηA ηB ηC σA σB σC) w β
-
 /-- Soundness at a good challenge for the univariate residual. -/
 theorem univariate_sound [DecidableEq F] {K : EvalDomain F} {f : F[X]}
     {w : UnivariateWitness F} {β : F}
