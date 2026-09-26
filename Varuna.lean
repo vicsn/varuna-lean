@@ -10,6 +10,7 @@ import Varuna.Domain
 import Varuna.Indexer
 import Varuna.AHP
 import Varuna.Lineval
+import Varuna.PublicInput
 import Varuna.MatrixSumcheck
 import Varuna.SonicPC
 import Varuna.Algebraic

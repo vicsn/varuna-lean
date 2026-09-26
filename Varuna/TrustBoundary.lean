@@ -14,6 +14,7 @@ import Varuna.Selectors
 import Varuna.Probability
 import Varuna.FSBound
 import Varuna.Statement
+import Varuna.PublicInput
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -218,3 +219,9 @@ assert_axioms Varuna.init_isPrefix_before
 assert_axioms Varuna.before_ne_of_inputs_ne
 assert_axioms Varuna.collision_of_inputs_ne
 assert_computable Varuna.v2Init
+assert_axioms Varuna.assignmentPoly_eval_on_input
+assert_axioms Varuna.reindex_input
+assert_axioms Varuna.reindex_witness_mod_ne_zero
+assert_axioms Varuna.input_node_eq
+assert_axioms Varuna.assignment_at_input_position
+assert_computable Varuna.reindexBySubdomain
