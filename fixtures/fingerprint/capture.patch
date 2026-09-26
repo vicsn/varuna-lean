@@ -1,0 +1,212 @@
+diff --git a/algorithms/src/snark/varuna/tests.rs b/algorithms/src/snark/varuna/tests.rs
+index 3e28db5ed..28dfca90a 100644
+--- a/algorithms/src/snark/varuna/tests.rs
++++ b/algorithms/src/snark/varuna/tests.rs
+@@ -1056,3 +1056,74 @@ mod varuna_test_vectors {
+         test_varuna_with_all_circuits(false);
+     }
+ }
++
++// Fingerprint capture for the varuna_lean kernel re-check (see its PROVENANCE).
++#[cfg(test)]
++mod fingerprint_capture {
++    use crate::{
++        crypto_hash::PoseidonSponge,
++        r1cs::{ConstraintSynthesizer, ConstraintSystem, SynthesisError},
++        snark::varuna::{VarunaHidingMode, VarunaSNARK, VarunaVersion, ahp::AHPForR1CS, varuna::fingerprint},
++        traits::{AlgebraicSponge, SNARK},
++    };
++    use snarkvm_curves::bls12_377::{Bls12_377, Fq, Fr};
++    use snarkvm_utilities::rand::TestRng;
++
++    type FS = PoseidonSponge<Fq, 2, 1>;
++    type Inst = VarunaSNARK<Bls12_377, FS, VarunaHidingMode>;
++
++    /// Fixed seed so the capture is reproducible.
++    const SEED: u64 = 0x07A0_2026;
++
++    /// A satisfiable circuit whose `A` rows carry several terms, so the three
++    /// non-zero domains differ (`|K_A| = 16`, `|K_B| = |K_C| = 8`) and the
++    /// matrix-sumcheck selectors carry a real `|K_M| / |K|` scale.
++    #[derive(Clone)]
++    struct Unbalanced {
++        x: Fr,
++    }
++
++    impl ConstraintSynthesizer<Fr> for Unbalanced {
++        fn generate_constraints<CS: ConstraintSystem<Fr>>(&self, cs: &mut CS) -> Result<(), SynthesisError> {
++            let f = |v: u64| Fr::from(v);
++            let x = cs.alloc_input(|| "x", || Ok(self.x))?; // x = 3
++            let a = cs.alloc(|| "a", || Ok(f(1)))?;
++            let b = cs.alloc(|| "b", || Ok(f(2)))?;
++            let c = cs.alloc(|| "c", || Ok(f(6)))?; // (a + b + x) * 1
++            let d = cs.alloc(|| "d", || Ok(f(3)))?; // (a + b) * a
++            let e = cs.alloc(|| "e", || Ok(f(12)))?; // (a + b + c + d) * 1
++            let g = cs.alloc(|| "g", || Ok(f(9)))?; // x * x
++            let h = cs.alloc(|| "h", || Ok(f(21)))?; // (e + g) * 1
++            let one = CS::one();
++            cs.enforce(|| "c", |lc| lc + a + b + x, |lc| lc + one, |lc| lc + c);
++            cs.enforce(|| "d", |lc| lc + a + b, |lc| lc + a, |lc| lc + d);
++            cs.enforce(|| "e", |lc| lc + a + b + c + d, |lc| lc + one, |lc| lc + e);
++            cs.enforce(|| "g", |lc| lc + x, |lc| lc + x, |lc| lc + g);
++            cs.enforce(|| "h", |lc| lc + e + g, |lc| lc + one, |lc| lc + h);
++            Ok(())
++        }
++    }
++
++    #[test]
++    fn capture_zero_eval_lc_fingerprint() {
++        let rng = &mut TestRng::fixed(SEED);
++        let max_degree = AHPForR1CS::<Fr, VarunaHidingMode>::max_degree(100, 25, 300).unwrap();
++        let srs = Inst::universal_setup(max_degree).unwrap();
++        let prover = &srs.to_universal_prover().unwrap();
++        let verifier = &srs.to_universal_verifier().unwrap();
++        let fs = FS::sample_parameters();
++        let x = Fr::from(3u64);
++        let circuit = Unbalanced { x };
++        let (pk, vk) = Inst::circuit_setup(&srs, &circuit).unwrap();
++
++        let path = std::env::var("VARUNA_FINGERPRINT_OUT").unwrap_or_else(|_| "/tmp/varuna_lc_fingerprint.json".into());
++        fingerprint::set(Some(path.clone()));
++        let proof = Inst::prove(prover, &fs, &pk, VarunaVersion::V2, &circuit, rng);
++        fingerprint::set(None);
++        let proof = proof.unwrap();
++
++        let inputs = vec![Fr::from(1u64), x];
++        assert!(Inst::verify(verifier, &fs, &vk, VarunaVersion::V2, inputs, &proof).unwrap(), "captured proof verifies");
++        println!("wrote fingerprint to {path}");
++    }
++}
+diff --git a/algorithms/src/snark/varuna/varuna.rs b/algorithms/src/snark/varuna/varuna.rs
+index d8e1cdae6..4cf38e5c7 100644
+--- a/algorithms/src/snark/varuna/varuna.rs
++++ b/algorithms/src/snark/varuna/varuna.rs
+@@ -53,6 +53,20 @@ use itertools::Itertools;
+ use rand::{CryptoRng, Rng};
+ use std::{borrow::Borrow, collections::BTreeMap, ops::Deref, sync::Arc};
+ 
++// Fingerprint capture (test only). When a path is set, `prove` dumps the
++// honest proof's zero-evaluation LCs and the scalars they are built from.
++#[cfg(test)]
++pub(crate) mod fingerprint {
++    use std::cell::RefCell;
++    thread_local!(static PATH: RefCell<Option<String>> = const { RefCell::new(None) });
++    pub(crate) fn set(path: Option<String>) {
++        PATH.with(|p| *p.borrow_mut() = path);
++    }
++    pub(crate) fn capture_path() -> Option<String> {
++        PATH.with(|p| p.borrow().clone())
++    }
++}
++
+ use crate::srs::UniversalProver;
+ 
+ /// The Varuna proof system.
+@@ -690,6 +704,107 @@ where
+             varuna_version,
+         )?;
+ 
++        #[cfg(test)]
++        if let Some(path) = fingerprint::capture_path() {
++            use crate::{
++                polycommit::sonic_pc::{LCTerm, LinearCombination},
++                snark::varuna::ahp::EvaluationsProvider,
++            };
++            use snarkvm_fields::{Field, One, PrimeField, Zero};
++            let n = |x: E::Fr| x.to_bigint().to_string();
++            // Verifier view: without the prover-only matrix numerators/denominators,
++            // plus the index polynomials, so the LCs take the deployed verifier's form.
++            let pk = keys_to_constraints.keys().next().unwrap();
++            let mut view: Vec<_> = polynomials
++                .iter()
++                .filter(|p| !p.label().contains("_a_poly_") && !p.label().contains("_b_poly_"))
++                .cloned()
++                .collect();
++            view.extend(pk.circuit.interpolate_matrix_evals()?);
++            let lc_s = AHPForR1CS::<_, SM>::construct_linear_combinations(
++                &public_inputs,
++                &view,
++                &prover_third_message,
++                &prover_fourth_message,
++                &verifier_state,
++                varuna_version,
++            )?;
++            let ev = |label: &str, point: E::Fr| -> Result<E::Fr> {
++                view.get_lc_eval(&LinearCombination::new(label.to_string(), [(E::Fr::one(), label.to_string())]), point)
++            };
++            ensure!(verifier_state.circuit_specific_states.len() == 1, "capture expects one circuit");
++            let (id, cs) = verifier_state.circuit_specific_states.iter().next().unwrap();
++            ensure!(cs.batch_size == 1, "capture expects one instance");
++            let alpha = verifier_state.second_round_message.as_ref().unwrap().alpha;
++            let prep = verifier_state.prepare_third_round_message.as_ref().unwrap();
++            let beta = verifier_state.third_round_message.unwrap().beta;
++            let gamma = verifier_state.gamma.unwrap();
++            let fourth = verifier_state.fourth_round_message.as_ref().unwrap();
++            let s3 = &prover_third_message.sums[0][0];
++            let s4 = &prover_fourth_message.sums[0];
++            let (x_dom, c_dom, r_dom) = (cs.input_domain, cs.variable_domain, cs.constraint_domain);
++            let k_max = verifier_state.max_non_zero_domain;
++            let k_doms = [cs.non_zero_a_domain, cs.non_zero_b_domain, cs.non_zero_c_domain];
++            // x̂(β) exactly as `construct_linear_combinations` computes it.
++            let formatted = prover::ConstraintSystem::format_public_input(&public_inputs[id][0]);
++            let lag = x_dom.evaluate_all_lagrange_coefficients(beta);
++            let x_at_beta: E::Fr = formatted.iter().zip_eq(&lag).map(|(x, l)| *x * l).sum();
++            let label = |m: &str| witness_label(*id, m, 0);
++            let idx = |kind: &str, m: &str| format!("circuit_{id}_{kind}_{m}");
++
++            let mut kv: Vec<(String, E::Fr)> = vec![
++                ("alpha".into(), alpha), ("beta".into(), beta), ("gamma".into(), gamma),
++                ("eta_b".into(), prep.eta_b), ("eta_c".into(), prep.eta_c),
++                ("delta_a".into(), fourth.delta_a[0]), ("delta_b".into(), fourth.delta_b[0]),
++                ("delta_c".into(), fourth.delta_c[0]),
++                ("sigma_a".into(), s3.sum_a), ("sigma_b".into(), s3.sum_b), ("sigma_c".into(), s3.sum_c),
++                ("sum4_a".into(), s4.sum_a), ("sum4_b".into(), s4.sum_b), ("sum4_c".into(), s4.sum_c),
++                ("x_at_beta".into(), x_at_beta),
++                ("h_0@alpha".into(), ev("h_0", alpha)?), ("mask@beta".into(), ev("mask_poly", beta)?),
++                ("w@beta".into(), ev(&label("w"), beta)?), ("h_1@beta".into(), ev("h_1", beta)?),
++                ("g_1@beta".into(), ev("g_1", beta)?), ("h_2@gamma".into(), ev("h_2", gamma)?),
++                ("inv_C".into(), c_dom.size_as_field_element.inverse().unwrap()),
++            ];
++            for (m, k_dom) in ["a", "b", "c"].into_iter().zip_eq(k_doms) {
++                kv.push((format!("g_{m}@gamma"), ev(&label(&format!("g_{m}")), gamma)?));
++                for kind in ["row", "col", "row_col", "row_col_val"] {
++                    kv.push((format!("{kind}_{m}@gamma"), ev(&idx(kind, m), gamma)?));
++                }
++                let den = k_dom.evaluate_vanishing_polynomial(gamma) * k_max.size_as_field_element;
++                kv.push((format!("inv_selden_{m}"), den.inverse().unwrap()));
++            }
++            let sizes = [("R", r_dom.size), ("C", c_dom.size), ("X", x_dom.size), ("K", k_max.size),
++                ("KA", k_doms[0].size), ("KB", k_doms[1].size), ("KC", k_doms[2].size)];
++
++            let point_of: BTreeMap<String, E::Fr> =
++                query_set.to_set().into_iter().map(|(l, (_, q))| (l, q)).collect();
++            let mut lcs_json = Vec::new();
++            for name in AHPForR1CS::<E::Fr, SM>::LC_WITH_ZERO_EVAL {
++                let lc = &lc_s[name];
++                let q = point_of[name];
++                let mut acc = E::Fr::zero();
++                let mut terms = Vec::new();
++                for (term, coeff) in &lc.terms {
++                    let (value, tl) = match term {
++                        LCTerm::One => (E::Fr::one(), "1".to_string()),
++                        LCTerm::PolyLabel(l) => (ev(l, q)?, l.replace(&format!("circuit_{id}_"), "")),
++                    };
++                    acc += *coeff * value;
++                    terms.push(format!("{{\"term\":\"{tl}\",\"coeff\":\"{}\",\"value\":\"{}\"}}", n(*coeff), n(value)));
++                }
++                ensure!(acc.is_zero(), "zero-eval LC {name} did not vanish on the honest proof");
++                lcs_json.push(format!("{{\"label\":\"{name}\",\"terms\":[{}]}}", terms.join(",")));
++            }
++            let scalars = kv.iter().map(|(k, v)| format!("\"{k}\":\"{}\"", n(*v))).collect::<Vec<_>>().join(",");
++            let sizes = sizes.iter().map(|(k, v)| format!("\"{k}\":{v}")).collect::<Vec<_>>().join(",");
++            let json = format!(
++                "{{\"protocol\":\"VARUNA-2023\",\"modulus\":\"{}\",\"sizes\":{{{sizes}}},\"scalars\":{{{scalars}}},\"lcs\":[{}]}}\n",
++                <E::Fr as PrimeField>::modulus(),
++                lcs_json.join(",")
++            );
++            std::fs::write(&path, json).expect("write fingerprint");
++        }
++
+         let eval_time = start_timer!(|| "Evaluating linear combinations over query set");
+         let mut evaluations = std::collections::BTreeMap::new();
+         for (label, (_, point)) in query_set.to_set() {
