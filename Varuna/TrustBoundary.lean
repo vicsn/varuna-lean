@@ -13,6 +13,7 @@ import Varuna.Composition
 import Varuna.Selectors
 import Varuna.Probability
 import Varuna.FSBound
+import Varuna.Statement
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -210,3 +211,10 @@ assert_axioms Varuna.hitsB
 assert_axioms Varuna.fs_query_charge
 assert_axioms Varuna.fsHits_of_bad
 assert_axioms Varuna.fs_break_count
+assert_axioms Varuna.map_fields_injective
+assert_axioms Varuna.inputBlocks_append_inj
+assert_axioms Varuna.v2Init_injective
+assert_axioms Varuna.init_isPrefix_before
+assert_axioms Varuna.before_ne_of_inputs_ne
+assert_axioms Varuna.collision_of_inputs_ne
+assert_computable Varuna.v2Init

@@ -44,6 +44,8 @@ inductive FSMessage (F : Type*) where
   | field (x : F)
   /-- A vector of field elements (public inputs, combiners, …). -/
   | fields (xs : List F)
+  /-- A size absorbed as bytes (snarkVM batch sizes, `u64` little-endian). -/
+  | size (n : Nat)
   deriving DecidableEq, Repr
 
 /-- Transcript: messages in absorb order. -/
