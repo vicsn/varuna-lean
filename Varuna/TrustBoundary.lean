@@ -11,6 +11,7 @@ import Varuna.Lineval
 import Varuna.MatrixSumcheck
 import Varuna.Composition
 import Varuna.Selectors
+import Varuna.Probability
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -194,3 +195,14 @@ assert_axioms Varuna.batchedOpening_extract
 assert_axioms Varuna.inspectOpening_break_of_root
 assert_axioms Varuna.acrossPoints_extract
 assert_computable Varuna.combineCoeffs
+assert_axioms Varuna.card_filter_eval_eq_zero_le
+assert_axioms Varuna.card_filter_inspectResidual_le
+assert_axioms Varuna.inspectBatch_ne_none_iff
+assert_axioms Varuna.card_filter_linear_le_one
+assert_axioms Varuna.card_filter_inspectBatch_pair
+assert_axioms Varuna.card_tapes
+assert_axioms Varuna.hitsB_iff
+assert_axioms Varuna.card_hits_le
+assert_axioms Varuna.ahp_error
+assert_axioms Varuna.tapes
+assert_axioms Varuna.hitsB
