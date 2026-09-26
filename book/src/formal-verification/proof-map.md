@@ -17,7 +17,10 @@ Iteration 5 colours the V2 Fiat–Shamir schedule.
 Iteration 6 colours batching and the extra round.
 Iteration 7 colours the typed accept predicate, toy fixtures, and
 source-pinned snarkVM samples (`SpotCheck.lean`).
-Iteration 8 colours the knowledge-soundness capstone.
+Iteration 8 colours the knowledge-soundness capstone. The security-analysis
+follow-up adds the V2 chain (and the unchecked mask sum, drawn as a
+hypothesis node), the algebraic-adversary PC layer, the probability
+bounds, and the R1CS bridge.
 
 Statuses, edge verbs, and the iteration plan are in [PLAN.md](../../../PLAN.md).
 How each item of the security-analysis plan is (or is not) covered is in

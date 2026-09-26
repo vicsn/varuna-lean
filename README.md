@@ -51,6 +51,17 @@ or batch break yields the three domain identities (Hadamard on `H`,
 lineval sum, matrix on `K`). Poseidon = RO and pairing hardness stay
 floors.
 
+**Security-analysis follow-up.** `v2_chain` composes the V2 checks as
+deployed (prover-sent sums, faithful lineval, matrix sumcheck proving
+`M̂(α, β)`). It concludes `(Az + e) ∘ Bz = Cz` with `e` the mask sum, which
+the verifier never checks: in ZK mode a prover can prove `5 · 1 = 0`
+(`shifted_witness_accepts`, confirmed against the pinned snarkVM). NonZK
+yields the R1CS relation (`satisfies_of_rows`). The PC layer is proved
+under an algebraic adversary (trapdoor breaks), probabilities are counted
+per challenge and per oracle query, and the Fiat–Shamir prefix binds the
+public inputs. See
+[security-analysis.md](book/src/formal-verification/security-analysis.md).
+
 See [PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
 
@@ -83,12 +94,24 @@ Varuna/
   Domain.lean                       -- EvalDomain, v_H, Lagrange, SZ
   Indexer.lean                      -- holographic row/col/val oracles
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck
+  Lineval.lean                      -- V2 lineval polynomial with M̂(α, X)
+  MatrixSumcheck.lean               -- Lagrange closed form; |K| σ = M̂(α, β)
+  PublicInput.lean                  -- input subdomain, reindex_by_subdomain
   SonicPC.lean                      -- labeled polynomials, KZG, binding breaks
+  Algebraic.lean                    -- KZG under an algebraic adversary, degree bounds
+  OpeningBatch.lean                 -- batched Sonic openings
   FiatShamir.lean                   -- V2 absorb/squeeze schedule, forks
   Batching.lean                     -- multi-circuit combiners, selectors
+  Selectors.lean                    -- selector = indicator; batched checks
+  Probability.lean                  -- bad-challenge counts, adaptive union bound
+  FSBound.lean                      -- Fiat–Shamir query charging
+  Statement.lean                    -- init_sponge binds the public inputs
   Match.lean                        -- typed accept, floors, toy fixtures
   Soundness.lean                    -- knowledge-soundness capstone
+  Composition.lean                  -- V2 chain and the mask-sum shift
+  Bridge.lean                       -- Int R1CS ↔ ZMod p; satisfies from rows
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
+  ProofSize.lean                    -- proof element counts vs the spec
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
 PLAN.md                             -- verification plan

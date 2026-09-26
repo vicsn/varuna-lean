@@ -404,6 +404,40 @@ concern, not on this spine.
 **Exit criterion (met).** Named endpoint in `TrustBoundary`; sorry-free;
 breaks are `def`s; floors are not axioms.
 
+### Security-analysis follow-up (complete)
+
+**Goal.** Close the gaps [security-analysis.md](book/src/formal-verification/security-analysis.md)
+found, except categories Ironwood also assumes (hash = RO, algebraic
+adversary, hardness, byte encodings) or does not claim (zero knowledge).
+
+**Delivered.**
+
+- `Lineval.lean`: the faithful V2 lineval polynomial `s + Σ η_M M̂(α, X) ẑ`
+  and `Σ_C M̂(α, c) ẑ(c) = LDE(Mz)(α)`
+- `MatrixSumcheck.lean`: subgroup Lagrange closed form off the domain;
+  the matrix sumcheck proves `|K| σ = M̂(α, β)`
+- `Composition.lean`: `v2_chain` gives `(Az + e) ∘ Bz = Cz` with `e` the
+  mask sum; `shifted_witness_accepts` shows the unchecked mask sum is
+  exploitable in ZK mode (confirmed against the pinned snarkVM);
+  `v2_chain_nonZK` gives the R1CS rows
+- `Bridge.lean`: `Int` residues ↔ `ZMod p`; `satisfies_of_rows`
+- `Selectors.lean`: selectors are indicators on `H`; batched zerocheck
+  and sumcheck soundness
+- `Algebraic.lean`, `OpeningBatch.lean`: KZG evaluation soundness,
+  degree bounds, and batched openings under an algebraic adversary, as
+  computed trapdoor breaks; new floor `algebraicAdversary`
+- `Probability.lean`, `FSBound.lean`: bad-challenge counts over any
+  finite challenge set, the adaptive union bound, and Fiat–Shamir query
+  charging (`Q · b / |S|`)
+- `Statement.lean`, `PublicInput.lean`: `init_sponge` binds the public
+  inputs; `reindex_by_subdomain` and `ẑ = x̂` on the input subdomain
+- `ProofSize.lean`: proof element counts from snarkVM's `Proof`
+
+**Not done.** An Ironwood-style captured-proof fingerprint (needs prover
+instrumentation, since the verifier sees only combined openings); one
+theorem composing the PC reductions with `v2_chain`; concrete residual
+degrees in `ahp_error`.
+
 ---
 
 ## 5. Proof-map discipline
