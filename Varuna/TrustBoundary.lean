@@ -5,6 +5,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 
 import Varuna.AxiomCheck
 import Varuna.SonicPC
+import Varuna.Algebraic
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -131,3 +132,16 @@ assert_axioms Varuna.sample_kzg_equation
 assert_axioms Varuna.sample_toy_vanishing_at_one
 assert_axioms Varuna.sample_toy_size_ratio
 assert_computable Varuna.queryChallengeNames
+assert_axioms Varuna.toPoly_addCoeffs
+assert_axioms Varuna.toPoly_scaleCoeffs
+assert_axioms Varuna.eval_toPoly
+assert_axioms Varuna.toPoly_openingDefect
+assert_axioms Varuna.toPoly_openingDefect_ne_zero
+assert_axioms Varuna.openingDefect_eval_trapdoor
+assert_axioms Varuna.inspectOpening_break
+assert_axioms Varuna.TrapdoorBreak.mem_szBadSet
+assert_axioms Varuna.inspectOpening_honest
+assert_computable Varuna.inspectOpening
+assert_computable Varuna.openingDefect
+assert_computable Varuna.evalCoeffs
+assert_computable Varuna.represent

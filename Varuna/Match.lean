@@ -33,8 +33,10 @@ variable {F : Type*} [Field F]
 inductive ModellingFloor where
   /-- Poseidon sponge = programmable random oracle. -/
   | poseidonRO
-  /-- Pairing-product breaks are computationally infeasible. -/
+  /-- Pairing-product and trapdoor-recovery (q-DLOG) breaks are infeasible. -/
   | pairingHardness
+  /-- The prover is algebraic: it outputs SRS representations of its group elements. -/
+  | algebraicAdversary
   /-- Universal SRS is well-formed; toxic waste is unknown. -/
   | srs
   /-- Domain separators, encodings, Poseidon parameters. -/
@@ -46,7 +48,8 @@ inductive ModellingFloor where
 /-- Human-readable name of a floor. -/
 def ModellingFloor.description : ModellingFloor → String
   | .poseidonRO => "Poseidon sponge = programmable RO"
-  | .pairingHardness => "pairing-product breaks are hard on BLS12-377"
+  | .pairingHardness => "pairing-product and SRS-trapdoor (q-DLOG) breaks are hard on BLS12-377"
+  | .algebraicAdversary => "the prover outputs SRS representations of its group elements"
   | .srs => "universal SRS well-formed, trapdoor unknown"
   | .byteEncodings => "domain-separator bytes and field/group encodings"
   | .indexEqualsCircuit => "verifying key indexes the claimed circuit"
@@ -57,10 +60,11 @@ def ModellingFloor.isFloor (_ : ModellingFloor) : Bool :=
 
 /-- The floors the capstone still rests on. -/
 def modellingFloors : List ModellingFloor :=
-  [.poseidonRO, .pairingHardness, .srs, .byteEncodings, .indexEqualsCircuit]
+  [.poseidonRO, .pairingHardness, .algebraicAdversary, .srs, .byteEncodings,
+    .indexEqualsCircuit]
 
-/-- There are five named floors. -/
-@[simp] theorem modellingFloors_length : modellingFloors.length = 5 :=
+/-- There are six named floors. -/
+@[simp] theorem modellingFloors_length : modellingFloors.length = 6 :=
   rfl
 
 /-- Poseidon = RO is among the floors. -/

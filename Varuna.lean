@@ -10,6 +10,7 @@ import Varuna.Domain
 import Varuna.Indexer
 import Varuna.AHP
 import Varuna.SonicPC
+import Varuna.Algebraic
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match

@@ -14,10 +14,10 @@ data, or the identities that imply `Az ∘ Bz = Cz` on the constraint
 domain.
 
 The theorem is stated at a generic `Field`. Instantiating the scalar
-field of BLS12-377 is a later pin; the five modelling floors in
-`modellingFloors` remain explicit. Poseidon = RO, pairing hardness,
-SRS well-formedness, encodings, and index = circuit are **not** Lean
-axioms.
+field of BLS12-377 is a later pin; the six modelling floors in
+`modellingFloors` remain explicit. Poseidon = RO, pairing / trapdoor
+hardness, the algebraic-adversary restriction, SRS well-formedness,
+encodings, and index = circuit are **not** Lean axioms.
 
 `inspectResidual` is noncomputable (Mathlib polynomials). Fork, collision,
 batch, and binding inspectors on field data stay computable `def`s.
@@ -81,7 +81,11 @@ theorem inspectAHP_eq_none_implies [DecidableEq F]
       | some _ => simp [hR, hL, hM] at h
       | none => exact ⟨rfl, rfl, rfl⟩
 
-/-- Algebraic view of an accepting V2 transcript (post-decoding). -/
+/-- Algebraic view of an accepting V2 transcript (post-decoding). The
+polynomials are the prover's algebraic representations of its commitments
+(`ModellingFloor.algebraicAdversary`); `inspectOpening_break` turns a
+mismatch between a representation and an accepted opening into a
+trapdoor break. -/
 structure ProofView (F : Type*) [Field F] where
   /-- Constraint domain `H` / `R`. -/
   H : EvalDomain F
@@ -202,6 +206,7 @@ theorem knowledgeSoundness_toy_typed :
 theorem knowledgeSoundness_rests_on_floors :
     ModellingFloor.poseidonRO ∈ modellingFloors ∧
       ModellingFloor.pairingHardness ∈ modellingFloors ∧
+      ModellingFloor.algebraicAdversary ∈ modellingFloors ∧
       ModellingFloor.srs ∈ modellingFloors ∧
       ModellingFloor.byteEncodings ∈ modellingFloors ∧
       ModellingFloor.indexEqualsCircuit ∈ modellingFloors := by
