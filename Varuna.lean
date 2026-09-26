@@ -26,6 +26,7 @@ import Varuna.Match
 import Varuna.Soundness
 import Varuna.Composition
 import Varuna.Bridge
+import Varuna.Endpoint
 import Varuna.SpotCheck
 import Varuna.ProofSize
 import Varuna.AxiomCheck

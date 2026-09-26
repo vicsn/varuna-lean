@@ -234,7 +234,7 @@ const nodes = [
     anchor:'Varuna.satisfies_of_rows · Varuna.satisfies_iff_zmod',
     role:'The SNARK relation itself: knowledge of z such that Az ∘ Bz = Cz, with public prefix x. The Int residue relation is the ZMod p Hadamard identity (satisfies_iff_zmod), and the V2 row identity gives it once the index encodes the constraint list (satisfies_of_rows, the index = circuit floor made precise).' },
   { id:'capstone', c:4, r:7, w:250, label:'knowledge soundness', status:'proven',
-    anchor:'Varuna.v2_chain · Varuna.knowledgeSoundness',
+    anchor:'Varuna.V2Endpoint.sound · Varuna.v2_chain',
     role:'V2 capstone: accepting rowcheck and lineval with true matrix claims and no computed break yield (Az + e) ∘ Bz = Cz on R with e = ∑_C s (v2_chain). NonZK gives e = 0 (v2_chain_nonZK). In ZK mode e is unchecked and shifted_witness_accepts shows the shift is exploitable. knowledgeSoundness is the earlier Marlin-shaped statement.' },
   { id:'maskSum', c:2, r:6, w:220, label:'mask sum = 0', status:'hyp',
     anchor:'Varuna.v2_chain · Varuna.shifted_witness_accepts',

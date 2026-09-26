@@ -17,6 +17,7 @@ import Varuna.FSBound
 import Varuna.Statement
 import Varuna.PublicInput
 import Varuna.Bridge
+import Varuna.Endpoint
 import Varuna.ProofSize
 import Varuna.FiatShamir
 import Varuna.Batching
@@ -249,3 +250,6 @@ assert_axioms Varuna.natDegree_rowcheckResidual_le
 assert_axioms Varuna.natDegree_univariateResidual_le
 assert_axioms Varuna.natDegree_matrixResidual_le
 assert_axioms Varuna.ahp_error_concrete
+assert_axioms Varuna.value_correct_of_inspect_none
+assert_axioms Varuna.V2Endpoint.sound
+assert_axioms Varuna.V2Endpoint.sound_nonZK

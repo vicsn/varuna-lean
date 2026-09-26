@@ -198,6 +198,15 @@ theorem inspectOpening_honest [DecidableEq F] (p q : List F) (z : F) :
     inspectOpening p q z (evalCoeffs p z) = none :=
   (inspectOpening_eq_none_iff p q z _).2 rfl
 
+/-- The PC reduction's contract: when inspection returns no break, the opened
+value is the evaluation of the prover's represented polynomial. This is what
+lets a downstream soundness argument treat an opened scalar as a true
+polynomial evaluation. -/
+theorem value_correct_of_inspect_none [DecidableEq F] {p q : List F} {z v : F}
+    (h : inspectOpening p q z v = none) : v = (toPoly p).eval z := by
+  rw [eval_toPoly]
+  exact (inspectOpening_eq_none_iff p q z v).1 h
+
 /-! ## Degree bounds
 
 Sonic/Marlin enforce `deg p ≤ d` with a shifted commitment `C̃` to
