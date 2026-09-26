@@ -15,6 +15,7 @@ import Varuna.Probability
 import Varuna.FSBound
 import Varuna.Statement
 import Varuna.PublicInput
+import Varuna.Bridge
 import Varuna.FiatShamir
 import Varuna.Batching
 import Varuna.Match
@@ -225,3 +226,13 @@ assert_axioms Varuna.reindex_witness_mod_ne_zero
 assert_axioms Varuna.input_node_eq
 assert_axioms Varuna.assignment_at_input_position
 assert_computable Varuna.reindexBySubdomain
+assert_axioms Varuna.cast_add
+assert_axioms Varuna.cast_mul
+assert_axioms Varuna.cast_dotProduct
+assert_axioms Varuna.residue_eq_iff
+assert_axioms Varuna.constraintHolds_iff_zmod
+assert_axioms Varuna.satisfies_iff_zmod
+assert_axioms Varuna.cast_rowDot1
+assert_axioms Varuna.fieldDot_eq_sum
+assert_axioms Varuna.constraintEntry_getElem
+assert_axioms Varuna.satisfies_of_rows
