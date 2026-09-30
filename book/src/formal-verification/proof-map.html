@@ -135,7 +135,7 @@ svg.map { display: block; width: 100%; min-width: 0; height: auto; }
       and the named floors.
     </p>
   </div>
-  <div class="state">iterations 0–8 · algebraic capstone</div>
+  <div class="state">V2 endpoint</div>
 </header>
 
 <div class="layout">
@@ -180,7 +180,7 @@ const ROW = r => 100 + r * 118;
 const territories = [
   { id:'faith', label:'Faithfulness', cells:[[1,0],[2,0]], h:'#b0873a' },
   { id:'ahp', label:'AHP · PIOPs', cells:[[0,4],[1,4],[0,5],[1,5],[0,6]], h:'#6f7bd6', headroom:28 },
-  { id:'rel', label:'R1CS relation · iteration 0', cells:[[0,7],[1,7],[2,7]], h:'var(--c-proven)', headroom:26 },
+  { id:'rel', label:'R1CS relation', cells:[[0,7],[1,7],[2,7]], h:'var(--c-proven)', headroom:26 },
   { id:'pc', label:'Polynomial commitment', cells:[[2,3],[3,3],[2,4]], h:'#a06fb0', labelSide:'right' },
   { id:'fs', label:'Fiat–Shamir', cells:[[2,1],[3,1],[2,2]], h:'#c15f86', labelSide:'right', headroom:28 },
   { id:'sz', label:'Schwartz–Zippel', cells:[[3,5],[3,6]], h:'var(--c-incoming)', labelSide:'right' },
@@ -190,7 +190,7 @@ const territories = [
 const nodes = [
   { id:'rustVerifier', c:0, r:0, w:230, label:'deployed verifier', status:'object',
     anchor:'snarkVM/ submodule · Varuna.snarkVMPin',
-    role:'The Rust verifier validators run, pinned as a git submodule. Iteration 7 puts a typed Lean model of its accept predicate next to this node; the zero-eval LC coefficients of a captured proof are re-checked in Lean (Fingerprint.lean). The group-level MSM / pairing assembly is outside Lean.' },
+    role:'The Rust verifier validators run, pinned as a git submodule. A typed Lean model of its accept predicate sits next to this node; the zero-eval LC coefficients of a captured proof are re-checked in Lean (Fingerprint.lean). The group-level MSM / pairing assembly is outside Lean.' },
   { id:'spotCheck', c:2, r:0, w:220, label:'source-pinned samples', status:'proven',
     anchor:'Varuna.sample_selector_eval · Varuna.sample_lcWithZeroEval',
     role:'Spot checks against the pinned snarkVM tree: LC names, V2 squeeze counts, selector scale |H_i|/|H|, four-term matrix b, padding at ω^0=1, KZG pairing equation, toy-field decide fixtures. The captured-proof fingerprint is the pinned-to-Rust node.' },
@@ -199,10 +199,10 @@ const nodes = [
     role:'Ironwood-style fingerprint. One honest snarkVM V2 hiding-mode proof, captured from the pinned tree (fixtures/fingerprint, test-only prover instrumentation, since the verifier sees only combined openings). Kernel decide over the BLS12-377 scalar field: every coefficient snarkVM assembles for rowcheck_zerocheck, lineval_sumcheck, and matrix_sumcheck equals Lean’s formula, each LC vanishes, and the scalar forms are the model (linevalEval_eq_scalar, matrixTerm_eq_scalar). Also pins row(γ)·col(γ) ≠ row_col(γ): Lean’s matrixBPoly agrees with the deployed b only on K. Trusted: that the capture came from the pinned tree. MSM / pairing assembly and byte encodings stay outside.' },
   { id:'accept', c:0, r:1, w:210, label:'accepting proof', status:'proven',
     anchor:'Varuna.TypedProof.accepts · Varuna.typedAHPAccepts_iff',
-    role:'Iteration 7. Typed accept: the three zero-eval LCs vanish and the batch combination has no live claim. Boolean predicate agrees with the Prop. Byte-level encodings stay a floor.' },
+    role:'Typed accept: the three zero-eval LCs vanish and the batch combination has no live claim. Boolean predicate agrees with the Prop. Byte-level encodings stay a floor.' },
   { id:'fsTranscript', c:0, r:2, w:210, label:'FS challenges', status:'proven',
     anchor:'Varuna.challenge_eq_ro · Varuna.hasPrepareThird_V2',
-    role:'Iteration 5. V2 absorb-then-squeeze: first combiners, α only, extra prepare_third (η_b, η_c delayed), β, δ, γ. Each challenge is ro of the prefix before that squeeze. Poseidon = RO remains a floor.' },
+    role:'V2 absorb-then-squeeze: first combiners, α only, extra prepare_third (η_b, η_c delayed), β, δ, γ. Each challenge is ro of the prefix before that squeeze. Poseidon = RO remains a floor.' },
   { id:'pcOpen', c:0, r:3, w:210, label:'PC openings', status:'proven',
     anchor:'Varuna.kzgCheck_honest · Varuna.inspectOpening_break',
     role:'Sonic-KZG openings of AHP oracles. Completeness is honest p(β)·g. Under the algebraic-adversary floor, an accepted opening whose value differs from the evaluation of the prover’s representation is a computed trapdoor break: a nonzero polynomial with the SRS trapdoor as a root. Two distinct openings of one commitment also give a pairing-product identity. Hardness of both breaks rests on the pairing floor.' },
@@ -211,22 +211,22 @@ const nodes = [
     role:'The three virtual linear combinations snarkVM checks evaluate to zero: rowcheck_zerocheck, lineval_sumcheck, matrix_sumcheck. In V2 they are chained: the rowcheck uses prover-sent sums σ_M, lineval proves them, the matrix sumcheck proves lineval’s M̂(α,β) claims. v2_chain composes the first two.' },
   { id:'rowcheck', c:1, r:4, label:'rowcheck', status:'proven',
     anchor:'Varuna.rowcheck_on_domain · Varuna.rowcheck_extract',
-    role:'Iteration 3. σ_A σ_B − σ_C = h₀(α) v_H(α). A zero residual implies the Hadamard identity on H; an accepting challenge with no inspectResidual break yields the same. Completeness is the honest quotient.' },
+    role:'σ_A σ_B − σ_C = h₀(α) v_H(α). A zero residual implies the Hadamard identity on H; an accepting challenge with no inspectResidual break yields the same. Completeness is the honest quotient.' },
   { id:'lincheck', c:1, r:5, label:'lincheck', status:'proven',
     anchor:'Varuna.univariate_sum · Varuna.sum_linevalPoly',
     role:'Univariate / lineval sumcheck on the faithful f = s + Σ_M η_M M̂(α,X) ẑ(X): f = h₁ v_C + X g₁ + σ/|C|, so ∑_C f = σ, and ∑_C M̂(α,c) ẑ(c) = LDE(Mz)(α) (linevalTarget_eq_mzPoly). The mask sum ∑_C s enters this identity.' },
   { id:'matrixSC', c:0, r:6, w:230, label:'matrix sumcheck', status:'proven',
     anchor:'Varuna.matrix_extract · Varuna.matrix_sumcheck_value',
-    role:'Iteration 3. Rational / matrix sumcheck: a − b(Xg+σ) = h₂ v_K on the sparse row·col·val encoding. On K, a(κ)=b(κ)(κ g(κ)+σ). With the subgroup Lagrange closed form, each a(κ)/b(κ) is val·L_row(α)·L_col(β), so the sumcheck proves |K|σ = M̂(α,β), the claim lineval consumes (matrix_sumcheck_value).' },
+    role:'Rational / matrix sumcheck: a − b(Xg+σ) = h₂ v_K on the sparse row·col·val encoding. On K, a(κ)=b(κ)(κ g(κ)+σ). With the subgroup Lagrange closed form, each a(κ)/b(κ) is val·L_row(α)·L_col(β), so the sumcheck proves |K|σ = M̂(α,β), the claim lineval consumes (matrix_sumcheck_value).' },
   { id:'indexer', c:1, r:6, label:'indexer oracles', status:'proven',
     anchor:'Varuna.holographicEval_at_nodes · Varuna.rowOracle_eval',
-    role:'Iteration 2. Sparse A, B, C become row/col/val interpolants on the nonzero domain K. Evaluating those oracles at a K-node recovers the stored entry, and the holographic sum at domain nodes recovers the matrix.' },
+    role:'Sparse A, B, C become row/col/val interpolants on the nonzero domain K. Evaluating those oracles at a K-node recovers the stored entry, and the holographic sum at domain nodes recovers the matrix.' },
   { id:'r1csEmpty', c:0, r:7, w:210, label:'empty R1CS', status:'proven',
     anchor:'Varuna.satisfies_nil · Varuna.hadamardSat_zero',
-    role:'Iteration 0, first proven sliver. An empty sparse constraint list is satisfied by any assignment, and the Hadamard form with m = 0 holds. This is the agreed base case of the sparse ↔ dense equivalence.' },
+    role:'An empty sparse constraint list is satisfied by any assignment, and the Hadamard form with m = 0 holds. This is the base case of the sparse ↔ dense equivalence.' },
   { id:'mulConstraint', c:1, r:7, w:230, label:'mul constraint', status:'proven',
     anchor:'Varuna.mulConstraint_holds_iff · Varuna.toy_mul_holds',
-    role:'Iteration 0, first non-trivial theorem. The constraint (x)(y)=(out) holds iff the assigned values multiply. A concrete toy instance 3 · 5 = 15 over 𝔽₁₇ is checked. Every later circuit is a composition of rows of this shape.' },
+    role:'The constraint (x)(y)=(out) holds iff the assigned values multiply. A concrete toy instance 3 · 5 = 15 over 𝔽₁₇ is checked. Every circuit is a composition of rows of this shape.' },
   { id:'hadamardIff', c:2, r:7, w:250, label:'sparse ↔ Hadamard', status:'proven',
     anchor:'Varuna.satisfies_iff_hadamard · Varuna.formatted_toy_iff',
     role:'Sparse snarkVM constraints are equivalent to Az ∘ Bz = Cz for the dense matrices they encode, including duplicate columns and implicit zeros, once every variable index is < n and the assignment is formatted (z[0] = 1, |x| = 2^k).' },
@@ -241,25 +241,25 @@ const nodes = [
     role:'Soundness of V2 in ZK mode needs ∑_C s = 0 for the committed mask s. The honest prover samples such a mask, but the verifier never checks it; with η_A = 1 a nonzero sum shifts σ_A undetected. xIsZero_shifted: a prover can “prove” 5 · 1 = 0. Confirmed against the pinned snarkVM with a prover-only patch.' },
   { id:'szBad', c:3, r:5, label:'SZ bad set', status:'proven',
     anchor:'Varuna.szBadSet · Varuna.card_szBadSet_le_natDegree',
-    role:'The finite set of roots of a nonzero polynomial. Cardinality ≤ degree (univariate Schwartz–Zippel). Later PIOPs instantiate this per residual; a hit is computed break data.' },
+    role:'The finite set of roots of a nonzero polynomial. Cardinality ≤ degree (univariate Schwartz–Zippel). Each residual instantiates this; a hit is computed break data.' },
   { id:'vanishing', c:4, r:5, w:230, label:'v_H(α)=0 ⇔ α∈H', status:'proven',
     anchor:'Varuna.EvalDomain.vanishing_eq_zero_iff · Varuna.EvalDomain.eval_lagrange_self',
-    role:'Iteration 1. On a multiplicative subgroup H of size 2^k, the vanishing polynomial is X^|H|-1, matching snarkVM EvaluationDomain. Lagrange basis evaluates to 1 at one node and 0 at the others.' },
+    role:'On a multiplicative subgroup H of size 2^k, the vanishing polynomial is X^|H|-1, matching snarkVM EvaluationDomain. Lagrange basis evaluates to 1 at one node and 0 at the others.' },
   { id:'goodChal', c:3, r:6, w:200, label:'good challenge', status:'proven',
     anchor:'Varuna.card_filter_inspectResidual_le · Varuna.ahp_error',
     role:'Counting over any finite challenge set S (snarkVM: 252-bit AHP, 168-bit PC challenges): a nonzero residual has at most deg bad challenges, a one-weight combination at most one, and an adaptive prover over α, β, γ breaks on at most (d_R+d_L+d_M)|S|² of |S|³ triples, with the residual degrees computed from the prover’s degree bounds (ahp_error_concrete). This discharges the inspect-returns-none hypotheses on the AHP rungs in probability.' },
   { id:'batching', c:2, r:4, w:250, label:'batching + extra round', status:'proven',
     anchor:'Varuna.inspectBatch_accepts · Varuna.selector_mul_vanishing',
-    role:'Iteration 6. Multi-circuit combiners (first of each family is 1), snarkVM selectors s = (v_H/v_{H_i})·(|H_i|/|H|), and the V2 extra round: α does not see prepare_third sums; η_b, η_c do. Sage is single-circuit; snarkVM is the source of truth.' },
+    role:'Multi-circuit combiners (first of each family is 1), snarkVM selectors s = (v_H/v_{H_i})·(|H_i|/|H|), and the V2 extra round: α does not see prepare_third sums; η_b, η_c do. Sage is single-circuit; snarkVM is the source of truth.' },
   { id:'sonicPC', c:3, r:3, label:'Sonic PC', status:'proven',
     anchor:'Varuna.kzgCheck · Varuna.LinearCombination.eval_add',
-    role:'Iteration 4. Labeled polynomials, degree bounds, and linear combinations including the three AHP virtual commitments that must evaluate to zero. Pairing groups are abstract; BLS12-377 is a later pin.' },
+    role:'Labeled polynomials, degree bounds, and linear combinations including the three AHP virtual commitments that must evaluate to zero. Pairing groups are abstract. Algebraic theorems are over an arbitrary field; BLS12-377 is the fingerprint’s carrier.' },
   { id:'forking', c:3, r:2, label:'FS query charging', status:'proven',
     anchor:'Varuna.fs_query_charge · Varuna.fs_break_count',
     role:'Lazy random oracle: the adversary’s i-th fresh query is answered by the i-th entry of a uniform tape in S^Q. With at most b bad answers per query, at most Q·b·|S|^(Q-1) tapes let it hit one; if every output challenge was answered on a query, an output with a break is a hit. Knowledge error Q·b/|S|, charged per query as in Ironwood. Forks and collisions stay computed data.' },
   { id:'poseidonRO', c:2, r:8, w:220, label:'Poseidon = RO', status:'floor',
     anchor:'modelling boundary, not an axiom',
-    role:'The deployed Poseidon sponge is identified with the programmable random oracle the forking lemmas talk about. The oracle model will be in Lean; the identification will not.' },
+    role:'The deployed Poseidon sponge is identified with the programmable random oracle the forking lemmas talk about. The oracle model is in Lean; the identification with Poseidon is not.' },
   { id:'pairing', c:3, r:8, w:230, label:'pairing / trapdoor hardness', status:'floor',
     anchor:'modelling boundary, not an axiom',
     role:'Pairing-product breaks and recovering the SRS trapdoor (q-DLOG) are assumed infeasible on BLS12-377. Lean exhibits the break data (pairingBreak_of_double_opening, inspectOpening_break); it does not prove hardness.' },
@@ -499,7 +499,7 @@ function clearHi() {
   nodes.forEach(n => n._g.classList.remove('dim'));
   edgeEls.forEach(p => { p.classList.remove('hot'); p.classList.remove('dim'); });
   detail.innerHTML = `<p class="empty">Hover or click a node to see what it is, its Lean anchor, and every theorem it connects to.</p>
-    <p class="hint">The spine runs down the left: accepting proof → FS challenges → PC openings → AHP checks → R1CS. Green nodes are the iteration-0 proof of concept.</p>`;
+    <p class="hint">The spine runs down the left: accepting proof → FS challenges → PC openings → AHP checks → R1CS. Green nodes are proved.</p>`;
 }
 
 nodes.forEach(n => {

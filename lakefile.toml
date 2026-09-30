@@ -11,8 +11,8 @@ lintDriver = "lint"
 pp.unicode.fun = true
 autoImplicit = false
 
-# Iteration 1 switches the AHP carrier to Mathlib `ZMod p` / `Polynomial`.
-# Pin matches Mathlib's `v4.33.0` tag (Lean 4.33). See PLAN.md.
+# Mathlib pin matches tag `v4.33.0` (Lean 4.33): `ZMod p` and `Polynomial`.
+# See PLAN.md.
 
 [[require]]
 name = "mathlib"

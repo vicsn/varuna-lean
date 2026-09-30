@@ -19,8 +19,7 @@ over a prime field — the Hadamard (row-wise) product of the three matrix–
 vector products. snarkVM stores the same relation as a list of sparse
 constraints `(Aᵢ · z)(Bᵢ · z) = (Cᵢ · z)`.
 
-This module is iteration 0 of the formalization : it defines both views and
-proves they agree.
+This module defines both views and proves they agree.
 
 * Sparse-list satisfaction `satisfies` is the snarkVM constraint store.
 * Dense Hadamard `hadamardSat` is the AHP relation `Az ∘ Bz = Cz`.

@@ -27,7 +27,7 @@ import Varuna.Soundness
 import Varuna.SpotCheck
 
 /-!
-# Trust boundary (iterations 0–8 + snarkVM samples)
+# Trust boundary
 
 Ironwood keeps the trusted base of every advertised endpoint as a
 build-time check. `assert_axioms` fails the build if a named theorem

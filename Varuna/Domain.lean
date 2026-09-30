@@ -25,8 +25,8 @@ inside an FFT-friendly field. The vanishing polynomial on that domain is
   univariate Schwartz–Zippel bound used to size `szBadSet`)
 * Lagrange basis polynomials that pick out a single domain node
 
-This module is iteration 1. Extractors later treat a challenge that lands
-in `szBadSet p` as computed break data, not as an existential in `Prop`.
+Extractors treat a challenge that lands in `szBadSet p` as computed break
+data, not as an existential in `Prop`.
 -/
 
 open Finset Polynomial

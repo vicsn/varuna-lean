@@ -16,7 +16,8 @@ The deployed verifier checks three virtual linear combinations
 * `matrix_sumcheck` — rational sumcheck of the sparse row·col·val encoding
 
 This module treats challenges as free field elements (the interactive AHP).
-Fiat–Shamir is iteration 5; multi-circuit selectors are iteration 6.
+The Fiat–Shamir schedule is `Varuna.FiatShamir`. Multi-circuit selectors
+are `Varuna.Batching` and `Varuna.Selectors`.
 
 Soundness is stated Ironwood-style : inspecting a residual at a challenge
 returns either “the identity holds identically” or the challenge as

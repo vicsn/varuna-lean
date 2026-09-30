@@ -6,10 +6,11 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 /-!
 # Prime-field carrier
 
-Integers in `[0, p)` with modular add/mul. This is the iteration-0 stand-in
-for the scalar field of BLS12-377 used by deployed Varuna. Iteration 1 will
-replace it with Mathlib `ZMod p` once vanishing polynomials and AHP
-identities need a real `Field`.
+Integers in `[0, p)` with modular add/mul. The R1CS relation is stated on
+this carrier. Domains and AHP identities use Mathlib `ZMod p`
+(`Varuna.Field`); `Bridge.lean` relates the two. Algebraic lemmas are
+generic; the deployed scalar field is BLS12-377, pinned in
+`Fingerprint.lean` for one captured proof.
 -/
 
 namespace Varuna

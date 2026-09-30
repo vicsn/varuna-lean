@@ -11,49 +11,19 @@ prose.
 
 ## Current status
 
-**Iteration 2 complete.** The holographic indexer is in Lean: row / col /
-val interpolants recover sparse matrix entries on the nonzero domain,
-and `assert_axioms` makes the census a build-time check.
+The formalization targets snarkVM’s **`VarunaVersion.V2`**. Lean checks
+the algebraic verifier: the R1CS relation (sparse constraints equivalent
+to `Az ∘ Bz = Cz`), evaluation domains and Schwartz–Zippel, the
+holographic indexer, the three AHP identities, Sonic-KZG openings and
+binding breaks, the V2 Fiat–Shamir schedule, and multi-circuit batching.
+`TypedProof.accepts` is the typed accept predicate. `SpotCheck.lean`
+kernel-checks source samples against the pinned `snarkVM/` submodule.
+`assert_axioms` makes the census a build-time check.
 
-**Iteration 3 complete.** The three AHP identities are in Lean:
-rowcheck (`σ_A σ_B − σ_C = h₀ v_H`), univariate lineval sumcheck
-(`∑ f = |K| σ`), and the rational matrix sumcheck on the sparse
-`a(X)`, `b(X)` encoding. Accepting a challenge yields the algebraic
-claim or Schwartz–Zippel break data (`inspectResidual`).
-
-**Iteration 4 complete.** Sonic-KZG is in Lean: labeled polynomials,
-linear combinations (including the three zero-eval LCs), honest opening
-completeness, and binding as computed break data
-(`pairingBreak_of_double_opening`).
-
-**Iteration 5 complete.** The V2 Fiat–Shamir schedule is in Lean:
-absorb-then-squeeze (`α` only in the second squeeze; extra
-`prepare_third` round), with forks and RO collisions as computed data
-(`inspectFork`, `inspectCollision`). Poseidon = RO remains a floor.
-
-**Iteration 6 complete.** Multi-circuit batching is in Lean: first
-combiners are `1`, selector polynomials lift subdomain residuals to
-the common domain, and the extra round binds instance sums before
-`η_b, η_c`. `inspectBatch` is the computed batch-break.
-
-**Iteration 7 complete.** The typed accept predicate and modelling
-floors live in `Match.lean`. Toy-field fixtures accept honest zeros
-and reject flipped LC evaluations; the KZG pairing equation is checked
-on a multiplicative `𝔽₁₇` pairing. `SpotCheck.lean` pins the
-`snarkVM/` submodule and kernel-checks source samples (LC names, V2
-squeeze counts, selector scale, four-term matrix `b`, padding at
-`ω^0 = 1`, KZG pairing equation).
-
-**Iteration 8 complete.** `knowledgeSoundness` is the advertised
-endpoint: an accepting algebraic V2 transcript with no computed AHP
-or batch break yields the three domain identities (Hadamard on `H`,
-lineval sum, matrix on `K`). Poseidon = RO and pairing hardness stay
-floors.
-
-**Security-analysis follow-up.** `v2_chain` composes the V2 checks as
-deployed (prover-sent sums, faithful lineval, matrix sumcheck proving
-`M̂(α, β)`). It concludes `(Az + e) ∘ Bz = Cz` with `e` the mask sum, which
-the verifier never checks: in ZK mode a prover can prove `5 · 1 = 0`
+`v2_chain` composes the V2 checks as deployed (prover-sent sums, faithful
+lineval, matrix sumcheck proving `M̂(α, β)`). It concludes
+`(Az + e) ∘ Bz = Cz` with `e` the mask sum, which the verifier never
+checks: in ZK mode a prover can prove `5 · 1 = 0`
 (`shifted_witness_accepts`, confirmed against the pinned snarkVM). NonZK
 yields the R1CS relation (`satisfies_of_rows`). The PC layer is proved
 under an algebraic adversary (trapdoor breaks), probabilities are counted
@@ -61,15 +31,31 @@ per challenge and per oracle query, and the Fiat–Shamir prefix binds the
 public inputs. `V2Endpoint.sound` composes the `h₀` opening reduction,
 the matrix sumchecks, and `v2_chain` in one theorem; `ahp_error_concrete`
 states the AHP error with concrete residual degrees. `Fingerprint.lean`
-is the Ironwood-style fingerprint. It kernel-checks a captured snarkVM V2
-proof: every coefficient of the three zero-eval LCs is Lean's formula,
-and each LC vanishes over the BLS12-377 scalar field. See
-[security-analysis.md](book/src/formal-verification/security-analysis.md).
+kernel-checks a captured snarkVM V2 proof: every coefficient of the three
+zero-eval LCs is Lean's formula, and each LC vanishes over the BLS12-377
+scalar field. Poseidon = RO, pairing hardness, and the algebraic-adversary
+restriction stay floors.
 
 See [PLAN.md](PLAN.md) and the
 [proof map](book/src/formal-verification/proof-map.html).
+How each item of the security-analysis plan is covered is in
+[security-analysis.md](book/src/formal-verification/security-analysis.md).
 
-The formalization targets snarkVM’s **`VarunaVersion.V2`**.
+### What remains
+
+- Compose the other openings (`ẑ`, `h₁`, `g₁`, matrix witnesses) the way
+  `h₀` is composed, and compose the matrix-residual `γ` step
+  (`matrix_extract`). The endpoint uses one `K` for all matrices; the
+  selector-batched sumcheck is not in it.
+- One theorem that derives every V2 squeeze’s bad set from the transcript.
+- The fingerprint stops at the zero-eval LC layer. MSM / pairing assembly
+  is outside Lean.
+- Algebraic theorems are over an arbitrary field. BLS12-377 is the
+  fingerprint’s carrier, not `V2Endpoint.sound`’s.
+- The unchecked mask sum is a protocol gap. Closing it needs a new
+  `VarunaVersion`, not another lemma about the deployed checks.
+
+Zero knowledge (a simulator) is not claimed.
 
 This repository verifies the **proof system**, not the circuits it
 proves. Circuit-gadget correctness is a separate effort
@@ -92,9 +78,9 @@ suite: the proofs *are* the verification.
 ```
 Varuna.lean                         -- library root (imports the census)
 Varuna/
-  PrimeField.lean                   -- [0, p) integer carrier (iteration 0)
+  PrimeField.lean                   -- [0, p) integer carrier for the R1CS relation
   R1CS.lean                         -- SNARK relation, sparse ↔ Hadamard
-  Field.lean                        -- Mathlib `ZMod p` (iteration 1)
+  Field.lean                        -- Mathlib `ZMod p`
   Domain.lean                       -- EvalDomain, v_H, Lagrange, SZ
   Indexer.lean                      -- holographic row/col/val oracles
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck

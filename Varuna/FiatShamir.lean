@@ -17,8 +17,9 @@ runs, as an absorb/squeeze transcript, and proves :
 * a fork of two transcripts that share a prefix and differ at a squeeze
   is computed data (`inspectFork`)
 
-Forking / special-soundness *use* of that pair (extracting a witness or
-a PC break) is composed in later iterations.
+Forks and collisions are computed data. Query charging of those breaks is
+`Varuna.FSBound`. No single theorem yet derives every V2 squeeze's bad set
+from the transcript.
 -/
 
 set_option linter.unusedSectionVars false

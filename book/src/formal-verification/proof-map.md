@@ -8,21 +8,17 @@ Open the interactive map:
 **[proof-map.html](proof-map.html)**
 
 The spine runs down the left: accepting proof → Fiat–Shamir challenges →
-polynomial-commitment openings → AHP checks → R1CS. Iteration 0 colours
-the R1CS relation. Iteration 1 colours evaluation-domain vanishing
-and Schwartz–Zippel. Iteration 2 colours the holographic indexer.
-Iteration 3 colours rowcheck, lineval, and the matrix sumcheck.
-Iteration 4 colours Sonic-KZG openings and binding breaks.
-Iteration 5 colours the V2 Fiat–Shamir schedule.
-Iteration 6 colours batching and the extra round.
-Iteration 7 colours the typed accept predicate, toy fixtures, and
-source-pinned snarkVM samples (`SpotCheck.lean`).
-Iteration 8 colours the knowledge-soundness capstone. The security-analysis
-follow-up adds the V2 chain (and the unchecked mask sum, drawn as a
-hypothesis node), the algebraic-adversary PC layer, the probability
-bounds, and the R1CS bridge.
+polynomial-commitment openings → AHP checks → R1CS. Proved nodes cover the
+R1CS relation, evaluation-domain vanishing and Schwartz–Zippel, the
+holographic indexer, rowcheck, lineval, and the matrix sumcheck, Sonic-KZG
+openings and binding breaks, the V2 Fiat–Shamir schedule, batching and the
+extra round, the typed accept predicate, toy fixtures, source-pinned snarkVM
+samples (`SpotCheck.lean`), and the knowledge-soundness capstone. The V2
+chain (and the unchecked mask sum, drawn as a hypothesis node), the
+algebraic-adversary PC layer, the probability bounds, and the R1CS bridge
+are on the map as well.
 
-Statuses, edge verbs, and the iteration plan are in [PLAN.md](../../../PLAN.md).
-How each item of the security-analysis plan is (or is not) covered is in
-[security-analysis.md](security-analysis.md).
+Statuses and edge verbs are in [PLAN.md](../../../PLAN.md), which also lists
+what is still open. How each item of the security-analysis plan is covered
+is in [security-analysis.md](security-analysis.md).
 This wrapper is intentionally thin: we are not cloning the Ironwood book.
