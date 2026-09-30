@@ -28,9 +28,13 @@ variable {F : Type*} [Field F]
 
 /-! ## The `init_sponge` prefix -/
 
-/-- snarkVM `PROTOCOL_NAME`. -/
+/-- snarkVM `PROTOCOL_NAME`, absorbed by V1 and V2. -/
 def protocolName : String :=
   "VARUNA-2023"
+
+/-- Domain separator absorbed by V3 (`varuna.rs` `init_sponge`). -/
+def protocolNameV3 : String :=
+  "VARUNA-2026-V3"
 
 /-- Per-circuit block: batch size, then one field vector per instance. -/
 def inputBlocks : List (List (List F)) → Transcript F
@@ -41,6 +45,10 @@ def inputBlocks : List (List (List F)) → Transcript F
 instance) and circuit commitments `comms`. -/
 def v2Init (inputs : List (List (List F))) (comms : List (List F)) : Transcript F :=
   .tag protocolName :: (inputBlocks inputs ++ comms.map FSMessage.fields)
+
+/-- The V3 initial transcript. Same body as V2, under `VARUNA-2026-V3`. -/
+def v3Init (inputs : List (List (List F))) (comms : List (List F)) : Transcript F :=
+  .tag protocolNameV3 :: (inputBlocks inputs ++ comms.map FSMessage.fields)
 
 /-- Mapping into `fields` is injective. -/
 theorem map_fields_injective : Function.Injective (List.map (FSMessage.fields (F := F))) :=
@@ -78,6 +86,17 @@ theorem v2Init_injective {i₁ i₂ : List (List (List F))} {c₁ c₂ : List (L
     (h : v2Init i₁ c₁ = v2Init i₂ c₂) : i₁ = i₂ ∧ c₁ = c₂ := by
   simp only [v2Init, List.cons.injEq, true_and] at h
   exact inputBlocks_append_inj i₁ i₂ c₁ c₂ h
+
+/-- V3's initial transcript determines the public inputs and commitments. -/
+theorem v3Init_injective {i₁ i₂ : List (List (List F))} {c₁ c₂ : List (List F)}
+    (h : v3Init i₁ c₁ = v3Init i₂ c₂) : i₁ = i₂ ∧ c₁ = c₂ := by
+  simp only [v3Init, List.cons.injEq, true_and] at h
+  exact inputBlocks_append_inj i₁ i₂ c₁ c₂ h
+
+/-- V2 and V3 never share an initial transcript: the domain separators differ. -/
+theorem v2Init_ne_v3Init {i₁ i₂ : List (List (List F))} {c₁ c₂ : List (List F)} :
+    v2Init i₁ c₁ ≠ v3Init i₂ c₂ := by
+  simp [v2Init, v3Init, protocolName, protocolNameV3]
 
 /-- Every challenge prefix starts with the initial transcript. -/
 theorem init_isPrefix_before (t : V2Transcript F) (c : V2Challenge) :

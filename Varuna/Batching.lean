@@ -322,12 +322,27 @@ def firstRoundSqueezeCount (nInstances : Nat) (isFirstCircuit : Bool) : Nat :=
   rfl
 
 /-- Extra field elements squeezed in V2 prepare-third after the combiners
-(`η_b, η_c`). -/
+(`η_b, η_c`). V3 squeezes three (`η_a, η_b, η_c`); see `prepareThirdEtaSqueeze`. -/
 def prepareThirdExtraSqueeze : Nat :=
   2
 
 /-- V2 prepare-third squeezes two extra challenges that V1 drew with `α`. -/
 @[simp] theorem prepareThirdExtraSqueeze_eq : prepareThirdExtraSqueeze = 2 :=
+  rfl
+
+/-- How many matrix weights prepare-third squeezes. V1 draws them with `α`.
+V2 squeezes `η_B, η_C` and fixes `η_A = 1`. V3 squeezes all three. -/
+def prepareThirdEtaSqueeze : VarunaVersion → Nat
+  | .V1 => 0
+  | .V2 => 2
+  | .V3 => 3
+
+/-- V3 prepare-third squeezes `η_A` as well as `η_B, η_C`. -/
+@[simp] theorem prepareThirdEtaSqueeze_V3 : prepareThirdEtaSqueeze .V3 = 3 :=
+  rfl
+
+/-- V2 prepare-third still squeezes only `η_B, η_C`. -/
+@[simp] theorem prepareThirdEtaSqueeze_V2 : prepareThirdEtaSqueeze .V2 = 2 :=
   rfl
 
 /-- The prepare-third *message* (instance sums) sits in the η-prefix. -/
@@ -355,9 +370,9 @@ theorem prepareThird_challenge_eq (ro : RO F) (t : V2Transcript F) :
       ro (t.init ++ [t.first, t.second, t.prepareThird]) :=
   rfl
 
-/-- V2 has the extra round; V1 does not. -/
-theorem extraRound_iff_V2 (v : VarunaVersion) :
-    hasPrepareThird v = true ↔ v = .V2 := by
+/-- V2 and V3 have the extra round; V1 does not. -/
+theorem hasPrepareThird_iff (v : VarunaVersion) :
+    hasPrepareThird v = true ↔ v = .V2 ∨ v = .V3 := by
   cases v <;> simp
 
 end Varuna

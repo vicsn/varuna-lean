@@ -18,14 +18,16 @@ plan is covered is in
 ## 1. What is being verified
 
 **Target.** Knowledge soundness of the *deployed* Varuna verifier: the
-object in snarkVM that validators actually run. Completeness of the
-individual checks is proved alongside soundness. Zero-knowledge
-(a simulator) is not claimed.
+object in snarkVM that validators actually run, `VarunaVersion.V3`.
+Completeness of the individual checks is proved alongside soundness.
+Zero-knowledge (a simulator) is not claimed. V2, with `η_A` fixed at
+`1`, is still formalized: that is the verifier on which the mask-sum
+shift is exploitable.
 
 Varuna is an optimized Marlin ([CHMMVW19](https://eprint.iacr.org/2019/1047))
 AHP compiled through a Sonic-style polynomial commitment and made
 non-interactive with Fiat–Shamir. The formalization targets
-snarkVM’s `VarunaVersion.V2` and names:
+snarkVM’s `VarunaVersion.V3` and names:
 
 - universal, updatable SRS
 - holographic indexer (row / col / val oracles for `A, B, C`)
@@ -48,10 +50,11 @@ The constraint language is R1CS (`Az ∘ Bz = Cz`).
 | AleoBFT consensus | `aleobft-formal` (ACL2) |
 | Pairing / curve arithmetic as a library | Mathlib + a future CompElliptic-style pin |
 
-The proof system says: *if the verifier accepts, then (under the
+The proof system says: *if the V3 verifier accepts, then (under the
 named assumptions) there exists a witness satisfying the R1CS*. It
-does not say the R1CS means what the Leo programmer thought. In ZK
-mode the proved relation is the shifted one in §5, not R1CS.
+does not say the R1CS means what the Leo programmer thought. V3
+forces the mask sum to zero, including in ZK mode (`v3_chain`). The
+V2 verifier does not: there the proved relation is `(Az + e) ∘ Bz = Cz`.
 
 ---
 
@@ -127,14 +130,16 @@ accepting proof
       rowcheck_zerocheck
       lineval_sumcheck
       matrix_sumcheck
-  → (Az + e) ∘ Bz = Cz              (e = 0 in NonZK; unchecked in ZK)
-  → R1CS witness                    (NonZK, via Bridge.lean)
+  → (Az + e) ∘ Bz = Cz              (V3 forces e = 0; V2 leaves e free)
+  → R1CS witness                    (V3 in either mode; V2 only in NonZK)
 ```
 
-`V2Endpoint.sound` is the composed theorem: a no-break opening of the
-rowcheck quotient `h₀`, the three matrix sumchecks, and `v2_chain`
-give `(Az + e) ∘ Bz = Cz` on `R`. `sound_nonZK` ends at `satisfies`.
-The holes in that composition are in §5.
+`V3Endpoint.sound` is the composed theorem: a no-break opening of the
+rowcheck quotient `h₀`, the three matrix sumchecks, and `v3_chain`
+give `e = 0` and `Az ∘ Bz = Cz` on `R`. `sound_r1cs` ends at
+`satisfies`. `V2Endpoint.sound` is the same composition for the old
+schedule and stops at the shifted relation. The holes in the
+composition are in §5.
 
 ```
   deployed snarkVM verifier          (definition; LC layer fingerprinted)
@@ -153,10 +158,10 @@ The holes in that composition are in §5.
      rowcheck ──► lincheck ──► matrix sumcheck
            │
            ▼
-  (Az + e) ∘ Bz = Cz                 (proved; e unchecked in ZK)
+  (Az + e) ∘ Bz = Cz                 (proved; V3 forces e = 0)
            │
            ▼
-  R1CS witness                       (proved in NonZK)
+  R1CS witness                       (proved for V3; V2 only in NonZK)
 ```
 
 ---
@@ -205,11 +210,14 @@ abstract. Hardness is the `pairingHardness` floor; the algebraic
 adversary is the `algebraicAdversary` floor.
 
 **Fiat–Shamir** (`FiatShamir.lean`, `Statement.lean`, `FSBound.lean`).
-V2 absorb-then-squeeze: combiners, `α` only, extra `prepareThird`
-(`η_b, η_c` delayed), `β`, `δ`, `γ`. Each challenge is a function of
-the prefix before that squeeze. `init_sponge` binds the public inputs
-(`v2Init_injective`). Forks and collisions are `def`s. `fs_query_charge`
-bounds lazy-oracle tapes by `Q · b / |S|`. Poseidon = RO is a floor.
+V2 and V3 absorb-then-squeeze: combiners, `α` only, extra `prepareThird`,
+`β`, `δ`, `γ`. V2 squeezes `η_B, η_C` there and fixes `η_A = 1`. V3
+squeezes `η_A, η_B, η_C` (`prepareThirdEtaSqueeze .V3 = 3`) and absorbs
+the domain separator `VARUNA-2026-V3` (`v3Init`, distinct from
+`v2Init`). Each challenge is a function of the prefix before that
+squeeze. `init_sponge` binds the public inputs. Forks and collisions
+are `def`s. `fs_query_charge` bounds lazy-oracle tapes by `Q · b / |S|`.
+Poseidon = RO is a floor.
 
 **Batching** (`Batching.lean`, `Selectors.lean`, `PublicInput.lean`).
 First combiner of each family is `1`. Selectors are indicators on `H`.
@@ -230,20 +238,23 @@ and each LC vanishes over the BLS12-377 scalar field. It also pins
 only on `K`.
 
 **Capstone** (`Composition.lean`, `Endpoint.lean`, `Soundness.lean`).
-`v2_chain` gives `(Az + e) ∘ Bz = Cz` with `e` the mask sum.
-`shifted_witness_accepts` shows the unchecked mask sum is exploitable
-in ZK mode (confirmed against the pinned snarkVM). `v2_chain_nonZK`
-and `satisfies_of_rows` give the R1CS rows. `V2Endpoint.sound` composes
-the `h₀` opening reduction, the three matrix sumchecks, and `v2_chain`.
-`knowledgeSoundness` is the earlier Marlin-shaped statement (three
-domain identities and a zero batch sum). `knowledgeSoundness_rests_on_floors`
-keeps the floors explicit. Probability counts are in `Probability.lean`.
+`v2_chain` gives `(Az + e) ∘ Bz = Cz` with `e` the mask sum, and
+`shifted_witness_accepts` shows that shift passes the V2 checks.
+`v3_chain` gives `e = 0` and the unshifted rows; `v3_shifted_residual_ne`
+shows the V2 messages do not make the V3 lineval residual identically
+zero when `e ≠ 0` and `η_A ≠ 1`. `V3Endpoint.sound` composes the `h₀`
+opening reduction, the three matrix sumchecks, and `v3_chain`.
+`sound_r1cs` ends at `satisfies` in either mode. `V2Endpoint.sound`
+is the old composition and stops at the shift. `knowledgeSoundness`
+is the earlier Marlin-shaped statement (three domain identities and a
+zero batch sum). `knowledgeSoundness_rests_on_floors` keeps the floors
+explicit. Probability counts are in `Probability.lean`.
 
 ---
 
 ## 5. What remains
 
-**Endpoint composition.** `V2Endpoint.sound` still takes as hypotheses:
+**Endpoint composition.** `V3Endpoint.sound` still takes as hypotheses:
 
 - openings of `ẑ`, `h₁`, `g₁`, and the matrix witnesses (each reduces
   the same way as `h₀`, via `value_correct_of_inspect_none`)
@@ -267,14 +278,7 @@ encodings stay a floor.
 
 **Concrete field on the generic statements.** Algebraic theorems are
 over an arbitrary `Field`. The BLS12-377 scalar field is the carrier
-of the fingerprint, not of `V2Endpoint.sound`.
-
-**Mask sum (protocol gap).** In ZK mode nothing checks `e = Σ_C s = 0`.
-A prover can prove `5 · 1 = 0` (`xIsZero_shifted`). Closing it needs a
-new `VarunaVersion`: either enforce `e = 0` (for example a checked
-degree bound on a mask of the form `X t(X) + v_C(X) r(X)`), or absorb
-a claimed mask sum before `α`. This is not a missing lemma about the
-deployed verifier.
+of the fingerprint, not of `V3Endpoint.sound`.
 
 **Named floors, not open proofs.** Poseidon = RO, pairing / trapdoor
 hardness, algebraic adversary, SRS, encodings, index = circuit.
@@ -307,7 +311,8 @@ Statuses:
 | `goal` | Advertised capstone |
 
 A node is `proven` only when its `anchor` field names a real
-declaration. The unchecked mask sum (`maskSum`) stays `hyp`.
+declaration. `maskSum` is proved for V3 (`v3_chain`). The V2 shift
+remains a theorem about that schedule (`v2_chain`).
 
 ---
 
@@ -320,7 +325,7 @@ Pin sources by commit, not by branch.
 | `ProvableHQ/varuna-sage-impl` `docs/spec.pdf` | Human protocol spec |
 | `ProvableHQ/varuna-sage-impl` Sage PIOPs | Executable identities for rowcheck / sumchecks |
 | `ProvableHQ/protocol-docs` (`protocol-docs/` submodule) | Algorithm identities (rowcheck, lincheck, matrix sumcheck), including VarunaVersion V2 batching |
-| `ProvableHQ/snarkVM` submodule (`Varuna.snarkVMPin`) `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V2`); sampled in `SpotCheck.lean` |
+| `ProvableHQ/snarkVM` submodule (`Varuna.snarkVMPin`) `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V3`); sampled in `SpotCheck.lean` |
 | `ProvableHQ/snarkVM` `algorithms/src/polycommit/sonic_pc/` and `kzg10/` | PC interface and pairing check |
 | `leanprover-community/mathlib4` tag `v4.33.0` | Field, `Polynomial`, roots of unity, Lagrange |
 | `fixtures/fingerprint/` | One captured snarkVM V2 proof |

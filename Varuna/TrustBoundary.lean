@@ -93,6 +93,7 @@ assert_axioms Varuna.inspectCollision_some
 assert_axioms Varuna.inspectCollision_ne
 assert_axioms Varuna.v2_secondRound_lt_v1
 assert_axioms Varuna.hasPrepareThird_V2
+assert_axioms Varuna.hasPrepareThird_V3
 assert_axioms Varuna.before_length
 assert_computable Varuna.inspectFork
 assert_computable Varuna.inspectCollision
@@ -107,7 +108,7 @@ assert_axioms Varuna.lift_residual
 assert_axioms Varuna.batched_rowcheck_two
 assert_axioms Varuna.alpha_independent_of_prepareThird
 assert_axioms Varuna.prepareThird_challenge_eq
-assert_axioms Varuna.extraRound_iff_V2
+assert_axioms Varuna.hasPrepareThird_iff
 assert_computable Varuna.inspectBatch
 assert_computable Varuna.weightedSum
 assert_axioms Varuna.lcNames_match_snarkVM
@@ -135,6 +136,9 @@ assert_axioms Varuna.snarkVMPin_length
 assert_axioms Varuna.sample_lcWithZeroEval
 assert_axioms Varuna.sample_v2_second_round_squeeze
 assert_axioms Varuna.sample_prepareThird_eta_squeezes
+assert_axioms Varuna.sample_v3_prepareThird_eta_squeezes
+assert_axioms Varuna.sample_v3_second_round_squeeze
+assert_axioms Varuna.sample_deployed_is_V3
 assert_axioms Varuna.sample_first_circuit_combiner
 assert_axioms Varuna.sample_etaA_is_one
 assert_axioms Varuna.EvalDomain.node_zero
@@ -220,10 +224,13 @@ assert_axioms Varuna.fs_break_count
 assert_axioms Varuna.map_fields_injective
 assert_axioms Varuna.inputBlocks_append_inj
 assert_axioms Varuna.v2Init_injective
+assert_axioms Varuna.v3Init_injective
+assert_axioms Varuna.v2Init_ne_v3Init
 assert_axioms Varuna.init_isPrefix_before
 assert_axioms Varuna.before_ne_of_inputs_ne
 assert_axioms Varuna.collision_of_inputs_ne
 assert_computable Varuna.v2Init
+assert_computable Varuna.v3Init
 assert_axioms Varuna.assignmentPoly_eval_on_input
 assert_axioms Varuna.reindex_input
 assert_axioms Varuna.reindex_witness_mod_ne_zero
@@ -254,6 +261,10 @@ assert_axioms Varuna.ahp_error_concrete
 assert_axioms Varuna.value_correct_of_inspect_none
 assert_axioms Varuna.V2Endpoint.sound
 assert_axioms Varuna.V2Endpoint.sound_nonZK
+assert_axioms Varuna.v3_chain
+assert_axioms Varuna.v3_shifted_residual_ne
+assert_axioms Varuna.V3Endpoint.sound
+assert_axioms Varuna.V3Endpoint.sound_r1cs
 assert_axioms Varuna.rowcheckV2Eval_eq_scalar
 assert_axioms Varuna.linevalEval_eq_scalar
 assert_axioms Varuna.matrixTerm_eq_scalar

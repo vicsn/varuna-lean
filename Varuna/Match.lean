@@ -90,13 +90,13 @@ def queryChallengeNames : List String :=
 
 /-- Deployed protocol version. -/
 def deployedVersion : VarunaVersion :=
-  .V2
+  .V3
 
-/-- The target version is V2. -/
-@[simp] theorem deployedVersion_eq : deployedVersion = .V2 :=
+/-- The target version is V3. -/
+@[simp] theorem deployedVersion_eq : deployedVersion = .V3 :=
   rfl
 
-/-- V2 includes the extra prepare-third round. -/
+/-- V3 includes the extra prepare-third round. -/
 @[simp] theorem deployed_hasPrepareThird :
     hasPrepareThird deployedVersion = true :=
   rfl

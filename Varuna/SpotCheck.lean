@@ -16,7 +16,7 @@ of the identities snarkVM actually runs, checked against the Lean defs.
 
 It is *not* a BLS12-377 proof capture. Byte encodings, Poseidon, and
 pairing hardness stay floors. Each sample names a path in the pinned
-`snarkVM/` submodule (`38a8fabc67d2e3b0b1b9079936e8208210839beb`).
+`snarkVM/` submodule (`8e86fb2b3414f7a16fa2d47d723e918f70aff0cc`).
 -/
 
 set_option linter.unusedSectionVars false
@@ -29,7 +29,7 @@ variable {F : Type*} [Field F]
 
 /-- Pinned snarkVM git object the samples were read from. -/
 def snarkVMPin : String :=
-  "38a8fabc67d2e3b0b1b9079936e8208210839beb"
+  "8e86fb2b3414f7a16fa2d47d723e918f70aff0cc"
 
 /-- The pin is the 40-character SHA recorded in `.gitmodules`. -/
 @[simp] theorem snarkVMPin_length : snarkVMPin.length = 40 :=
@@ -60,7 +60,17 @@ theorem sample_v1_second_round_squeeze :
 
 /-- V2 prepare-third squeezes two extra fields (`η_b, η_c`). -/
 theorem sample_prepareThird_eta_squeezes :
-    prepareThirdExtraSqueeze = 2 :=
+    prepareThirdEtaSqueeze .V2 = 2 :=
+  rfl
+
+/-- V3 prepare-third squeezes three fields (`η_a, η_b, η_c`). -/
+theorem sample_v3_prepareThird_eta_squeezes :
+    prepareThirdEtaSqueeze .V3 = 3 :=
+  rfl
+
+/-- V3 second-round squeeze is one field (`α` only), as in V2. -/
+theorem sample_v3_second_round_squeeze :
+    secondRoundSqueezeCount .V3 = 1 :=
   rfl
 
 /-- First circuit combiner is `1` (`sample_batch_combiners`). -/
@@ -83,10 +93,11 @@ theorem sample_deltaA_first_is_one (deltaB deltaC : F) :
     (DeltaCombiners.first deltaB deltaC).deltaA = 1 :=
   deltaA_first_eq_one deltaB deltaC
 
-/-- Deployed version is V2 and has the extra round. -/
-theorem sample_deployed_is_V2 :
-    deployedVersion = .V2 ∧ hasPrepareThird .V2 = true :=
-  ⟨rfl, rfl⟩
+/-- Deployed version is V3 and has the extra round. -/
+theorem sample_deployed_is_V3 :
+    deployedVersion = .V3 ∧ hasPrepareThird .V3 = true ∧
+      prepareThirdEtaSqueeze deployedVersion = 3 :=
+  ⟨rfl, rfl, rfl⟩
 
 /-! ## Domains, padding, indexer (`fft/domain.rs`, `ahp/matrices.rs`) -/
 

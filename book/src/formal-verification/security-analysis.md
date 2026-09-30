@@ -4,7 +4,7 @@ This maps every item of the Varuna security-analysis plan to three things: the a
 
 **Status.** **Lean**: kernel-checked here. **Partial**: Lean checks the core; a composed or concrete statement is missing. **Spec**: argued in the spec only. **Excluded**: a category Ironwood also assumes or does not claim (hash = random oracle, algebraic adversary, hardness, byte encodings, zero knowledge); named as a floor where it is an assumption.
 
-## Finding: the verifier does not check the mask sum (ZK mode)
+## Finding: V2 does not check the mask sum (closed in V3)
 
 In V2 the rowcheck uses prover-sent sums $\sigma_M$ in place of $\hat z_M(\alpha)$, and lineval proves them with $\eta_A = 1$ fixed. The lineval sum then reads $e + \sum_M \eta_M \hat z_M(\alpha) = \sum_M \eta_M \sigma_M$ with $e = \sum_{c \in C} s(c)$ for the committed mask $s$. The honest mask has $e = 0$, but nothing checks it. A prover can therefore set $\sigma_A = \hat z_A(\alpha) + e$ undetected, and the verifier accepts any witness of the shifted relation $(Az + e) \circ Bz = Cz$.
 
@@ -13,12 +13,14 @@ In V2 the rowcheck uses prover-sent sums $\sigma_M$ in place of $\hat z_M(\alpha
 - [`xIsZero_false`](../../../Varuna/Composition.lean#L243) and [`xIsZero_shifted`](../../../Varuna/Composition.lean#L248): the shifted relation is strictly weaker. The constraint $x \cdot 1 = 0$ at $x = 5$ is false, and satisfied with $e = -5$.
 - [`v2_chain_nonZK`](../../../Varuna/Composition.lean#L142) and [`satisfies_of_rows`](../../../Varuna/Bridge.lean#L96): NonZK mode has no mask, so $e = 0$ and the chain gives the R1CS relation.
 
-This was confirmed end to end against the pinned snarkVM. With a prover-only patch in hiding mode (the mode `console/network` uses for proving keys), the unmodified verifier accepted a proof of $5 \cdot 1 = 0$; the honest prover refuses that statement. The patch is kept outside this repository.
+This was confirmed end to end against snarkVM V2. With a prover-only patch in hiding mode, the unmodified V2 verifier accepted a proof of $5 \cdot 1 = 0$; the honest prover refuses that statement. The patch is kept outside this repository.
 
-Either change below closes the gap, and either needs a new `VarunaVersion`, since it changes what verifiers accept:
+V3 closes it by sampling $\eta_A$ in prepare-third, after the mask commitment and the matrix-sum claims, and multiplying the $A$ terms by that challenge (`verifier.rs`, `third.rs`). The lineval combination is then $e + \eta_A(t_A - \sigma_A) + \eta_B(t_B - \sigma_B) + \eta_C(t_C - \sigma_C)$.
 
-- enforce $e = 0$ (for example, commit the mask in the form $X\,t(X) + v_C(X)\,r(X)$ with a checked degree bound)
-- absorb a claimed mask sum before $\alpha$ and use it in the lineval target, or sample $\eta_A$ as Marlin does
+- [`v3_chain`](../../../Varuna/Composition.lean): an accepting lineval with no batch break forces $e = 0$ and the unshifted rows on $R$.
+- [`v3_shifted_residual_ne`](../../../Varuna/Composition.lean): the V2 messages $\sigma_A = t_A + e$ do not make that residual identically zero when $e \ne 0$ and $\eta_A \ne 1$.
+- [`V3Endpoint.sound`](../../../Varuna/Endpoint.lean) composes the $h_0$ opening, the matrix sumchecks, and `v3_chain`. [`V3Endpoint.sound_r1cs`](../../../Varuna/Endpoint.lean) ends at `satisfies` in either mode.
+- The V3 transcript domain is `VARUNA-2026-V3` ([`v3Init`](../../../Varuna/Statement.lean), [`v2Init_ne_v3Init`](../../../Varuna/Statement.lean)).
 
 ## 1. Soundness of the AHP
 
@@ -121,7 +123,7 @@ Ironwood makes no ZK claim. As deployed, ZK mode uses hiding commitments with bo
 
 | Item | Status | Main Lean anchors |
 | --- | --- | --- |
-| Mask-sum finding | Lean + PoC | `v2_chain`, `shifted_witness_accepts` |
+| Mask-sum finding | Closed in V3 | `v3_chain`, `v3_shifted_residual_ne` |
 | 1.1 S1 notion | Lean | `inspectResidual`, `ahp_error` |
 | 1.2 Unbatched error | Lean | `ahp_error_concrete`, `card_filter_inspectResidual_le` |
 | 1.3 AHP batching error | Lean | `batchedZerocheck_extract`, `batchedSumcheck_extract` |

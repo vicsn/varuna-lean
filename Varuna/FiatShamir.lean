@@ -29,12 +29,14 @@ namespace Varuna
 
 variable {F : Type*} [Field F]
 
-/-- snarkVM `VarunaVersion`. The formalization targets `V2`. -/
+/-- snarkVM `VarunaVersion`. The formalization targets `V3`. -/
 inductive VarunaVersion where
   /-- Original schedule: `η_b, η_c` squeezed with `α`. -/
   | V1
-  /-- Extra `prepare_third` round; `η_b, η_c` delayed until after that round. -/
+  /-- Extra `prepare_third` round; `η_b, η_c` delayed; `η_A` fixed to `1`. -/
   | V2
+  /-- V2 schedule, with `η_A` squeezed after the mask commitment and the sums. -/
+  | V3
   deriving DecidableEq, Repr
 
 /-- Messages absorbed into the sponge (typed, post-decoding). -/
@@ -267,6 +269,7 @@ def v1SecondRoundSqueezeCount : Nat := 3
 def secondRoundSqueezeCount : VarunaVersion → Nat
   | .V1 => v1SecondRoundSqueezeCount
   | .V2 => v2SecondRoundSqueezeCount
+  | .V3 => v2SecondRoundSqueezeCount
 
 /-- V2 second-round squeeze count is strictly smaller than V1. -/
 theorem v2_secondRound_lt_v1 :
@@ -277,9 +280,14 @@ theorem v2_secondRound_lt_v1 :
 def hasPrepareThird : VarunaVersion → Bool
   | .V1 => false
   | .V2 => true
+  | .V3 => true
 
 /-- V2 has the extra round. -/
 @[simp] theorem hasPrepareThird_V2 : hasPrepareThird .V2 = true :=
+  rfl
+
+/-- V3 has the extra round. -/
+@[simp] theorem hasPrepareThird_V3 : hasPrepareThird .V3 = true :=
   rfl
 
 /-- V1 does not have the extra round. -/

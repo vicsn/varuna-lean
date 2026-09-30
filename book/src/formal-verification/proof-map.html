@@ -135,7 +135,7 @@ svg.map { display: block; width: 100%; min-width: 0; height: auto; }
       and the named floors.
     </p>
   </div>
-  <div class="state">V2 endpoint</div>
+  <div class="state">V3 endpoint</div>
 </header>
 
 <div class="layout">
@@ -235,10 +235,10 @@ const nodes = [
     role:'The SNARK relation itself: knowledge of z such that Az ∘ Bz = Cz, with public prefix x. The Int residue relation is the ZMod p Hadamard identity (satisfies_iff_zmod), and the V2 row identity gives it once the index encodes the constraint list (satisfies_of_rows, the index = circuit floor made precise).' },
   { id:'capstone', c:4, r:7, w:250, label:'knowledge soundness', status:'proven',
     anchor:'Varuna.V2Endpoint.sound · Varuna.v2_chain',
-    role:'V2 capstone: accepting rowcheck and lineval with true matrix claims and no computed break yield (Az + e) ∘ Bz = Cz on R with e = ∑_C s (v2_chain). V2Endpoint.sound composes this with the h₀ opening reduction (value_correct_of_inspect_none) and the three matrix sumchecks (matrix_sumcheck_value); the other openings still enter as evaluations of the committed polynomials. NonZK gives e = 0 (v2_chain_nonZK). In ZK mode e is unchecked and shifted_witness_accepts shows the shift is exploitable. knowledgeSoundness is the earlier Marlin-shaped statement.' },
-  { id:'maskSum', c:2, r:6, w:220, label:'mask sum = 0', status:'hyp',
-    anchor:'Varuna.v2_chain · Varuna.shifted_witness_accepts',
-    role:'Soundness of V2 in ZK mode needs ∑_C s = 0 for the committed mask s. The honest prover samples such a mask, but the verifier never checks it; with η_A = 1 a nonzero sum shifts σ_A undetected. xIsZero_shifted: a prover can “prove” 5 · 1 = 0. Confirmed against the pinned snarkVM with a prover-only patch.' },
+    role:'V3 capstone: accepting rowcheck and lineval with true matrix claims and no computed break yield e = 0 and Az ∘ Bz = Cz on R (v3_chain). V3Endpoint.sound composes this with the h₀ opening reduction and the three matrix sumchecks. V2, with η_A fixed at 1, still only yields (Az + e) ∘ Bz = Cz (v2_chain, shifted_witness_accepts). The other openings still enter as evaluations of the committed polynomials. knowledgeSoundness is the earlier Marlin-shaped statement.' },
+  { id:'maskSum', c:2, r:6, w:220, label:'mask sum = 0', status:'proven',
+    anchor:'Varuna.v3_chain · Varuna.v3_shifted_residual_ne',
+    role:'V3 squeezes η_A after the mask commitment and the sums. The lineval combination is e + η_A(t_A − σ_A) + η_B(t_B − σ_B) + η_C(t_C − σ_C). No batch break forces e = 0 and σ_M = t_M (v3_chain). The V2 messages σ_A = t_A + e do not make that residual identically zero when e ≠ 0 and η_A ≠ 1.' },
   { id:'szBad', c:3, r:5, label:'SZ bad set', status:'proven',
     anchor:'Varuna.szBadSet · Varuna.card_szBadSet_le_natDegree',
     role:'The finite set of roots of a nonzero polynomial. Cardinality ≤ degree (univariate Schwartz–Zippel). Each residual instantiates this; a hit is computed break data.' },
@@ -308,7 +308,7 @@ const edges = [
   ['batching', 'ahpEq', 'entails'],
   ['pcOpen', 'pairing', 'rests'],
   ['pcOpen', 'agm', 'rests'],
-  ['lincheck', 'maskSum', 'rests'],
+  ['lincheck', 'maskSum', 'discharges', 'v3_chain'],
   ['fsTranscript', 'poseidonRO', 'rests'],
   ['forking', 'poseidonRO', 'rests'],
   ['capstone', 'srs', 'rests'],

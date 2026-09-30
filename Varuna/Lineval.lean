@@ -182,4 +182,64 @@ theorem sum_linevalPoly {R Cd : EvalDomain F} {A B Cm : SparseMatrix F} (hA : A.
   rw [sum_congr rfl h, sum_add_distrib, sum_add_distrib, sum_add_distrib, ← mul_sum, ← mul_sum,
     sum_matrixAtAlpha_mul hA, sum_matrixAtAlpha_mul hB, sum_matrixAtAlpha_mul hC]
 
+/-! ## V3 lineval: `η_A` is a challenge -/
+
+/-- V3 lineval polynomial `s + (η_A M̂_A + η_B M̂_B + η_C M̂_C) ẑ`.
+V2 is the special case `η_A = 1`. -/
+noncomputable def linevalPolyEta (mode : SNARKMode) (mask zhat mA mB mC : F[X])
+    (ηA ηB ηC : F) : F[X] :=
+  maskPoly mode mask + (C ηA * mA + C ηB * mB + C ηC * mC) * zhat
+
+/-- V2 lineval is V3 lineval at `η_A = 1`. -/
+theorem linevalPoly_eq_eta (mode : SNARKMode) (mask zhat mA mB mC : F[X]) (ηB ηC : F) :
+    linevalPoly mode mask zhat mA mB mC ηB ηC =
+      linevalPolyEta mode mask zhat mA mB mC 1 ηB ηC := by
+  simp [linevalPoly, linevalPolyEta]
+
+/-- Verifier lineval LC with a squeezed `η_A`. -/
+noncomputable def linevalEvalEta (mode : SNARKMode) (mask zhat : F[X]) (Cd : EvalDomain F)
+    (ηA ηB ηC τA τB τC : F) (w : UnivariateWitness F) (β : F) : F :=
+  (maskPoly mode mask).eval β + (ηA * τA + ηB * τB + ηC * τC) * zhat.eval β -
+    w.h.eval β * Cd.vanishing.eval β - β * w.g.eval β - w.σ
+
+/-- V2 lineval evaluation is V3 at `η_A = 1`. -/
+theorem linevalEval_eq_eta (mode : SNARKMode) (mask zhat : F[X]) (Cd : EvalDomain F)
+    (ηB ηC τA τB τC : F) (w : UnivariateWitness F) (β : F) :
+    linevalEval mode mask zhat Cd ηB ηC τA τB τC w β =
+      linevalEvalEta mode mask zhat Cd 1 ηB ηC τA τB τC w β := by
+  simp [linevalEval, linevalEvalEta]
+
+/-- With true claims, the V3 lineval LC is the univariate residual of `linevalPolyEta`. -/
+theorem linevalEvalEta_eq_residual (mode : SNARKMode) (mask zhat mA mB mC : F[X])
+    (Cd : EvalDomain F) (ηA ηB ηC τA τB τC : F) (w : UnivariateWitness F) (β : F)
+    (hA : τA = mA.eval β) (hB : τB = mB.eval β) (hC : τC = mC.eval β) :
+    linevalEvalEta mode mask zhat Cd ηA ηB ηC τA τB τC w β =
+      (univariateResidual Cd (linevalPolyEta mode mask zhat mA mB mC ηA ηB ηC) w).eval β := by
+  subst hA hB hC
+  simp [linevalEvalEta, univariateResidual, linevalPolyEta, eval_add, eval_mul, eval_sub, eval_C,
+    eval_X]
+
+/-- Domain sum of the V3 lineval polynomial. -/
+theorem sum_linevalPolyEta {R Cd : EvalDomain F} {A B Cm : SparseMatrix F} (hA : A.Bounded R Cd)
+    (hB : B.Bounded R Cd) (hC : Cm.Bounded R Cd) (mode : SNARKMode) (mask zhat : F[X])
+    (ηA ηB ηC α : F) :
+    ∑ c ∈ range Cd.n,
+        (linevalPolyEta mode mask zhat (matrixAtAlpha R Cd A α) (matrixAtAlpha R Cd B α)
+          (matrixAtAlpha R Cd Cm α) ηA ηB ηC).eval (Cd.node c) =
+      (∑ c ∈ range Cd.n, (maskPoly mode mask).eval (Cd.node c)) +
+        ηA * linevalTarget R Cd A zhat α + ηB * linevalTarget R Cd B zhat α +
+          ηC * linevalTarget R Cd Cm zhat α := by
+  have h : ∀ c ∈ range Cd.n,
+      (linevalPolyEta mode mask zhat (matrixAtAlpha R Cd A α) (matrixAtAlpha R Cd B α)
+          (matrixAtAlpha R Cd Cm α) ηA ηB ηC).eval (Cd.node c) =
+        (maskPoly mode mask).eval (Cd.node c) +
+          ηA * ((matrixAtAlpha R Cd A α).eval (Cd.node c) * zhat.eval (Cd.node c)) +
+          ηB * ((matrixAtAlpha R Cd B α).eval (Cd.node c) * zhat.eval (Cd.node c)) +
+          ηC * ((matrixAtAlpha R Cd Cm α).eval (Cd.node c) * zhat.eval (Cd.node c)) := by
+    intro c _
+    simp only [linevalPolyEta, eval_add, eval_mul, eval_C]
+    ring
+  rw [sum_congr rfl h, sum_add_distrib, sum_add_distrib, sum_add_distrib, ← mul_sum, ← mul_sum,
+    ← mul_sum, sum_matrixAtAlpha_mul hA, sum_matrixAtAlpha_mul hB, sum_matrixAtAlpha_mul hC]
+
 end Varuna

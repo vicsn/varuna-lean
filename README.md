@@ -11,21 +11,23 @@ prose.
 
 ## Current status
 
-The formalization targets snarkVM’s **`VarunaVersion.V2`**. Lean checks
+The formalization targets snarkVM’s **`VarunaVersion.V3`**. Lean checks
 the algebraic verifier: the R1CS relation (sparse constraints equivalent
 to `Az ∘ Bz = Cz`), evaluation domains and Schwartz–Zippel, the
 holographic indexer, the three AHP identities, Sonic-KZG openings and
-binding breaks, the V2 Fiat–Shamir schedule, and multi-circuit batching.
+binding breaks, the V3 Fiat–Shamir schedule, and multi-circuit batching.
 `TypedProof.accepts` is the typed accept predicate. `SpotCheck.lean`
 kernel-checks source samples against the pinned `snarkVM/` submodule.
 `assert_axioms` makes the census a build-time check.
 
-`v2_chain` composes the V2 checks as deployed (prover-sent sums, faithful
-lineval, matrix sumcheck proving `M̂(α, β)`). It concludes
-`(Az + e) ∘ Bz = Cz` with `e` the mask sum, which the verifier never
-checks: in ZK mode a prover can prove `5 · 1 = 0`
-(`shifted_witness_accepts`, confirmed against the pinned snarkVM). NonZK
-yields the R1CS relation (`satisfies_of_rows`). The PC layer is proved
+`v2_chain` is the old schedule, with `η_A` fixed at `1`. It concludes
+`(Az + e) ∘ Bz = Cz`, and `shifted_witness_accepts` shows a prover can
+prove `5 · 1 = 0` against that verifier. V3 squeezes `η_A` after the
+mask and the sums. `v3_chain` then forces `e = 0` and the unshifted
+rows, and `v3_shifted_residual_ne` shows the V2 messages do not make
+the V3 lineval residual identically zero. `V3Endpoint.sound` composes
+the `h₀` opening, the matrix sumchecks, and `v3_chain`; `sound_r1cs`
+ends at the R1CS relation in either mode. The PC layer is proved
 under an algebraic adversary (trapdoor breaks), probabilities are counted
 per challenge and per oracle query, and the Fiat–Shamir prefix binds the
 public inputs. `V2Endpoint.sound` composes the `h₀` opening reduction,
@@ -51,11 +53,10 @@ How each item of the security-analysis plan is covered is in
 - The fingerprint stops at the zero-eval LC layer. MSM / pairing assembly
   is outside Lean.
 - Algebraic theorems are over an arbitrary field. BLS12-377 is the
-  fingerprint’s carrier, not `V2Endpoint.sound`’s.
-- The unchecked mask sum is a protocol gap. Closing it needs a new
-  `VarunaVersion`, not another lemma about the deployed checks.
+  fingerprint’s carrier, not `V3Endpoint.sound`’s.
 
-Zero knowledge (a simulator) is not claimed.
+Zero knowledge (a simulator) is not claimed. The V2 mask-sum shift is
+a theorem about that schedule; V3 closes it.
 
 This repository verifies the **proof system**, not the circuits it
 proves. Circuit-gadget correctness is a separate effort

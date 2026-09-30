@@ -14,7 +14,7 @@ holographic indexer, rowcheck, lineval, and the matrix sumcheck, Sonic-KZG
 openings and binding breaks, the V2 Fiat–Shamir schedule, batching and the
 extra round, the typed accept predicate, toy fixtures, source-pinned snarkVM
 samples (`SpotCheck.lean`), and the knowledge-soundness capstone. The V2
-chain (and the unchecked mask sum, drawn as a hypothesis node), the
+chain (the mask sum is proved zero for V3), the
 algebraic-adversary PC layer, the probability bounds, and the R1CS bridge
 are on the map as well.
 
