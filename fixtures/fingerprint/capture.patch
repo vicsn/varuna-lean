@@ -68,12 +68,12 @@ index 3e28db5ed..28dfca90a 100644
 +
 +        let path = std::env::var("VARUNA_FINGERPRINT_OUT").unwrap_or_else(|_| "/tmp/varuna_lc_fingerprint.json".into());
 +        fingerprint::set(Some(path.clone()));
-+        let proof = Inst::prove(prover, &fs, &pk, VarunaVersion::V2, &circuit, rng);
++        let proof = Inst::prove(prover, &fs, &pk, VarunaVersion::V3, &circuit, rng);
 +        fingerprint::set(None);
 +        let proof = proof.unwrap();
 +
 +        let inputs = vec![Fr::from(1u64), x];
-+        assert!(Inst::verify(verifier, &fs, &vk, VarunaVersion::V2, inputs, &proof).unwrap(), "captured proof verifies");
++        assert!(Inst::verify(verifier, &fs, &vk, VarunaVersion::V3, inputs, &proof).unwrap(), "captured proof verifies");
 +        println!("wrote fingerprint to {path}");
 +    }
 +}
@@ -156,7 +156,7 @@ index d8e1cdae6..4cf38e5c7 100644
 +
 +            let mut kv: Vec<(String, E::Fr)> = vec![
 +                ("alpha".into(), alpha), ("beta".into(), beta), ("gamma".into(), gamma),
-+                ("eta_b".into(), prep.eta_b), ("eta_c".into(), prep.eta_c),
++                ("eta_a".into(), prep.eta_a), ("eta_b".into(), prep.eta_b), ("eta_c".into(), prep.eta_c),
 +                ("delta_a".into(), fourth.delta_a[0]), ("delta_b".into(), fourth.delta_b[0]),
 +                ("delta_c".into(), fourth.delta_c[0]),
 +                ("sigma_a".into(), s3.sum_a), ("sigma_b".into(), s3.sum_b), ("sigma_c".into(), s3.sum_c),
@@ -200,7 +200,7 @@ index d8e1cdae6..4cf38e5c7 100644
 +            let scalars = kv.iter().map(|(k, v)| format!("\"{k}\":\"{}\"", n(*v))).collect::<Vec<_>>().join(",");
 +            let sizes = sizes.iter().map(|(k, v)| format!("\"{k}\":{v}")).collect::<Vec<_>>().join(",");
 +            let json = format!(
-+                "{{\"protocol\":\"VARUNA-2023\",\"modulus\":\"{}\",\"sizes\":{{{sizes}}},\"scalars\":{{{scalars}}},\"lcs\":[{}]}}\n",
++                "{{\"protocol\":\"VARUNA-2026-V3\",\"modulus\":\"{}\",\"sizes\":{{{sizes}}},\"scalars\":{{{scalars}}},\"lcs\":[{}]}}\n",
 +                <E::Fr as PrimeField>::modulus(),
 +                lcs_json.join(",")
 +            );

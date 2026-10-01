@@ -20,33 +20,27 @@ binding breaks, the V3 Fiat–Shamir schedule, and multi-circuit batching.
 kernel-checks source samples against the pinned `snarkVM/` submodule.
 `assert_axioms` makes the census a build-time check.
 
-`v2_chain` is the old schedule, with `η_A` fixed at `1`. It concludes
-`(Az + e) ∘ Bz = Cz`, and `shifted_witness_accepts` shows a prover can
-prove `5 · 1 = 0` against that verifier. V3 squeezes `η_A` after the
-mask and the sums. `v3_chain` then forces `e = 0` and the unshifted
-rows, and `v3_shifted_residual_ne` shows the V2 messages do not make
-the V3 lineval residual identically zero. `V3Endpoint.sound` composes
-the `h₀` opening, one nonzero domain per matrix, and `v3_chain`.
+`v3_chain` gives `Az ∘ Bz = Cz` on the constraint domain, with the mask
+sum equal to zero, in either mode. `V3Endpoint.sound` composes the `h₀`
+opening, one nonzero domain per matrix, and `v3_chain`.
 `sound_of_openings` reduces `ẑ`, `h₁`, `g₁`, and the matrix witnesses;
 `sound_of_combined_matrix` is the `δ` batch; `matrix_sumcheck_of_selector`
-is the selector-batched sum. `fs_v2_squeeze_charge` charges every V2
+is the selector-batched sum. `fs_v2_squeeze_charge` charges every
 squeeze, and `PreprocessingAHP` is the public-coin argument in the
-algebraic projection. `sound_r1cs` ends at the R1CS relation in either
-mode. The PC layer is proved
-under an algebraic adversary (trapdoor breaks), probabilities are counted
-per challenge and per oracle query, and the Fiat–Shamir prefix binds the
-public inputs. `V2Endpoint.sound` composes the `h₀` opening reduction,
-the matrix sumchecks, and `v2_chain` in one theorem; `ahp_error_concrete`
-states the AHP error with concrete residual degrees. `Fingerprint.lean`
-kernel-checks a captured snarkVM V2 proof: every coefficient of the three
+algebraic projection. `sound_r1cs` ends at the R1CS relation.
+The PC layer is proved under an algebraic adversary (trapdoor breaks),
+probabilities are counted per challenge and per oracle query, and the
+Fiat–Shamir prefix binds the public inputs. `ahp_error_concrete` states
+the AHP error with concrete residual degrees. `Fingerprint.lean`
+kernel-checks a captured snarkVM V3 proof: every coefficient of the three
 zero-eval LCs is Lean's formula, and each LC vanishes over the BLS12-377
 scalar field. Poseidon = RO, pairing hardness, and the algebraic-adversary
 restriction stay floors.
 
-See [PLAN.md](PLAN.md) and the
+The scope, the soundness spine, and how each security-analysis item is covered
+are in [security-analysis.md](book/src/formal-verification/security-analysis.md).
+The interactive picture is the
 [proof map](book/src/formal-verification/proof-map.html).
-How each item of the security-analysis plan is covered is in
-[security-analysis.md](book/src/formal-verification/security-analysis.md).
 
 ### What remains
 
@@ -60,8 +54,6 @@ How each item of the security-analysis plan is covered is in
   opening and absorbs the witness into the ZK mask. A constant blinding
   shifts the hiding commitment along `gamma_g`, and one fresh hiding
   opening is simulation-extractable (`ZK.lean`).
-
-The V2 mask-sum shift is a theorem about that schedule; V3 closes it.
 
 This repository verifies the **proof system**, not the circuits it
 proves. Circuit-gadget correctness is a separate effort
@@ -90,13 +82,13 @@ Varuna/
   Domain.lean                       -- EvalDomain, v_H, Lagrange, SZ
   Indexer.lean                      -- holographic row/col/val oracles
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck
-  Lineval.lean                      -- V2 lineval polynomial with M̂(α, X)
+  Lineval.lean                      -- lineval polynomial with M̂(α, X)
   MatrixSumcheck.lean               -- Lagrange closed form; |K| σ = M̂(α, β)
   PublicInput.lean                  -- input subdomain, reindex_by_subdomain
   SonicPC.lean                      -- labeled polynomials, KZG, binding breaks
   Algebraic.lean                    -- KZG under an algebraic adversary, degree bounds
   OpeningBatch.lean                 -- batched Sonic openings
-  FiatShamir.lean                   -- V2 absorb/squeeze schedule, forks
+  FiatShamir.lean                   -- V3 absorb/squeeze schedule, forks
   Batching.lean                     -- multi-circuit combiners, selectors
   Selectors.lean                    -- selector = indicator; batched checks
   Probability.lean                  -- bad-challenge counts, adaptive union bound
@@ -105,17 +97,16 @@ Varuna/
   Statement.lean                    -- init_sponge binds the public inputs
   Match.lean                        -- typed accept, floors, toy fixtures
   Soundness.lean                    -- knowledge-soundness capstone
-  Composition.lean                  -- V2 chain and the mask-sum shift
+  Composition.lean                  -- v3_chain: mask sum zero and Az ∘ Bz = Cz
   Bridge.lean                       -- Int R1CS ↔ ZMod p; satisfies from rows
-  Endpoint.lean                     -- PC reduction + matrix sumchecks + v2_chain
+  Endpoint.lean                     -- PC reduction + matrix sumchecks + v3_chain
   Fingerprint.lean                  -- captured snarkVM proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
   ProofSize.lean                    -- proof element counts vs the spec
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
-PLAN.md                             -- verification plan
-fixtures/fingerprint/               -- captured V2 proof, capture patch, provenance
+fixtures/fingerprint/               -- captured proof, capture patch, provenance
 scripts/fingerprint_to_lean.py      -- fixture → Fingerprint/Capture.lean
 protocol-docs/                      -- algorithm spec (git submodule)
 snarkVM/                            -- deployed verifier (git submodule)
@@ -129,10 +120,10 @@ book/src/formal-verification/
 
 | Artifact | Role |
 | --- | --- |
-| [`protocol-docs`](https://github.com/ProvableHQ/protocol-docs) (submodule) | Algorithm identities, including V2 batching |
+| [`protocol-docs`](https://github.com/ProvableHQ/protocol-docs) (submodule) | Algorithm identities, including V3 batching |
 | [`varuna-sage-impl/docs/spec.pdf`](https://github.com/ProvableHQ/varuna-sage-impl/blob/main/docs/spec.pdf) | Protocol specification |
 | [`varuna-sage-impl`](https://github.com/ProvableHQ/varuna-sage-impl) | SageMath reference (single-circuit R1CS, ZK) |
-| [`snarkVM`](https://github.com/ProvableHQ/snarkVM) (submodule, pin in `Varuna.snarkVMPin`) | Deployed Rust implementation (`VarunaVersion.V2`); `SpotCheck.lean` samples, `Fingerprint.lean` captured proof |
+| [`snarkVM`](https://github.com/ProvableHQ/snarkVM) (submodule, pin in `Varuna.snarkVMPin`) | Deployed Rust implementation (`VarunaVersion.V3`); `SpotCheck.lean` samples, `Fingerprint.lean` captured proof |
 | [Marlin](https://eprint.iacr.org/2019/1047) | Underlying AHP |
 | [`mathlib4` v4.33.0](https://github.com/leanprover-community/mathlib4/releases/tag/v4.33.0) | Field, polynomials, roots of unity |
 

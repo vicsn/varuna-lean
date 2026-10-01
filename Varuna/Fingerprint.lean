@@ -13,10 +13,10 @@ import Varuna.Field
 Ironwood ties its Lean verifier to the shipped Rust one with a *fingerprint* :
 the Lean-assembled check is compared with the Rust-assembled one on captured
 proofs. This is the Varuna counterpart, at the level of the three
-zero-evaluation linear combinations that the V2 verifier opens :
+zero-evaluation linear combinations that the V3 verifier opens :
 `rowcheck_zerocheck`, `lineval_sumcheck`, `matrix_sumcheck`.
 
-`Capture.lean` holds one honest snarkVM V2 hiding-mode proof : each LC's
+`Capture.lean` holds one honest snarkVM V3 hiding-mode proof : each LC's
 `(coefficient, value)` terms as snarkVM assembles them, and the independent
 inputs (sizes, challenges, sums) the coefficients are built from. The checks :
 
@@ -28,7 +28,7 @@ inputs (sizes, challenges, sums) the coefficients are built from. The checks :
   Lean's scalar form of it (`*_model`).
 * **The scalar forms are the model.** `rowcheckV2Eval_eq_scalar`,
   `linevalEval_eq_scalar`, `matrixTerm_eq_scalar`, and `selector_eval_scalar`
-  prove the scalar forms are the definitions `v2_chain` reasons about.
+  prove the scalar forms are the definitions `v3_chain` reasons about.
 
 Everything is kernel `decide` over `ZMod q`, the BLS12-377 scalar field : no
 `native_decide`, so the census stays standard. The fixture also pins one
@@ -54,8 +54,8 @@ def rowcheckScalar (vR h0 σA σB σC : R) : R :=
   σA * σB - σC - h0 * vR
 
 /-- `lineval_sumcheck` at `β`, with `ẑ(β) = x̂(β) + v_X(β) ŵ(β)` and constant `σ / C.n`. -/
-def linevalScalar (mask τA τB τC ηB ηC x vX w h1 vC β g1 σc : R) : R :=
-  mask + (τA + ηB * τB + ηC * τC) * (x + vX * w) - h1 * vC - β * g1 - σc
+def linevalScalar (mask τA τB τC ηA ηB ηC x vX w h1 vC β g1 σc : R) : R :=
+  mask + (ηA * τA + ηB * τB + ηC * τC) * (x + vX * w) - h1 * vC - β * g1 - σc
 
 /-- One matrix's term of `matrix_sumcheck` at `γ`, with the deployed four-term `b`. -/
 def matrixTermScalar (vrc rc α β rowColVal col row rowCol g σ γ : R) : R :=
@@ -83,16 +83,16 @@ theorem rowcheckV2Eval_eq_scalar (R : EvalDomain F) (h0 : F[X]) (σA σB σC α 
       rowcheckScalar (R.vanishing.eval α) (h0.eval α) σA σB σC :=
   rfl
 
-/-- The V2 lineval LC the chain uses is `linevalScalar`, for the ZK mask and
+/-- The V3 lineval LC the chain uses is `linevalScalar`, for the ZK mask and
 `ẑ = x̂ + v_X ŵ`. -/
 theorem linevalEval_eq_scalar (mask xPoly w h1 g1 : F[X]) (Xd Cd : EvalDomain F)
-    (ηB ηC τA τB τC σA σB σC β : F) :
-    linevalEval .ZK mask (assignmentPoly Xd xPoly w) Cd ηB ηC τA τB τC
-        (linevalWitness Cd h1 g1 ηB ηC σA σB σC) β =
-      linevalScalar (mask.eval β) τA τB τC ηB ηC (xPoly.eval β) (Xd.vanishing.eval β) (w.eval β)
+    (ηA ηB ηC τA τB τC σA σB σC β : F) :
+    linevalEvalEta .ZK mask (assignmentPoly Xd xPoly w) Cd ηA ηB ηC τA τB τC
+        (linevalWitnessEta Cd h1 g1 ηA ηB ηC σA σB σC) β =
+      linevalScalar (mask.eval β) τA τB τC ηA ηB ηC (xPoly.eval β) (Xd.vanishing.eval β) (w.eval β)
         (h1.eval β) (Cd.vanishing.eval β) β (g1.eval β)
-        ((σA + ηB * σB + ηC * σC) * Cd.sizeInv) := by
-  simp only [linevalEval, linevalWitness, maskPoly, eval_assignmentPoly, linevalScalar]
+        ((ηA * σA + ηB * σB + ηC * σC) * Cd.sizeInv) := by
+  simp only [linevalEvalEta, linevalWitnessEta, maskPoly, eval_assignmentPoly, linevalScalar]
 
 /-- The matrix term the Lean model uses is `matrixTermScalar` with `row_col := row · col`. -/
 theorem matrixTerm_eq_scalar (R Cd K : EvalDomain F) (vRC : F) (rcv : Nat → F) (α β : F)
@@ -143,11 +143,11 @@ def tauB : Fr := (sizeKB : Fr) * sum4B
 /-- `τ_C`. -/
 def tauC : Fr := (sizeKC : Fr) * sum4C
 
-/-- `τ_A + η_B τ_B + η_C τ_C` (with `η_A = 1`). -/
-def tauComb : Fr := tauA + etaB * tauB + etaC * tauC
+/-- `η_A τ_A + η_B τ_B + η_C τ_C`. -/
+def tauComb : Fr := etaA * tauA + etaB * tauB + etaC * tauC
 
-/-- Batch lineval sum `σ = σ_A + η_B σ_B + η_C σ_C`. -/
-def sigmaComb : Fr := sigmaA + etaB * sigmaB + etaC * sigmaC
+/-- Batch lineval sum `σ = η_A σ_A + η_B σ_B + η_C σ_C`. -/
+def sigmaComb : Fr := etaA * sigmaA + etaB * sigmaB + etaC * sigmaC
 
 /-- Lean's selector `s_{K,K_A}(γ) = v_K(γ) K_A.n (v_{K_A}(γ) K.n)^{-1}`. -/
 def selA : Fr := vKAtGamma * (sizeKA : Fr) * invSeldenA
@@ -240,7 +240,7 @@ theorem rowcheck_model : rowcheckScalar vRAtAlpha h0AtAlpha sigmaA sigmaB sigmaC
 
 /-- Lean's lineval LC, on the captured values, vanishes. -/
 theorem lineval_model :
-    linevalScalar maskAtBeta tauA tauB tauC etaB etaC xAtBeta vXAtBeta wAtBeta h1AtBeta vCAtBeta
+    linevalScalar maskAtBeta tauA tauB tauC etaA etaB etaC xAtBeta vXAtBeta wAtBeta h1AtBeta vCAtBeta
         beta g1AtBeta (sigmaComb * invC) = 0 := by
   decide
 
@@ -275,9 +275,12 @@ theorem rowcheck_rejects_tampered :
     rowcheckScalar vRAtAlpha (h0AtAlpha + 1) sigmaA sigmaB sigmaC ≠ 0 := by
   decide
 
+/-- The captured `η_A` is a squeezed challenge, not the V2 constant `1`. -/
+theorem etaA_ne_one : etaA ≠ 1 := by decide
+
 /-- Negative control: changing `ŵ(β)` by one breaks the lineval LC. -/
 theorem lineval_rejects_tampered :
-    linevalScalar maskAtBeta tauA tauB tauC etaB etaC xAtBeta vXAtBeta (wAtBeta + 1) h1AtBeta
+    linevalScalar maskAtBeta tauA tauB tauC etaA etaB etaC xAtBeta vXAtBeta (wAtBeta + 1) h1AtBeta
         vCAtBeta beta g1AtBeta (sigmaComb * invC) ≠ 0 := by
   decide
 

@@ -1,26 +1,119 @@
-# Security analysis plan: how each point is tackled
+# Security analysis
 
-This maps every item of the Varuna security-analysis plan to three things: the answer, what the Lean kernel checks, and what is left. Lean links are relative to the repository root. snarkVM paths refer to the pinned `snarkVM/` submodule (`Varuna.snarkVMPin`). The spec is `protocol-docs/snark/varuna/varuna-spec-prod.tex`.
+This is the record of the Varuna verification: what is in scope, the conventions, the soundness spine, and how each item of the security-analysis plan is covered. The interactive picture is [`proof-map.html`](proof-map.html). Lean links below are relative to the repository root. snarkVM paths refer to the pinned `snarkVM/` submodule (`Varuna.snarkVMPin`). The spec is `protocol-docs/snark/varuna/varuna-spec-prod.tex`.
 
-**Status.** **Lean**: kernel-checked here. **Partial**: Lean checks the core; a composed or concrete statement is missing. **Spec**: argued in the spec only. **Excluded**: a category Ironwood also assumes or does not claim (hash = random oracle, algebraic adversary, hardness, byte encodings, zero knowledge); named as a floor where it is an assumption.
+The development follows [zcash/ironwood](https://github.com/zcash/ironwood): a layered Lean development over Mathlib, a proof map that shows the theorem graph and its remaining holes, and a trust-boundary census so the trusted base is a build-time property.
 
-## Finding: V2 does not check the mask sum (closed in V3)
+**Status**, for the item-by-item sections below. **Lean**: kernel-checked here. **Partial**: Lean checks the core; a composed or concrete statement is missing. **Spec**: argued in the spec only. **Excluded**: a category Ironwood also assumes or does not claim (hash = random oracle, algebraic adversary, hardness, byte encodings); named as a floor where it is an assumption. Zero knowledge of the AHP simulator and of one hiding opening is now Lean; see §5.
 
-In V2 the rowcheck uses prover-sent sums $\sigma_M$ in place of $\hat z_M(\alpha)$, and lineval proves them with $\eta_A = 1$ fixed. The lineval sum then reads $e + \sum_M \eta_M \hat z_M(\alpha) = \sum_M \eta_M \sigma_M$ with $e = \sum_{c \in C} s(c)$ for the committed mask $s$. The honest mask has $e = 0$, but nothing checks it. A prover can therefore set $\sigma_A = \hat z_A(\alpha) + e$ undetected, and the verifier accepts any witness of the shifted relation $(Az + e) \circ Bz = Cz$.
+## What is being verified
 
-- [`v2_chain`](../../../Varuna/Composition.lean#L83): the V2 checks, with [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151) discharging the matrix claims, yield exactly the shifted relation on $R$.
-- [`shifted_witness_accepts`](../../../Varuna/Composition.lean#L166): every witness of the shifted relation passes both LCs at every challenge, with no inspector reporting a break.
-- [`xIsZero_false`](../../../Varuna/Composition.lean#L243) and [`xIsZero_shifted`](../../../Varuna/Composition.lean#L248): the shifted relation is strictly weaker. The constraint $x \cdot 1 = 0$ at $x = 5$ is false, and satisfied with $e = -5$.
-- [`v2_chain_nonZK`](../../../Varuna/Composition.lean#L142) and [`satisfies_of_rows`](../../../Varuna/Bridge.lean#L96): NonZK mode has no mask, so $e = 0$ and the chain gives the R1CS relation.
+**Target.** Knowledge soundness of the deployed Varuna verifier, the object in snarkVM that validators run, `VarunaVersion.V3`. Completeness of the individual checks is proved alongside soundness. The AHP simulator ([`ZK.lean`](../../../Varuna/ZK.lean)) programs the one opening outside the domain and absorbs the witness into the ZK mask. A constant blinding shifts the hiding commitment along `gamma_g`, and a fresh algebraic opening is a trapdoor break or the represented value ([`simulation_extractable`](../../../Varuna/ZK.lean#L154)). Pairing independence of `g` and `gamma_g` stays a hypothesis of that binding.
 
-This was confirmed end to end against snarkVM V2. With a prover-only patch in hiding mode, the unmodified V2 verifier accepted a proof of $5 \cdot 1 = 0$; the honest prover refuses that statement. The patch is kept outside this repository.
+Varuna is an optimized Marlin ([CHMMVW19](https://eprint.iacr.org/2019/1047)) AHP, compiled through a Sonic-style polynomial commitment and made non-interactive with Fiat–Shamir. The formalization targets snarkVM’s `VarunaVersion.V3` and names:
 
-V3 closes it by sampling $\eta_A$ in prepare-third, after the mask commitment and the matrix-sum claims, and multiplying the $A$ terms by that challenge (`verifier.rs`, `third.rs`). The lineval combination is then $e + \eta_A(t_A - \sigma_A) + \eta_B(t_B - \sigma_B) + \eta_C(t_C - \sigma_C)$.
+- universal, updatable SRS
+- holographic indexer (row / col / val oracles for $A, B, C$)
+- three PIOPs: rowcheck, univariate (lincheck) sumcheck, rational (matrix) sumcheck — snarkVM’s linear combinations `rowcheck_zerocheck`, `lineval_sumcheck`, `matrix_sumcheck`
+- Sonic PC openings on BLS12-377
+- multi-circuit / multi-instance batching, including the extra IOP round added in 2025 to stop adaptive statement selection
+- optional zero-knowledge (masking polynomials)
 
-- [`v3_chain`](../../../Varuna/Composition.lean): an accepting lineval with no batch break forces $e = 0$ and the unshifted rows on $R$.
-- [`v3_shifted_residual_ne`](../../../Varuna/Composition.lean): the V2 messages $\sigma_A = t_A + e$ do not make that residual identically zero when $e \ne 0$ and $\eta_A \ne 1$.
-- [`V3Endpoint.sound`](../../../Varuna/Endpoint.lean) composes the $h_0$ opening, the matrix sumchecks, and `v3_chain`. [`V3Endpoint.sound_r1cs`](../../../Varuna/Endpoint.lean) ends at `satisfies` in either mode.
-- The V3 transcript domain is `VARUNA-2026-V3` ([`v3Init`](../../../Varuna/Statement.lean), [`v2Init_ne_v3Init`](../../../Varuna/Statement.lean)).
+The constraint language is R1CS ($Az \circ Bz = Cz$). If the V3 verifier accepts, then under the named assumptions there is a witness satisfying the R1CS. [`v3_chain`](../../../Varuna/Composition.lean#L173) gives that relation on $R$, in either mode, with the mask sum equal to zero.
+
+**Separate projects.**
+
+| Concern | Where it lives |
+| --- | --- |
+| snarkVM gadget ↔ spec correctness | ACL2 AleoVM circuits; `aleovm-circuits-lean` |
+| Aleo instructions / Leo compilation | ACL2 language books; future verifying compiler |
+| AleoBFT consensus | `aleobft-formal` (ACL2) |
+| Pairing / curve arithmetic as a library | Mathlib + a future CompElliptic-style pin |
+
+The R1CS means what the circuit says. Whether that circuit is what a Leo programmer intended is the gadget and compiler work above.
+
+## Conventions
+
+Ironwood’s [formal-verification page](https://zcash.github.io/ironwood/formal-verification.html) is the style guide.
+
+**Breaks as computed data.** A theorem `soundness ∨ ∃-break` is vacuous in a prime-order group (nontrivial discrete-log relations always exist) and for compressing hashes (collisions always exist). Every reduction is a plain `def` that returns the breaking data, with `Prop` certificates attached. For Varuna the breaks are a Schwartz–Zippel root, a polynomial-commitment binding break (two openings of one commitment), a discrete-log / pairing-assumption break extracted from a Sonic-PC forgery, and a random-oracle collision or programming miss. Extractors are `def`s, and `noncomputable` is kept off that path. `inspectResidual` is the exception: it is noncomputable because it inspects Mathlib polynomials.
+
+**Trust discipline.** General theorems rest only on `propext`, `Classical.choice`, and `Quot.sound`. Concrete closed facts may use `native_decide`, and that extension of the trusted base is named on the census. [`TrustBoundary.lean`](../../../Varuna/TrustBoundary.lean) is the census. `assert_axioms` / `assert_computable` in [`AxiomCheck.lean`](../../../Varuna/AxiomCheck.lean) make it a build-time property. CI fails on `sorry` via `lake build --wfail`. Toy-field samples in `Match.lean` / `SpotCheck.lean`, and the captured proof in `Fingerprint.lean`, use kernel `decide`, so the census stays those three axioms. The group-level MSM / pairing assembly is not captured.
+
+**Floors are identifications, not axioms.** Hash-as-RO, pairing-as-hardness, “the verifying key is the index of the real circuit”, and byte-level encodings are floors on the proof map. They do not appear as Lean `axiom`s. A reader of a capstone theorem can see them as explicit hypotheses or as out-of-Lean identification steps ([`knowledgeSoundness_rests_on_floors`](../../../Varuna/Soundness.lean)).
+
+## The soundness spine
+
+Ironwood’s spine is accepting proof → verifier equation → IPA tree → opening → `SnarkRelation`. Varuna’s spine, reading the Sage verifier and `snarkVM/.../varuna/ahp/ahp.rs`, is:
+
+```
+accepting proof
+  → Fiat–Shamir challenges          (schedule proved; Poseidon = RO is a floor)
+  → Sonic-PC openings               (h₀ reduction proved; pairing hardness is a floor)
+  → AHP linear combinations evaluate to zero
+      rowcheck_zerocheck
+      lineval_sumcheck
+      matrix_sumcheck
+  → Az ∘ Bz = Cz
+  → R1CS witness
+```
+
+[`V3Endpoint.sound`](../../../Varuna/Endpoint.lean) is the composed theorem: a no-break opening of the rowcheck quotient $h_0$, the three matrix sumchecks, and [`v3_chain`](../../../Varuna/Composition.lean#L173) give a zero mask sum and $Az \circ Bz = Cz$ on $R$. [`sound_r1cs`](../../../Varuna/Endpoint.lean) ends at `satisfies`. How the openings, the $\delta$ batch, and the selector sumcheck enter that composition is §2.3. What stays outside it is [below](#what-remains).
+
+```
+  deployed snarkVM verifier          (definition; LC layer fingerprinted)
+           │
+           ▼
+  accepting proof                    (typed predicate, proved iff the Prop)
+           │
+           ▼
+  FS transcript / challenges         (schedule proved; Poseidon = RO is a floor)
+           │
+           ▼
+  PC openings bind the oracles       (algebraic reduction; pairing/SRS floors)
+           │
+           ▼
+  AHP verifier equations             (proved)
+     rowcheck ──► lincheck ──► matrix sumcheck
+           │
+           ▼
+  Az ∘ Bz = Cz                       (proved)
+           │
+           ▼
+  R1CS witness                       (proved)
+```
+
+## Proof-map statuses
+
+Copied from Ironwood’s proof map. Edge verbs:
+
+- **entails** — B follows from A (and any other incoming arrows)
+- **discharges** — A proves away hypothesis B
+- **rests on** — B is an assumption A still needs (an in-Lean hypothesis or an out-of-Lean floor)
+
+| Status | Meaning |
+| --- | --- |
+| `proven` | A named Lean theorem exists; `lake build` checks it |
+| `hyp` | In-Lean hypothesis, or a lemma stated but not proved |
+| `floor` | Modelling identification, not a Lean axiom |
+| `object` | A definition (data or `Prop`), not a theorem |
+| `goal` | Advertised capstone |
+
+A node is `proven` only when its `anchor` field names a real declaration. `book/validate-proof-journey.py` checks that every `proven` anchor, and every edge `via`, names a declaration in `Varuna/`. `maskSum` is `v3_chain`: the mask sum is zero.
+
+## Layers
+
+Sorry-free. `lake build --wfail` is the verifier. The item sections below say what each security-analysis question concludes. This is the file-level inventory those sections draw on.
+
+**R1CS** (`PrimeField.lean`, `R1CS.lean`). Sparse constraints and the Hadamard predicate agree ([`satisfies_iff_hadamard`](../../../Varuna/R1CS.lean#L464)). A multiplication constraint is multiplication ([`mulConstraint_holds_iff`](../../../Varuna/R1CS.lean#L161)). Formatted public inputs prepend the constant-$1$ slot and are admissible iff their length is a power of two ([`formattedPublicInputAdmissible_isPowerOfTwo`](../../../Varuna/Domain.lean#L55)). The toy instance $3 \cdot 5 = 15$ holds over $\mathbb F_{17}$ ([`toy_mul_holds`](../../../Varuna/R1CS.lean#L576)).
+
+**Field, domains, vanishing** (`Field.lean`, `Domain.lean`, `Bridge.lean`). Mathlib `ZMod p` at `v4.33.0`. A multiplicative subgroup of size $2^k$, with $v_H(X) = X^{|H|} - 1$ and $v_H(\alpha) = 0 \leftrightarrow \alpha \in H$, a Lagrange basis, and Schwartz–Zippel ([`schwartzZippel_card`](../../../Varuna/Domain.lean), [`szBadSet`](../../../Varuna/Domain.lean)). The R1CS relation stays on integer residues; [`satisfies_iff_zmod`](../../../Varuna/Bridge.lean#L64) and [`satisfies_of_rows`](../../../Varuna/Bridge.lean#L96) send them to `ZMod p`.
+
+**Indexer** (`Indexer.lean`). Row, column, and value interpolants recover sparse entries on the nonzero domain ([`rowOracle_eval`](../../../Varuna/Indexer.lean#L116) and its siblings). [`holographicEval_at_nodes`](../../../Varuna/Indexer.lean#L85) is the snarkVM identity $M(a,b) = \sum_k \mathrm{val}(k)\, L^R_{\mathrm{row}(k)}(a)\, L^C_{\mathrm{col}(k)}(b)$ at domain nodes.
+
+**AHP, polynomial commitment, Fiat–Shamir, batching.** The three checks, their error, and the batching extractors are §1. Sonic-PC binding, degree bounds, hiding, and simulation extractability are §2.4. The V3 absorb-then-squeeze schedule, including [`prepareThirdEtaSqueeze .V3 = 3`](../../../Varuna/Batching.lean#L341) and the domain separator `VARUNA-2026-V3` ([`v3Init`](../../../Varuna/Statement.lean#L50)), is §3. Forks and collisions are `def`s (`inspectFork`, `inspectCollision`). The first combiner of each family is $1$. [`reindexBySubdomain`](../../../Varuna/PublicInput.lean#L34) and $\hat z = \hat x$ on the input subdomain are below, with the other facts the numbered items do not ask for.
+
+**Faithfulness and the capstone.** [`TypedProof.accepts`](../../../Varuna/Match.lean) agrees with the `Prop` accept. Toy-field fixtures accept honest zeros and reject flipped evaluations. The V3 composition (`V3Endpoint.sound`, `sound_of_openings`, `sound_of_combined_matrix`, `matrix_sumcheck_of_selector`, `sound_r1cs`) and the Marlin-shaped [`knowledgeSoundness`](../../../Varuna/Soundness.lean) are §2. [`knowledgeSoundness_bls`](../../../Varuna/Soundness.lean#L245) restates that statement at `ZMod bls12_377_r`. The fingerprint and the source samples are the Lean-vs-snarkVM item below.
 
 ## 1. Soundness of the AHP
 
@@ -47,7 +140,7 @@ $S$ is where snarkVM's 252-bit AHP challenges enter (`crypto_hash/poseidon.rs:47
 - **Batched zerocheck:** [`batchedZerocheck_extract`](../../../Varuna/Selectors.lean#L81). A batched rowcheck that is a multiple of $v_H$ gives each circuit's rowcheck on its own domain, or a lucky combination at some point.
 - **Batched sumchecks:** [`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152) and [`sum_selectorPoly_mul`](../../../Varuna/Selectors.lean#L112). This covers lineval ($\mu, \rho$) and matrix ($\delta$) batching: per-circuit sums, or a lucky combination.
 - **Cost of a lucky combination:** at most 1 per free weight ([`card_filter_linear_le_one`](../../../Varuna/Probability.lean#L59), [`card_filter_inspectBatch_pair`](../../../Varuna/Probability.lean#L68)), i.e. $1/|S|$ per family.
-- **V2 extra round:** [`alpha_independent_of_prepareThird`](../../../Varuna/Batching.lean#L345) and [`prepareThird_challenge_eq`](../../../Varuna/Batching.lean#L353).
+- **Prepare-third round:** [`alpha_independent_of_prepareThird`](../../../Varuna/Batching.lean#L345) and [`prepareThird_challenge_eq`](../../../Varuna/Batching.lean#L353). $\alpha$ is squeezed before that round; $\eta_A, \eta_B, \eta_C$ are squeezed there ([`prepareThirdEtaSqueeze_V3`](../../../Varuna/Batching.lean#L341)).
 
 ### 1.4 Assumptions underpinning S1 (Lean)
 
@@ -61,7 +154,7 @@ P is Marlin's public-coin preprocessing argument of knowledge. [`PreprocessingAH
 
 ### 2.2 The property S2 that step 3 needs (Lean)
 
-S2 is RBR knowledge soundness, charged per oracle query. [`fs_query_charge`](../../../Varuna/FSBound.lean#L48): with at most $b$ bad answers per query, at most $Q\,b\,|S|^{Q-1}$ of $|S|^Q$ lazy-oracle tapes let a deterministic adversary hit one. [`fs_break_count`](../../../Varuna/FSBound.lean#L83): a V2 output with a break at any squeeze is such a hit, if its challenges were answered on its queries. [`squeezeBad`](../../../Varuna/FSBound.lean#L108) is the bad set of each of the six squeezes: Schwartz–Zippel roots at $\alpha$, $\beta$, $\gamma$, and one-weight `inspectBatch` breaks at the three combiner squeezes. [`fs_v2_squeeze_charge`](../../../Varuna/FSBound.lean#L222) puts those sets on the transcript prefixes and charges the resulting break count. Poseidon = RO stays a floor.
+S2 is RBR knowledge soundness, charged per oracle query. [`fs_query_charge`](../../../Varuna/FSBound.lean#L48): with at most $b$ bad answers per query, at most $Q\,b\,|S|^{Q-1}$ of $|S|^Q$ lazy-oracle tapes let a deterministic adversary hit one. [`fs_break_count`](../../../Varuna/FSBound.lean#L83): an output with a break at any squeeze is such a hit, if its challenges were answered on its queries. [`squeezeBad`](../../../Varuna/FSBound.lean#L108) is the bad set of each squeeze: Schwartz–Zippel roots at $\alpha$, $\beta$, $\gamma$, and one-weight `inspectBatch` breaks at the combiner squeezes. [`fs_v2_squeeze_charge`](../../../Varuna/FSBound.lean#L222) puts those sets on the transcript prefixes and charges the resulting break count. Poseidon = RO stays a floor.
 
 ### 2.3 Compilation yields S2 from S1 (Lean)
 
@@ -71,9 +164,7 @@ Under the algebraic restriction, every PC step either gives the polynomial fact 
 - a violated degree bound: [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L302)
 - a batched opening: [`batchedOpening_extract`](../../../Varuna/OpeningBatch.lean#L61) per point, [`acrossPoints_extract`](../../../Varuna/OpeningBatch.lean#L90) across points
 
-[`V2Endpoint.sound`](../../../Varuna/Endpoint.lean#L129) composes the opening reduction with the AHP in one theorem. A no-break opening of the rowcheck quotient $h_0$ ([`value_correct_of_inspect_none`](../../../Varuna/Algebraic.lean#L205)), the three matrix sumchecks with their degree bounds ([`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L185)), and [`v2_chain`](../../../Varuna/Composition.lean#L79) give $(Az + e) \circ Bz = Cz$ on $R$. [`V2Endpoint.sound_nonZK`](../../../Varuna/Endpoint.lean#L170) ends at the R1CS relation.
-
-[`V3Endpoint.sound`](../../../Varuna/Endpoint.lean#L221) is the V3 composition. Each matrix has its own nonzero domain. The $\gamma$ check is `matrixEval` $= 0$ plus [`inspectResidual`](../../../Varuna/AHP.lean#L57), which [`inspectResidual_accepts`](../../../Varuna/AHP.lean#L69) turns into the residual identity [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L185) consumes. [`sound_of_openings`](../../../Varuna/Endpoint.lean#L301) does the same for $\hat z$, $h_1$, $g_1$, and the three matrix witnesses: a no-break opening plus the scalar check the verifier runs is the polynomial check. [`sound_of_combined_matrix`](../../../Varuna/Endpoint.lean#L377) replaces the three $\gamma$ checks by one $\delta$-combination ([`inspectBatch_accepts`](../../../Varuna/Batching.lean#L169)). [`matrix_sumcheck_of_selector`](../../../Varuna/Endpoint.lean#L429) turns a selector-batched sum on a common domain ([`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152)) into $|K|\sigma = \hat M(\alpha,\beta)$ via [`matrix_sumcheck_value_of_sum`](../../../Varuna/MatrixSumcheck.lean#L152). [`knowledgeSoundness_bls`](../../../Varuna/Soundness.lean#L245) restates the Marlin capstone at `ZMod bls12_377_r`; primality of the modulus is a `Fact`.
+[`V3Endpoint.sound`](../../../Varuna/Endpoint.lean#L221) composes the opening reduction with the AHP. A no-break opening of the rowcheck quotient $h_0$ ([`value_correct_of_inspect_none`](../../../Varuna/Algebraic.lean#L205)), the three matrix sumchecks with their degree bounds ([`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L185)), and [`v3_chain`](../../../Varuna/Composition.lean#L173) give a zero mask sum and $Az \circ Bz = Cz$ on $R$. Each matrix has its own nonzero domain. The $\gamma$ check is `matrixEval` $= 0$ plus [`inspectResidual`](../../../Varuna/AHP.lean#L57), which [`inspectResidual_accepts`](../../../Varuna/AHP.lean#L69) turns into the residual identity [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L185) consumes. [`sound_of_openings`](../../../Varuna/Endpoint.lean#L301) does the same for $\hat z$, $h_1$, $g_1$, and the three matrix witnesses: a no-break opening plus the scalar check the verifier runs is the polynomial check. [`sound_of_combined_matrix`](../../../Varuna/Endpoint.lean#L377) replaces the three $\gamma$ checks by one $\delta$-combination ([`inspectBatch_accepts`](../../../Varuna/Batching.lean#L169)). [`matrix_sumcheck_of_selector`](../../../Varuna/Endpoint.lean#L429) turns a selector-batched sum on a common domain ([`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152)) into $|K|\sigma = \hat M(\alpha,\beta)$ via [`matrix_sumcheck_value_of_sum`](../../../Varuna/MatrixSumcheck.lean#L152). [`knowledgeSoundness_bls`](../../../Varuna/Soundness.lean#L245) restates the Marlin capstone at `ZMod bls12_377_r`. That `bls12_377_r` is prime is a `Fact` hypothesis: trial division is not a practical kernel proof at this size. [`Fingerprint.q_eq_bls12_377_r`](../../../Varuna/Fingerprint.lean) shows the captured modulus is that number.
 
 ### 2.4 Properties of SonicPCS (Lean)
 
@@ -89,8 +180,8 @@ Both levels reduce to a lucky combination: [`batchedOpening_extract`](../../../V
 
 ## 3. Soundness of the Fiat–Shamir transform (Lean; Poseidon = RO excluded)
 
-- **Schedule:** [`V2Transcript`](../../../Varuna/FiatShamir.lean#L129), [`challenge_eq_ro`](../../../Varuna/FiatShamir.lean#L159), and squeeze counts pinned to snarkVM ([`sample_v2_second_round_squeeze`](../../../Varuna/SpotCheck.lean#L52)).
-- **Statement binding:** [`v2Init`](../../../Varuna/Statement.lean#L42) models `init_sponge` (`varuna.rs:136-154`). [`v2Init_injective`](../../../Varuna/Statement.lean#L77) and [`before_ne_of_inputs_ne`](../../../Varuna/Statement.lean#L88): different public inputs never share a challenge prefix, and equal challenges there are an RO collision ([`collision_of_inputs_ne`](../../../Varuna/Statement.lean#L106)).
+- **Schedule:** absorb then squeeze, with each challenge a function of the prefix before that squeeze ([`challenge_eq_ro`](../../../Varuna/FiatShamir.lean#L159)). V3 squeezes $\alpha$ alone in the second round and $\eta_A, \eta_B, \eta_C$ in prepare-third ([`sample_v3_second_round_squeeze`](../../../Varuna/SpotCheck.lean#L72), [`sample_v3_prepareThird_eta_squeezes`](../../../Varuna/SpotCheck.lean#L67)).
+- **Statement binding:** [`v3Init`](../../../Varuna/Statement.lean#L50) models `init_sponge` with domain separator `VARUNA-2026-V3`. [`v3Init_injective`](../../../Varuna/Statement.lean#L91): the initial transcript determines the public inputs and the commitments.
 - **Query charging:** [`fs_query_charge`](../../../Varuna/FSBound.lean#L48).
 - **Poseidon = RO:** a floor.
 
@@ -106,29 +197,36 @@ The AHP simulator is honest-verifier, query bound 1. [`maskAt`](../../../Varuna/
 
 [`simulateLineval`](../../../Varuna/ZK.lean#L105) builds the lineval polynomial from the public input and a mask, with no witness. [`simulateLineval_eq_real`](../../../Varuna/ZK.lean#L111) moves a real witness into the ZK mask, and [`simulateLineval_witness`](../../../Varuna/ZK.lean#L124) shows the honest sumcheck witness agrees. [`simulateLineval_accepts`](../../../Varuna/ZK.lean#L135) is the simulated check. In non-ZK mode the mask is dropped ([`linevalPolyEta_nonZK_ignores_mask`](../../../Varuna/ZK.lean#L85)), so the witness cannot be moved.
 
-The hiding commitment of that polynomial is the non-hiding commitment plus a constant blinding along `gamma_g`. [`simulateHidingLineval_accepts`](../../../Varuna/ZK.lean#L142) is the honest `random_v` opening. [`simulation_extractable`](../../../Varuna/ZK.lean#L154) says that opening checks, and that a fresh algebraic opening of a different polynomial is a trapdoor break or the represented value. The mask also bears on soundness, as in the finding above.
+The hiding commitment of that polynomial is the non-hiding commitment plus a constant blinding along `gamma_g`. [`simulateHidingLineval_accepts`](../../../Varuna/ZK.lean#L142) is the honest `random_v` opening. [`simulation_extractable`](../../../Varuna/ZK.lean#L154) says that opening checks, and that a fresh algebraic opening of a different polynomial is a trapdoor break or the represented value.
 
 ## Areas the plan does not list
 
-1. **How the three V2 checks compose (Lean).** [`v2_chain`](../../../Varuna/Composition.lean#L83), [`sum_linevalPoly`](../../../Varuna/Lineval.lean#L163), [`linevalTarget_eq_mzPoly`](../../../Varuna/Lineval.lean#L115), [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151). This is where the finding comes from.
+1. **How the three V3 checks compose (Lean).** [`v3_chain`](../../../Varuna/Composition.lean#L173), [`sum_linevalPoly`](../../../Varuna/Lineval.lean#L163), [`linevalTarget_eq_mzPoly`](../../../Varuna/Lineval.lean#L115), [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151).
 2. **From domain identities to R1CS (Lean).** [`satisfies_iff_zmod`](../../../Varuna/Bridge.lean#L64) and [`satisfies_of_rows`](../../../Varuna/Bridge.lean#L96).
 3. **Challenge space (Lean).** Every count takes an arbitrary finite $S$.
 4. **Degree bounds (Lean).** See 2.4.
 5. **Public input and reindexing (Lean).** [`reindexBySubdomain`](../../../Varuna/PublicInput.lean#L34), [`reindex_witness_mod_ne_zero`](../../../Varuna/PublicInput.lean#L46), [`assignment_at_input_position`](../../../Varuna/PublicInput.lean#L73): $\hat z$ equals the verifier's $\hat x$ at every input position, given canonical generators (`hgen`).
 6. **Index = circuit (floor, now precise).** The hypotheses `hidx*` of [`satisfies_of_rows`](../../../Varuna/Bridge.lean#L96) state exactly what the floor assumes.
 7. **Completeness (Lean).** [`rowcheckResidual_honest`](../../../Varuna/AHP.lean#L127), [`univariateResidual_honest`](../../../Varuna/AHP.lean#L200), [`matrixResidual_honest`](../../../Varuna/AHP.lean#L342), [`kzgCheck_honest`](../../../Varuna/SonicPC.lean#L259), [`accepts_of_residuals_zero`](../../../Varuna/AHP.lean#L401).
-8. **Lean vs snarkVM (Lean fingerprint).** [`Fingerprint.lean`](../../../Varuna/Fingerprint.lean) re-checks one captured snarkVM V2 hiding-mode proof ([`fixtures/fingerprint`](../../../fixtures/fingerprint/PROVENANCE.md), from the pinned tree with test-only instrumentation). The verifier sees only combined openings, so the capture is on the prover side, re-assembled in the verifier's LC shape. Kernel `decide` over the BLS12-377 scalar field checks three things:
+8. **Lean vs snarkVM (Lean fingerprint).** [`Fingerprint.lean`](../../../Varuna/Fingerprint.lean) re-checks one captured snarkVM V3 hiding-mode proof ([`fixtures/fingerprint`](../../../fixtures/fingerprint/PROVENANCE.md), from the pinned tree with test-only instrumentation). The verifier sees only combined openings, so the capture is on the prover side, re-assembled in the verifier's LC shape. Kernel `decide` over the BLS12-377 scalar field checks three things:
    - every coefficient snarkVM assembles equals Lean's formula ([`matrix_coeffs`](../../../Varuna/Fingerprint.lean#L203), [`lineval_coeffs`](../../../Varuna/Fingerprint.lean#L195), [`rowcheck_coeffs`](../../../Varuna/Fingerprint.lean#L189));
    - each LC vanishes, both as snarkVM assembled it and in Lean's scalar form ([`matrix_vanishes`](../../../Varuna/Fingerprint.lean#L231), [`matrix_model`](../../../Varuna/Fingerprint.lean#L244));
    - the scalar forms are the model ([`linevalEval_eq_scalar`](../../../Varuna/Fingerprint.lean#L87), [`matrixTerm_eq_scalar`](../../../Varuna/Fingerprint.lean#L97)).
 
-   The fixture uses unequal $|K_M|$, so the selector scale is exercised ([`selB_ne_one`](../../../Varuna/Fingerprint.lean#L263)). It also shows $\mathrm{row}(\gamma)\,\mathrm{col}(\gamma) \ne \mathrm{row\_col}(\gamma)$ ([`product_form_differs`](../../../Varuna/Fingerprint.lean#L267)): Lean's `matrixBPoly` agrees with the deployed $b$ only on $K$, which is all [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151) uses. [`SpotCheck.lean`](../../../Varuna/SpotCheck.lean) samples the source, and the finding above was confirmed by running snarkVM. Not covered: the group-level MSM / pairing assembly and byte encodings (a floor).
+   The fixture uses unequal $|K_M|$, so the selector scale is exercised ([`selB_ne_one`](../../../Varuna/Fingerprint.lean#L263)). It also shows $\mathrm{row}(\gamma)\,\mathrm{col}(\gamma) \ne \mathrm{row\_col}(\gamma)$ ([`product_form_differs`](../../../Varuna/Fingerprint.lean#L267)): Lean's `matrixBPoly` agrees with the deployed $b$ only on $K$, which is all [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151) uses. [`SpotCheck.lean`](../../../Varuna/SpotCheck.lean) samples the source. The fixture has field elements only, so the group-level MSM / pairing assembly is outside Lean, and byte encodings stay a floor. Sage proofs are not captured: the Sage implementation is a readable single-circuit PIOP, and snarkVM is the verifier of record.
+
+## What remains
+
+**Faithfulness past the LC layer.** The fingerprint covers zero-eval LC coefficients of one captured proof. The group-level MSM / pairing assembly, byte encodings, and Sage proofs are outside that capture. See the fingerprint item above.
+
+**Primality of the scalar modulus.** `knowledgeSoundness_bls` is the capstone at `ZMod bls12_377_r`, and `Fingerprint.q_eq_bls12_377_r` shows the captured `q` is that number. Primality is a `Fact`, as in §2.3.
+
+**Named floors.** Poseidon = RO, pairing / trapdoor hardness, algebraic adversary, SRS, encodings, and index = circuit. Commitment hiding is the constant shift $\rho \cdot \mathtt{gamma\_g}$ ([`commit_hiding_as_blind`](../../../Varuna/SonicPC.lean), [`commit_blind_shift`](../../../Varuna/SonicPC.lean)) together with binding of both scalars ([`commit_hiding_binding`](../../../Varuna/SonicPC.lean)). Simulation extractability of one hiding opening is [`simulation_extractable`](../../../Varuna/ZK.lean#L154). Unique responses and a distribution over the group stay out: padding makes proofs non-unique, and pairing independence of the two generators is a hypothesis of the hiding binding. [`PreprocessingAHP`](../../../Varuna/Soundness.lean) is the public-coin interaction in the algebraic projection; it carries the represented polynomials, not group elements.
 
 ## Summary
 
 | Item | Status | Main Lean anchors |
 | --- | --- | --- |
-| Mask-sum finding | Closed in V3 | `v3_chain`, `v3_shifted_residual_ne` |
 | 1.1 S1 notion | Lean | `inspectResidual`, `ahp_error` |
 | 1.2 Unbatched error | Lean | `ahp_error_concrete`, `card_filter_inspectResidual_le` |
 | 1.3 AHP batching error | Lean | `batchedZerocheck_extract`, `batchedSumcheck_extract` |
@@ -138,6 +236,26 @@ The hiding commitment of that polynomial is the non-hiding commitment plus a con
 | 2.3 Compilation | Lean | `V3Endpoint.sound_of_openings`, `matrix_sumcheck_of_selector` |
 | 2.4 PCS properties | Lean | `inspectOpening_break`, `commit_hiding_binding`, `hidingOpening_extract` |
 | 2.5 PC batching loss | Lean | `batchedOpening_extract`, `acrossPoints_extract` |
-| 3 Fiat–Shamir | Lean | `v2Init_injective`, `fs_query_charge` |
+| 3 Fiat–Shamir | Lean | `v3Init_injective`, `fs_query_charge` |
 | 4 Succinctness | Lean count | `ProofShape.g1_eq`, `spec_batch_scalars_iff` |
 | 5 Zero knowledge | Lean AHP simulator and one hiding opening | `simulateLineval_eq_real`, `simulation_extractable` |
+
+## Sources and pins
+
+Pin sources by commit, not by branch.
+
+| Source | Use |
+| --- | --- |
+| `ProvableHQ/varuna-sage-impl` `docs/spec.pdf` | Human protocol spec |
+| `ProvableHQ/varuna-sage-impl` Sage PIOPs | Executable identities for rowcheck / sumchecks |
+| `ProvableHQ/protocol-docs` (`protocol-docs/` submodule) | Algorithm identities (rowcheck, lincheck, matrix sumcheck), including V3 batching |
+| `ProvableHQ/snarkVM` submodule (`Varuna.snarkVMPin`) `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V3`); sampled in `SpotCheck.lean` |
+| `ProvableHQ/snarkVM` `algorithms/src/polycommit/sonic_pc/` and `kzg10/` | PC interface and pairing check |
+| `leanprover-community/mathlib4` tag `v4.33.0` | Field, `Polynomial`, roots of unity, Lagrange |
+| `fixtures/fingerprint/` | One captured snarkVM V3 hiding-mode proof |
+
+The Sage implementation is single-circuit R1CS with ZK, and without batching or lookups. It is a readable PIOP. snarkVM is the verifier of record, and this project does not capture Sage proofs.
+
+## Build
+
+`lake build --wfail` is the verifier. CI runs it (`.github/workflows/lean.yml`) and fetches the Mathlib cache. Mathlib is pinned at tag `v4.33.0` (toolchain `v4.33.0`). `assert_axioms` / `assert_computable` in `Varuna/AxiomCheck.lean` bound the census; `sorryAx` fails the build. A node on the proof map is `proven` only when its anchor names a real declaration.

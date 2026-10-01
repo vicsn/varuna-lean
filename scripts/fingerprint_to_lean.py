@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generate Varuna/Fingerprint/Capture.lean from a captured snarkVM V2 proof.
+"""Generate Varuna/Fingerprint/Capture.lean from a captured snarkVM V3 proof.
 
-The capture (fixtures/fingerprint/v2_lc_capture.json) is produced by the
+The capture (fixtures/fingerprint/v3_lc_capture.json) is produced by the
 test-only instrumentation in fixtures/fingerprint/capture.patch; see
 fixtures/fingerprint/PROVENANCE.md. This script only transcribes the decimal
 field elements into Lean literals; it computes nothing.
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "fixtures/fingerprint/v2_lc_capture.json"
+SRC = ROOT / "fixtures/fingerprint/v3_lc_capture.json"
 OUT = ROOT / "Varuna/Fingerprint/Capture.lean"
 
 
@@ -51,11 +51,11 @@ def main() -> None:
         "import Mathlib.Data.ZMod.Basic",
         "",
         "/-!",
-        "# Captured V2 proof (generated; do not edit)",
+        "# Captured V3 proof (generated; do not edit)",
         "",
-        "Field elements of one honest snarkVM `VarunaVersion::V2` proof in hiding",
+        "Field elements of one honest snarkVM `VarunaVersion::V3` proof in hiding",
         "mode, transcribed by `scripts/fingerprint_to_lean.py` from",
-        f"`fixtures/fingerprint/v2_lc_capture.json` (SHA-256 `{sha}`).",
+        f"`fixtures/fingerprint/v3_lc_capture.json` (SHA-256 `{sha}`).",
         "Provenance and regeneration: `fixtures/fingerprint/PROVENANCE.md`.",
         "-/",
         "",

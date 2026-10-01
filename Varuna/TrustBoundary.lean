@@ -314,6 +314,7 @@ assert_axioms Varuna.Fingerprint.selA_eq_one
 assert_axioms Varuna.Fingerprint.selB_ne_one
 assert_axioms Varuna.Fingerprint.product_form_differs
 assert_axioms Varuna.Fingerprint.rowcheck_rejects_tampered
+assert_axioms Varuna.Fingerprint.etaA_ne_one
 assert_axioms Varuna.Fingerprint.lineval_rejects_tampered
 assert_computable Varuna.rowcheckScalar
 assert_computable Varuna.linevalScalar
