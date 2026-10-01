@@ -22,8 +22,10 @@ Pairing groups stay abstract. The kernel checks :
   produce a pairing-product identity (the “PC forgery ⇒ pairing break
   structure” reduction). Hardness of that break is a floor.
 
-Hiding (`random_v`, `gamma_g`) is parameterized; the first proofs use the
-non-hiding check, matching `SNARKMode::NonZK`.
+Hiding (`random_v`, `gamma_g`) is the check below. A constant blinding
+shifts the commitment along `gamma_g` and does not depend on the
+polynomial. Two pairing-independent generators bind both the polynomial
+and the blinding at the trapdoor.
 -/
 
 set_option linter.unusedSectionVars false
@@ -421,5 +423,105 @@ theorem kzgCheck_batch (e : Pairing F G1 G2 GT) (vk : VerifyingKey G1 G2)
   have hD : vk.betaH - o₂.point • vk.h = vk.betaH - o₁.point • vk.h := by
     rw [hp]
   rw [hD, ← e.map_smul_left, ← e.map_add_left]
+
+/-! ## Hiding commitments (`random_v`, `gamma_g`) -/
+
+/-- Verifying key with the hiding generator `vk.gamma_g`. -/
+structure HidingKey (G1 G2 : Type*) extends VerifyingKey G1 G2 where
+  /-- `γ · g`, the extra generator snarkVM uses in ZK mode. -/
+  gammaG : G1
+
+/-- SRS well-formedness for the hiding key: `beta_h = [β] h`. -/
+def HidingKey.wellFormed (vk : HidingKey G1 G2) (β : F) : Prop :=
+  vk.betaH = β • vk.h
+
+/-- `e(g, h)` and `e(gamma_g, h)` are linearly independent over `F`. -/
+def pairingIndependent (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2) : Prop :=
+  ∀ a b : F, a • e.pair vk.g vk.h + b • e.pair vk.gammaG vk.h = 0 → a = 0 ∧ b = 0
+
+/-- Hiding commitment `p(β) · g + r(β) · gamma_g`. -/
+def kzgCommitHiding (vk : HidingKey G1 G2) (β : F) (p r : F[X]) : G1 :=
+  p.eval β • vk.g + r.eval β • vk.gammaG
+
+/-- snarkVM `KZG10::check` with hiding:
+`e(C − v g − random_v gamma_g, h) = e(w, βh − z h)`. -/
+def kzgCheckHiding (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2)
+    (C : G1) (randomV : F) (o : Opening G1 F) : Prop :=
+  e.pair (C - o.value • vk.g - randomV • vk.gammaG) vk.h =
+    e.pair o.witness (vk.betaH - o.point • vk.h)
+
+/-- Honest hiding witness: quotients of `p` and of the blinding polynomial. -/
+noncomputable def honestHidingWitness (vk : HidingKey G1 G2) (β : F)
+    (p r : F[X]) (z : F) : G1 :=
+  (kzgWitnessPoly p z).eval β • vk.g + (kzgWitnessPoly r z).eval β • vk.gammaG
+
+/-- Honest hiding opening of `p` at `z`. `random_v` is `r(z)`, passed separately. -/
+noncomputable def honestHidingOpening (vk : HidingKey G1 G2) (β : F)
+    (p r : F[X]) (z : F) : Opening G1 F :=
+  ⟨z, p.eval z, honestHidingWitness vk β p r z⟩
+
+/-- Completeness of the hiding check for an honest commitment and opening. -/
+theorem kzgCheckHiding_honest (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2)
+    {β : F} (hwf : vk.wellFormed β) (p r : F[X]) (z : F) :
+    kzgCheckHiding e vk (kzgCommitHiding vk β p r) (r.eval z)
+      (honestHidingOpening vk β p r z) := by
+  unfold kzgCheckHiding kzgCommitHiding honestHidingOpening honestHidingWitness
+    HidingKey.wellFormed at *
+  rw [hwf]
+  have hC :
+      p.eval β • vk.g + r.eval β • vk.gammaG - p.eval z • vk.g - r.eval z • vk.gammaG =
+        (p.eval β - p.eval z) • vk.g + (r.eval β - r.eval z) • vk.gammaG := by
+    rw [sub_smul, sub_smul]
+    abel_nf
+  have hβ : β • vk.h - z • vk.h = (β - z) • vk.h := by rw [← sub_smul]
+  rw [hC, hβ, eval_sub_eq_mul_witness p z β, eval_sub_eq_mul_witness r z β,
+    mul_smul, mul_smul, ← smul_add, e.map_smul_left, e.map_smul_right]
+
+/-- A constant blinding is added on top of the non-hiding commitment. -/
+theorem commit_hiding_as_blind (vk : HidingKey G1 G2) (β : F) (p : F[X]) (ρ : F) :
+    kzgCommitHiding vk β p (C ρ) = kzgCommit vk.toVerifyingKey β p + ρ • vk.gammaG := by
+  simp [kzgCommitHiding, kzgCommit, eval_C]
+
+/-- Shifting the constant blinding by `δ` adds `δ · gamma_g` and does not
+read the polynomial. This is the hiding term `random_v` cancels at opening. -/
+theorem commit_blind_shift (vk : HidingKey G1 G2) (β : F) (p : F[X]) (ρ δ : F) :
+    kzgCommitHiding vk β p (C (ρ + δ)) =
+      kzgCommitHiding vk β p (C ρ) + δ • vk.gammaG := by
+  simp only [kzgCommitHiding, eval_C, add_smul]
+  abel
+
+/-- A nonzero `gamma_g` makes the constant blinding unique. -/
+theorem commit_const_blind_injective (vk : HidingKey G1 G2) (β : F) (p : F[X])
+    {ρ ρ' : F} (hγ : vk.gammaG ≠ 0)
+    (h : kzgCommitHiding vk β p (C ρ) = kzgCommitHiding vk β p (C ρ')) : ρ = ρ' := by
+  unfold kzgCommitHiding at h
+  simp only [eval_C] at h
+  have h0 : (ρ - ρ') • vk.gammaG = 0 := by
+    rw [sub_smul, sub_eq_zero]
+    have h' := congrArg (fun c => c - p.eval β • vk.g) h
+    simpa [add_sub_cancel_left] using h'
+  by_contra hne
+  have : vk.gammaG = 0 := by
+    calc vk.gammaG = (ρ - ρ')⁻¹ • (ρ - ρ') • vk.gammaG := by
+          rw [smul_smul, inv_mul_cancel₀ (sub_ne_zero.mpr hne), one_smul]
+      _ = 0 := by rw [h0, smul_zero]
+  exact hγ this
+
+/-- Matching hiding commitments, with pairing-independent generators, agree
+on both `p(β)` and `r(β)`. -/
+theorem commit_hiding_binding (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2)
+    (β : F) (p r p' r' : F[X]) (hind : pairingIndependent e vk)
+    (h : kzgCommitHiding vk β p r = kzgCommitHiding vk β p' r') :
+    p.eval β = p'.eval β ∧ r.eval β = r'.eval β := by
+  have h0 :
+      (p.eval β - p'.eval β) • vk.g + (r.eval β - r'.eval β) • vk.gammaG = 0 := by
+    unfold kzgCommitHiding at h
+    rw [sub_smul, sub_smul, ← sub_eq_zero]
+    convert sub_eq_zero.mpr h using 1
+    abel_nf
+  have hp := congrArg (fun c => e.pair c vk.h) h0
+  rw [e.pair_zero_left, e.map_add_left, e.map_smul_left, e.map_smul_left] at hp
+  have ⟨ha, hb⟩ := hind _ _ hp
+  exact ⟨sub_eq_zero.mp ha, sub_eq_zero.mp hb⟩
 
 end Varuna

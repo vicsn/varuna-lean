@@ -3,6 +3,7 @@ Copyright (c) 2026 Provable Inc.
 Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
+import Mathlib.Tactic.Module
 import Varuna.SonicPC
 
 /-!
@@ -11,7 +12,8 @@ import Varuna.SonicPC
 Ironwood's adversary is *algebraic* : every group element it outputs comes
 with a representation over the public points it was given. For Sonic-KZG
 those points are the SRS powers `[τ^i] g`, so a representation is a
-coefficient list `r` and the element is `r(τ) · g`.
+coefficient list `r` and the element is `r(τ) · g`. A hiding
+commitment also carries a blinding representation over `gamma_g`.
 
 Under that restriction an accepted opening either claims the true
 evaluation of the representation, or the SRS trapdoor `τ` is a root of a
@@ -327,6 +329,82 @@ theorem inspectDegree_break [DecidableEq F] (e : Pairing F G1 G2 GT) (vk : Verif
     rw [toPoly_degreeDefect]
     simp only [eval_sub, eval_mul, eval_pow, eval_X, eval_toPoly]
     exact hs
+
+/-- An accepted hiding check splits across the two generators: both the
+polynomial and the blinding open at the trapdoor. -/
+theorem hidingDefect_eval_trapdoor (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2)
+    {τ : F} (hwf : vk.wellFormed τ) (hind : pairingIndependent e vk)
+    (p r q s : List F) {C : G1} {randomV : F} (o : Opening G1 F)
+    (hC : C = represent vk.g τ p + represent vk.gammaG τ r)
+    (hw : o.witness = represent vk.g τ q + represent vk.gammaG τ s)
+    (hc : kzgCheckHiding e vk C randomV o) :
+    (toPoly (openingDefect p q o.point o.value)).eval τ = 0 ∧
+      (toPoly (openingDefect r s o.point randomV)).eval τ = 0 := by
+  unfold kzgCheckHiding HidingKey.wellFormed at *
+  rw [hwf, hC, hw] at hc
+  unfold represent at hc
+  have hL :
+      evalCoeffs p τ • vk.g + evalCoeffs r τ • vk.gammaG - o.value • vk.g -
+          randomV • vk.gammaG =
+        (evalCoeffs p τ - o.value) • vk.g + (evalCoeffs r τ - randomV) • vk.gammaG := by
+    rw [sub_smul, sub_smul]
+    abel_nf
+  have hβ : τ • vk.h - o.point • vk.h = (τ - o.point) • vk.h := by rw [← sub_smul]
+  rw [hL, hβ] at hc
+  have hLpair :
+      e.pair ((evalCoeffs p τ - o.value) • vk.g + (evalCoeffs r τ - randomV) • vk.gammaG) vk.h =
+        (evalCoeffs p τ - o.value) • e.pair vk.g vk.h +
+          (evalCoeffs r τ - randomV) • e.pair vk.gammaG vk.h := by
+    rw [e.map_add_left, e.map_smul_left, e.map_smul_left]
+  have hRpair :
+      e.pair (evalCoeffs q τ • vk.g + evalCoeffs s τ • vk.gammaG) ((τ - o.point) • vk.h) =
+        ((τ - o.point) * evalCoeffs q τ) • e.pair vk.g vk.h +
+          ((τ - o.point) * evalCoeffs s τ) • e.pair vk.gammaG vk.h := by
+    rw [e.map_smul_right, e.map_add_left, e.map_smul_left, e.map_smul_left, smul_add, smul_smul,
+      smul_smul]
+  rw [hLpair, hRpair] at hc
+  set eg := e.pair vk.g vk.h
+  set eγ := e.pair vk.gammaG vk.h
+  set a := evalCoeffs p τ - o.value
+  set b := evalCoeffs r τ - randomV
+  set c := (τ - o.point) * evalCoeffs q τ
+  set d := (τ - o.point) * evalCoeffs s τ
+  have h0 : (a - c) • eg + (b - d) • eγ = 0 := by
+    suffices hgen :
+        ∀ (a b c d : F) (eg eγ : GT),
+          a • eg + b • eγ = c • eg + d • eγ → (a - c) • eg + (b - d) • eγ = 0 by
+      exact hgen a b c d eg eγ hc
+    intro a b c d eg eγ hc
+    have hsplit : (a - c) • eg + (b - d) • eγ = (a • eg + b • eγ) - (c • eg + d • eγ) :=
+      by
+      module
+    rw [hsplit, hc, sub_self]
+  have ⟨ha, hb⟩ := hind _ _ h0
+  refine ⟨?_, ?_⟩
+  · rw [toPoly_openingDefect]
+    simpa [eval_sub, eval_mul, eval_C, eval_X, eval_toPoly] using ha
+  · rw [toPoly_openingDefect]
+    simpa [eval_sub, eval_mul, eval_C, eval_X, eval_toPoly] using hb
+
+/-- Simulation extraction for one hiding opening. An accepted algebraic proof
+is a trapdoor break or the opened value of the represented polynomial. -/
+theorem hidingOpening_extract [DecidableEq F] (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2)
+    {τ : F} (hwf : vk.wellFormed τ) (hind : pairingIndependent e vk)
+    (p r q s : List F) {C : G1} {randomV : F} (o : Opening G1 F)
+    (hC : C = represent vk.g τ p + represent vk.gammaG τ r)
+    (hw : o.witness = represent vk.g τ q + represent vk.gammaG τ s)
+    (hc : kzgCheckHiding e vk C randomV o) :
+    (∃ b, inspectOpening p q o.point o.value = some b ∧ b.holds τ) ∨
+      o.value = (toPoly p).eval o.point := by
+  have ⟨hp, _⟩ := hidingDefect_eval_trapdoor e vk hwf hind p r q s o hC hw hc
+  by_cases hv : o.value = evalCoeffs p o.point
+  · right
+    rw [eval_toPoly]
+    exact hv
+  · left
+    refine ⟨⟨openingDefect p q o.point o.value⟩, ?_, ?_⟩
+    · simp [inspectOpening, hv]
+    · exact ⟨toPoly_openingDefect_ne_zero hv, hp⟩
 
 /-- A degree bound `deg g₁ ≤ |C| − 2` gives the lineval remainder bound
 `deg (X g₁ + σ) < | C | ` that `univariate_sum` and `knowledgeSoundness` take. -/

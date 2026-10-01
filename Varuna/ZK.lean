@@ -3,15 +3,17 @@ Copyright (c) 2026 Provable Inc.
 Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
+import Varuna.Algebraic
 import Varuna.Lineval
 
 /-!
 # Honest-verifier simulator, query bound 1
 
 ZK mode adds `mask_poly` to the lineval polynomial and hides the
-commitments (`random_v`). This file is the AHP half. Commitment hiding
-stays a floor : the verifier's openings are field elements, and the
-simulator programs those.
+commitments (`random_v`). This file is the AHP half. A constant blinding
+shifts the hiding commitment along `gamma_g`. The simulator opens
+`simulateLineval` with that blinding. A fresh algebraic opening is a
+trapdoor break or the represented polynomial's value.
 
 The verifier opens a masked polynomial at one challenge outside the
 domain. `maskAt` is the constant mask that sends that opening to any
@@ -135,5 +137,38 @@ theorem simulateLineval_accepts (Cd X : EvalDomain F) (xPoly mask mA mB mC : F[X
     univariateEval Cd (simulateLineval X xPoly mask mA mB mC ηA ηB ηC)
       (honestUnivariate Cd (simulateLineval X xPoly mask mA mB mC ηA ηB ηC)) β = 0 :=
   univariateEval_honest _ _ _
+
+/-- The simulator's hiding opening of the masked lineval checks. -/
+theorem simulateHidingLineval_accepts {G1 G2 GT : Type*} [AddCommGroup G1] [AddCommGroup G2]
+    [AddCommGroup GT] [Module F G1] [Module F G2] [Module F GT]
+    (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2) {β : F} (hwf : vk.wellFormed β)
+    (X : EvalDomain F) (xPoly mask mA mB mC blind : F[X]) (ηA ηB ηC z : F) :
+    kzgCheckHiding e vk
+      (kzgCommitHiding vk β (simulateLineval X xPoly mask mA mB mC ηA ηB ηC) blind) (blind.eval z)
+      (honestHidingOpening vk β (simulateLineval X xPoly mask mA mB mC ηA ηB ηC) blind z) :=
+  kzgCheckHiding_honest e vk hwf _ _ _
+
+/-- Simulation extractability of one hiding opening. The simulator's lineval
+opening checks. A fresh algebraic opening of a different polynomial is a
+trapdoor break or the represented value. -/
+theorem simulation_extractable [DecidableEq F] {G1 G2 GT : Type*} [AddCommGroup G1]
+    [AddCommGroup G2] [AddCommGroup GT] [Module F G1] [Module F G2] [Module F GT]
+    (e : Pairing F G1 G2 GT) (vk : HidingKey G1 G2) {τ : F} (hwf : vk.wellFormed τ)
+    (hind : pairingIndependent e vk) (X : EvalDomain F)
+    (xPoly mask mA mB mC blind : F[X]) (ηA ηB ηC z : F) (p r q s : List F) {C : G1}
+    {randomV : F} (o : Opening G1 F)
+    (hC : C = represent vk.g τ p + represent vk.gammaG τ r)
+    (hw : o.witness = represent vk.g τ q + represent vk.gammaG τ s)
+    (hc : kzgCheckHiding e vk C randomV o)
+    (hfresh : toPoly p ≠ simulateLineval X xPoly mask mA mB mC ηA ηB ηC) :
+    kzgCheckHiding e vk
+        (kzgCommitHiding vk τ (simulateLineval X xPoly mask mA mB mC ηA ηB ηC) blind)
+        (blind.eval z)
+        (honestHidingOpening vk τ (simulateLineval X xPoly mask mA mB mC ηA ηB ηC) blind z) ∧
+      ((∃ b, inspectOpening p q o.point o.value = some b ∧ b.holds τ) ∨
+        o.value = (toPoly p).eval o.point) ∧
+      toPoly p ≠ simulateLineval X xPoly mask mA mB mC ηA ηB ηC :=
+  ⟨kzgCheckHiding_honest e vk hwf _ _ _,
+    hidingOpening_extract e vk hwf hind p r q s o hC hw hc, hfresh⟩
 
 end Varuna

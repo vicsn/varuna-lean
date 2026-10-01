@@ -56,9 +56,10 @@ How each item of the security-analysis plan is covered is in
 - `knowledgeSoundness_bls` states the capstone at `ZMod bls12_377_r`.
   Primality of that modulus is a `Fact`, not a kernel proof.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
-  index = circuit, and commitment hiding stay floors. The AHP
-  simulator programs one opening and absorbs the witness into the
-  ZK mask (`ZK.lean`).
+  and index = circuit stay floors. The AHP simulator programs one
+  opening and absorbs the witness into the ZK mask. A constant blinding
+  shifts the hiding commitment along `gamma_g`, and one fresh hiding
+  opening is simulation-extractable (`ZK.lean`).
 
 The V2 mask-sum shift is a theorem about that schedule; V3 closes it.
 

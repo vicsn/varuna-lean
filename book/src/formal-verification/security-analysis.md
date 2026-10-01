@@ -75,12 +75,13 @@ Under the algebraic restriction, every PC step either gives the polynomial fact 
 
 [`V3Endpoint.sound`](../../../Varuna/Endpoint.lean#L221) is the V3 composition. Each matrix has its own nonzero domain. The $\gamma$ check is `matrixEval` $= 0$ plus [`inspectResidual`](../../../Varuna/AHP.lean#L57), which [`inspectResidual_accepts`](../../../Varuna/AHP.lean#L69) turns into the residual identity [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L185) consumes. [`sound_of_openings`](../../../Varuna/Endpoint.lean#L301) does the same for $\hat z$, $h_1$, $g_1$, and the three matrix witnesses: a no-break opening plus the scalar check the verifier runs is the polynomial check. [`sound_of_combined_matrix`](../../../Varuna/Endpoint.lean#L377) replaces the three $\gamma$ checks by one $\delta$-combination ([`inspectBatch_accepts`](../../../Varuna/Batching.lean#L169)). [`matrix_sumcheck_of_selector`](../../../Varuna/Endpoint.lean#L429) turns a selector-batched sum on a common domain ([`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152)) into $|K|\sigma = \hat M(\alpha,\beta)$ via [`matrix_sumcheck_value_of_sum`](../../../Varuna/MatrixSumcheck.lean#L152). [`knowledgeSoundness_bls`](../../../Varuna/Soundness.lean#L245) restates the Marlin capstone at `ZMod bls12_377_r`; primality of the modulus is a `Fact`.
 
-### 2.4 Properties of SonicPCS (Lean; hiding and SE excluded)
+### 2.4 Properties of SonicPCS (Lean)
 
 - **Extractability:** from the algebraic restriction, named as the floor `algebraicAdversary` ([`ModellingFloor`](../../../Varuna/Match.lean#L33)).
-- **Evaluation binding:** [`inspectOpening_break`](../../../Varuna/Algebraic.lean#L180) and [`pairingBreak_of_double_opening`](../../../Varuna/SonicPC.lean#L352); hardness is the `pairingHardness` floor.
-- **Degree bounds:** [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L302). [`natDegree_X_mul_add_C_lt`](../../../Varuna/Algebraic.lean#L333) turns $\deg g_1 \le |C|-2$ (`third.rs:60`) into `hdeg`.
-- **Hiding** (ZK only) and **simulation extractability** ([SE-KZG], [WM]): excluded, since Ironwood claims neither. Note that padding makes proofs non-unique (`varuna-padding.tex:256`), which matters for [WM]'s unique-response condition.
+- **Evaluation binding:** [`inspectOpening_break`](../../../Varuna/Algebraic.lean#L182) and [`pairingBreak_of_double_opening`](../../../Varuna/SonicPC.lean#L352); hardness is the `pairingHardness` floor.
+- **Degree bounds:** [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L304). [`natDegree_X_mul_add_C_lt`](../../../Varuna/Algebraic.lean#L411) turns $\deg g_1 \le |C|-2$ (`third.rs:60`) into `hdeg`.
+- **Hiding** (ZK only): [`kzgCheckHiding_honest`](../../../Varuna/SonicPC.lean#L464) is the snarkVM check `e(C − v g − random_v gamma_g, h) = e(w, βh − z h)`. A constant blinding is the shift `ρ · gamma_g` on top of the non-hiding commitment ([`commit_hiding_as_blind`](../../../Varuna/SonicPC.lean#L481), [`commit_blind_shift`](../../../Varuna/SonicPC.lean#L487)), and a nonzero `gamma_g` makes that scalar unique ([`commit_const_blind_injective`](../../../Varuna/SonicPC.lean#L494)). With pairing-independent generators, equal hiding commitments agree on both `p(β)` and `r(β)` ([`commit_hiding_binding`](../../../Varuna/SonicPC.lean#L512)). That independence is a hypothesis, not a proved hardness statement. The development does not treat the blinding coset as a uniform distribution.
+- **Simulation extractability:** an accepted algebraic hiding opening is a trapdoor break or the represented value ([`hidingOpening_extract`](../../../Varuna/Algebraic.lean#L391)). The simulator's hiding opening of the masked lineval checks, and a fresh polynomial is extracted the same way ([`simulation_extractable`](../../../Varuna/ZK.lean#L154)). Padding still makes proofs non-unique (`varuna-padding.tex:256`), so this is not the unique-response property of [WM], and it is one opening rather than the whole SNARK.
 
 ### 2.5 Loss from batching SonicPCS openings (Lean)
 
@@ -99,13 +100,13 @@ Both levels reduce to a lucky combination: [`batchedOpening_extract`](../../../V
 
 The spec's $9\,\mathbb G_1 + 10\,\mathbb F$ omits the three KZG witnesses and the `random_v` values ([`spec_single_proof`](../../../Varuna/ProofSize.lean#L74)). Its batch $\mathbb F$ count $1 + 9i$ is right only when $J = i$ ([`spec_batch_scalars_iff`](../../../Varuna/ProofSize.lean#L86)). Verifier time (2 pairings plus $O(\sum |x| + \log |R_{\max}|)$) is the spec's; Lean has no cost model.
 
-## 5. Zero knowledge (Lean AHP simulator; commitment hiding excluded)
+## 5. Zero knowledge (Lean AHP simulator and hiding openings)
 
-The AHP simulator is honest-verifier, query bound 1. [`maskAt`](../../../Varuna/ZK.lean#L39) is the constant mask that sends one opening outside the domain to any chosen field element and leaves the domain values unchanged ([`masked_eval_at_query`](../../../Varuna/ZK.lean#L48), [`masked_agrees_on_domain`](../../../Varuna/ZK.lean#L43)). [`simulateRowcheck`](../../../Varuna/ZK.lean#L63) then makes the rowcheck accept at that challenge ([`simulateRowcheck_accepts`](../../../Varuna/ZK.lean#L67)).
+The AHP simulator is honest-verifier, query bound 1. [`maskAt`](../../../Varuna/ZK.lean#L41) is the constant mask that sends one opening outside the domain to any chosen field element and leaves the domain values unchanged ([`masked_eval_at_query`](../../../Varuna/ZK.lean#L50), [`masked_agrees_on_domain`](../../../Varuna/ZK.lean#L45)). [`simulateRowcheck`](../../../Varuna/ZK.lean#L65) then makes the rowcheck accept at that challenge ([`simulateRowcheck_accepts`](../../../Varuna/ZK.lean#L69)).
 
-[`simulateLineval`](../../../Varuna/ZK.lean#L103) builds the lineval polynomial from the public input and a mask, with no witness. [`simulateLineval_eq_real`](../../../Varuna/ZK.lean#L109) moves a real witness into the ZK mask, and [`simulateLineval_witness`](../../../Varuna/ZK.lean#L122) shows the honest sumcheck witness agrees. [`simulateLineval_accepts`](../../../Varuna/ZK.lean#L133) is the simulated check. In non-ZK mode the mask is dropped ([`linevalPolyEta_nonZK_ignores_mask`](../../../Varuna/ZK.lean#L83)), so the witness cannot be moved.
+[`simulateLineval`](../../../Varuna/ZK.lean#L105) builds the lineval polynomial from the public input and a mask, with no witness. [`simulateLineval_eq_real`](../../../Varuna/ZK.lean#L111) moves a real witness into the ZK mask, and [`simulateLineval_witness`](../../../Varuna/ZK.lean#L124) shows the honest sumcheck witness agrees. [`simulateLineval_accepts`](../../../Varuna/ZK.lean#L135) is the simulated check. In non-ZK mode the mask is dropped ([`linevalPolyEta_nonZK_ignores_mask`](../../../Varuna/ZK.lean#L85)), so the witness cannot be moved.
 
-Hiding commitments (`random_v`, bound 1) and simulation extractability stay excluded. The mask also bears on soundness, as in the finding above.
+The hiding commitment of that polynomial is the non-hiding commitment plus a constant blinding along `gamma_g`. [`simulateHidingLineval_accepts`](../../../Varuna/ZK.lean#L142) is the honest `random_v` opening. [`simulation_extractable`](../../../Varuna/ZK.lean#L154) says that opening checks, and that a fresh algebraic opening of a different polynomial is a trapdoor break or the represented value. The mask also bears on soundness, as in the finding above.
 
 ## Areas the plan does not list
 
@@ -135,8 +136,8 @@ Hiding commitments (`random_v`, bound 1) and simulation extractability stay excl
 | 2.1 Primitive P | Lean (algebraic projection) | `PreprocessingAHP.sound`, `ProofView` |
 | 2.2 S2 | Lean | `fs_v2_squeeze_charge`, `fs_query_charge` |
 | 2.3 Compilation | Lean | `V3Endpoint.sound_of_openings`, `matrix_sumcheck_of_selector` |
-| 2.4 PCS properties | Lean (hiding, SE excluded) | `inspectOpening_break`, `inspectDegree_break` |
+| 2.4 PCS properties | Lean | `inspectOpening_break`, `commit_hiding_binding`, `hidingOpening_extract` |
 | 2.5 PC batching loss | Lean | `batchedOpening_extract`, `acrossPoints_extract` |
 | 3 Fiat–Shamir | Lean | `v2Init_injective`, `fs_query_charge` |
 | 4 Succinctness | Lean count | `ProofShape.g1_eq`, `spec_batch_scalars_iff` |
-| 5 Zero knowledge | Lean AHP simulator (hiding excluded) | `simulateLineval_eq_real`, `masked_eval_at_query` |
+| 5 Zero knowledge | Lean AHP simulator and one hiding opening | `simulateLineval_eq_real`, `simulation_extractable` |

@@ -83,6 +83,9 @@ assert_axioms Varuna.kzgCheck_honest
 assert_axioms Varuna.pairingBreak_of_double_opening
 assert_axioms Varuna.inspectBinding_of_double_check
 assert_axioms Varuna.kzgCheck_batch
+assert_axioms Varuna.kzgCheckHiding_honest
+assert_axioms Varuna.commit_const_blind_injective
+assert_axioms Varuna.commit_hiding_binding
 assert_computable Varuna.LinearCombination.empty
 assert_axioms Varuna.challenge_eq_ro
 assert_axioms Varuna.alpha_prefix_isPrefix
@@ -286,6 +289,9 @@ assert_axioms Varuna.linevalPolyEta_absorb
 assert_axioms Varuna.simulateLineval_eq_real
 assert_axioms Varuna.simulateLineval_witness
 assert_axioms Varuna.simulateLineval_accepts
+assert_axioms Varuna.simulateHidingLineval_accepts
+assert_axioms Varuna.simulation_extractable
+assert_axioms Varuna.hidingOpening_extract
 assert_axioms Varuna.rowcheckV2Eval_eq_scalar
 assert_axioms Varuna.linevalEval_eq_scalar
 assert_axioms Varuna.matrixTerm_eq_scalar

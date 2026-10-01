@@ -21,9 +21,13 @@ plan is covered is in
 object in snarkVM that validators actually run, `VarunaVersion.V3`.
 Completeness of the individual checks is proved alongside soundness.
 The AHP simulator (`ZK.lean`) programs the one opening outside the
-domain and absorbs the witness into the ZK mask. Commitment hiding
-stays a floor. V2, with `η_A` fixed at `1`, is still formalized: that
-is the verifier on which the mask-sum shift is exploitable.
+domain and absorbs the witness into the ZK mask. A constant blinding
+shifts the hiding commitment along `gamma_g`, and a fresh algebraic
+opening is a trapdoor break or the represented value
+(`simulation_extractable`). Pairing independence of `g` and `gamma_g`
+stays a hypothesis of that binding. V2, with `η_A` fixed at `1`, is
+still formalized: that is the verifier on which the mask-sum shift is
+exploitable.
 
 Varuna is an optimized Marlin ([CHMMVW19](https://eprint.iacr.org/2019/1047))
 AHP compiled through a Sonic-style polynomial commitment and made
@@ -280,8 +284,13 @@ trial division is not a practical kernel proof at this size.
 
 **Named floors, not open proofs.** Poseidon = RO, pairing / trapdoor
 hardness, algebraic adversary, SRS, encodings, index = circuit.
-Commitment hiding and simulation extractability are excluded. The AHP
-simulator is `ZK.lean`. `PreprocessingAHP` is the public-coin
+Commitment hiding is the constant shift `ρ · gamma_g`
+(`commit_hiding_as_blind`, `commit_blind_shift`) together with binding
+of both scalars (`commit_hiding_binding`). Simulation extractability of
+one hiding opening is `simulation_extractable`. Unique responses and a
+distribution over the group stay out: padding makes proofs non-unique,
+and pairing independence of the two generators is a hypothesis, not a
+proved hardness statement. `PreprocessingAHP` is the public-coin
 interaction in the algebraic projection; it does not carry group
 elements.
 
