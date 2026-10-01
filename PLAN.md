@@ -20,9 +20,10 @@ plan is covered is in
 **Target.** Knowledge soundness of the *deployed* Varuna verifier: the
 object in snarkVM that validators actually run, `VarunaVersion.V3`.
 Completeness of the individual checks is proved alongside soundness.
-Zero-knowledge (a simulator) is not claimed. V2, with `η_A` fixed at
-`1`, is still formalized: that is the verifier on which the mask-sum
-shift is exploitable.
+The AHP simulator (`ZK.lean`) programs the one opening outside the
+domain and absorbs the witness into the ZK mask. Commitment hiding
+stays a floor. V2, with `η_A` fixed at `1`, is still formalized: that
+is the verifier on which the mask-sum shift is exploitable.
 
 Varuna is an optimized Marlin ([CHMMVW19](https://eprint.iacr.org/2019/1047))
 AHP compiled through a Sonic-style polynomial commitment and made
@@ -255,7 +256,9 @@ shift. `knowledgeSoundness` is the earlier Marlin-shaped statement.
 it at `ZMod bls12_377_r`, whose primality is a `Fact`.
 `Fingerprint.q_eq_bls12_377_r` shows the captured modulus is
 `bls12_377_r`. `fs_v2_squeeze_charge` reads each V2 squeeze's bad set
-off the transcript and charges it. `knowledgeSoundness_rests_on_floors`
+off the transcript and charges it. `ZK.lean` is the honest-verifier
+simulator: one programmed opening, and the witness absorbed into the
+ZK mask. `knowledgeSoundness_rests_on_floors`
 keeps the floors explicit. Probability counts are in `Probability.lean`.
 
 ---
@@ -277,9 +280,10 @@ trial division is not a practical kernel proof at this size.
 
 **Named floors, not open proofs.** Poseidon = RO, pairing / trapdoor
 hardness, algebraic adversary, SRS, encodings, index = circuit.
-Zero knowledge (a simulator), hiding, and simulation extractability
-are excluded. `PreprocessingAHP` is the public-coin interaction in the
-algebraic projection; it does not carry group elements.
+Commitment hiding and simulation extractability are excluded. The AHP
+simulator is `ZK.lean`. `PreprocessingAHP` is the public-coin
+interaction in the algebraic projection; it does not carry group
+elements.
 
 ---
 

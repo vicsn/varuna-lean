@@ -30,5 +30,6 @@ import Varuna.Endpoint
 import Varuna.Fingerprint
 import Varuna.SpotCheck
 import Varuna.ProofSize
+import Varuna.ZK
 import Varuna.AxiomCheck
 import Varuna.TrustBoundary

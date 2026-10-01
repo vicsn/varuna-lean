@@ -18,6 +18,7 @@ import Varuna.Statement
 import Varuna.PublicInput
 import Varuna.Bridge
 import Varuna.Endpoint
+import Varuna.ZK
 import Varuna.Fingerprint
 import Varuna.ProofSize
 import Varuna.FiatShamir
@@ -279,6 +280,12 @@ assert_axioms Varuna.fs_v2_squeeze_charge
 assert_axioms Varuna.PreprocessingAHP.sound
 assert_axioms Varuna.knowledgeSoundness_bls
 assert_axioms Varuna.Fingerprint.q_eq_bls12_377_r
+assert_axioms Varuna.masked_eval_at_query
+assert_axioms Varuna.simulateRowcheck_accepts
+assert_axioms Varuna.linevalPolyEta_absorb
+assert_axioms Varuna.simulateLineval_eq_real
+assert_axioms Varuna.simulateLineval_witness
+assert_axioms Varuna.simulateLineval_accepts
 assert_axioms Varuna.rowcheckV2Eval_eq_scalar
 assert_axioms Varuna.linevalEval_eq_scalar
 assert_axioms Varuna.matrixTerm_eq_scalar

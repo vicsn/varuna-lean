@@ -99,9 +99,13 @@ Both levels reduce to a lucky combination: [`batchedOpening_extract`](../../../V
 
 The spec's $9\,\mathbb G_1 + 10\,\mathbb F$ omits the three KZG witnesses and the `random_v` values ([`spec_single_proof`](../../../Varuna/ProofSize.lean#L74)). Its batch $\mathbb F$ count $1 + 9i$ is right only when $J = i$ ([`spec_batch_scalars_iff`](../../../Varuna/ProofSize.lean#L86)). Verifier time (2 pairings plus $O(\sum |x| + \log |R_{\max}|)$) is the spec's; Lean has no cost model.
 
-## 5. Zero knowledge (Excluded)
+## 5. Zero knowledge (Lean AHP simulator; commitment hiding excluded)
 
-Ironwood makes no ZK claim. As deployed, ZK mode uses hiding commitments with bound 1 on top of masking (`first.rs:51`; `random_v` at `sonic_pc/mod.rs:769`), and the spec sketches perfect ZK with query bound $b$ (lines 456–468). Lean has the parameters only ([`SNARKMode`](../../../Varuna/AHP.lean#L37), [`maskPoly`](../../../Varuna/AHP.lean#L45)). The finding above shows the mask also bears on soundness.
+The AHP simulator is honest-verifier, query bound 1. [`maskAt`](../../../Varuna/ZK.lean#L39) is the constant mask that sends one opening outside the domain to any chosen field element and leaves the domain values unchanged ([`masked_eval_at_query`](../../../Varuna/ZK.lean#L48), [`masked_agrees_on_domain`](../../../Varuna/ZK.lean#L43)). [`simulateRowcheck`](../../../Varuna/ZK.lean#L63) then makes the rowcheck accept at that challenge ([`simulateRowcheck_accepts`](../../../Varuna/ZK.lean#L67)).
+
+[`simulateLineval`](../../../Varuna/ZK.lean#L103) builds the lineval polynomial from the public input and a mask, with no witness. [`simulateLineval_eq_real`](../../../Varuna/ZK.lean#L109) moves a real witness into the ZK mask, and [`simulateLineval_witness`](../../../Varuna/ZK.lean#L122) shows the honest sumcheck witness agrees. [`simulateLineval_accepts`](../../../Varuna/ZK.lean#L133) is the simulated check. In non-ZK mode the mask is dropped ([`linevalPolyEta_nonZK_ignores_mask`](../../../Varuna/ZK.lean#L83)), so the witness cannot be moved.
+
+Hiding commitments (`random_v`, bound 1) and simulation extractability stay excluded. The mask also bears on soundness, as in the finding above.
 
 ## Areas the plan does not list
 
@@ -135,4 +139,4 @@ Ironwood makes no ZK claim. As deployed, ZK mode uses hiding commitments with bo
 | 2.5 PC batching loss | Lean | `batchedOpening_extract`, `acrossPoints_extract` |
 | 3 Fiat–Shamir | Lean | `v2Init_injective`, `fs_query_charge` |
 | 4 Succinctness | Lean count | `ProofShape.g1_eq`, `spec_batch_scalars_iff` |
-| 5 Zero knowledge | Excluded | none |
+| 5 Zero knowledge | Lean AHP simulator (hiding excluded) | `simulateLineval_eq_real`, `masked_eval_at_query` |

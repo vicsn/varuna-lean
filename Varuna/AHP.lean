@@ -24,8 +24,8 @@ returns either “the identity holds identically” or the challenge as
 Schwartz–Zippel break data. Completeness is a sibling theorem, not a
 hypothesis of soundness.
 
-Zero-knowledge masking (`SNARKMode::ZK`, `mask_poly`) is parameterized;
-the first proofs instantiate the non-ZK case (`mask = 0`).
+Zero-knowledge masking (`SNARKMode::ZK`, `mask_poly`) is parameterized.
+The honest-verifier simulator is `Varuna.ZK`. Non-ZK mode drops the mask.
 -/
 
 open Finset Polynomial
