@@ -5,6 +5,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 
 import Varuna.Fingerprint.Capture
 import Varuna.Composition
+import Varuna.Field
 
 /-!
 # Captured-proof fingerprint
@@ -117,6 +118,9 @@ end Link
 /-! ## The captured proof -/
 
 namespace Fingerprint
+
+/-- The captured modulus is the named BLS12-377 scalar prime. -/
+theorem q_eq_bls12_377_r : q = bls12_377_r := rfl
 
 /-- `v_R(α) = α^{R.n} − 1`. -/
 def vRAtAlpha : Fr := alpha ^ sizeR - 1

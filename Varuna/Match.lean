@@ -17,8 +17,9 @@ encodings, and Poseidon parameters stay out of Lean.
 
 Fixtures are closed facts on `ToyField = ZMod 17`, kernel-checked with
 `decide` (not `native_decide`, which would extend the trusted base).
-Captured snarkVM / Sage proofs over BLS12-377 are future pins; the
-typed equation they must satisfy is the one below.
+The captured snarkVM proof is the fingerprint in `Fingerprint.lean`.
+This project does not capture Sage proofs. The typed equation a
+captured proof must satisfy is the one below.
 -/
 
 set_option linter.unusedSectionVars false

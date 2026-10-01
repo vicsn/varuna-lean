@@ -32,4 +32,11 @@ abbrev Fp (p : ℕ) [Fact p.Prime] := ZMod p
 /-- Toy prime as a Mathlib field. -/
 abbrev ToyField := Fp 17
 
+/-- BLS12-377 scalar-field modulus, the field of the deployed verifier.
+`Fingerprint.q` is this number. Primality is a `Fact` hypothesis on
+theorems stated at `ZMod bls12_377_r` : trial division is not a practical
+kernel proof at this size. -/
+def bls12_377_r : ℕ :=
+  8444461749428370424248824938781546531375899335154063827935233455917409239041
+
 end Varuna

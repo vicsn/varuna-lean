@@ -145,16 +145,17 @@ theorem matrix_term {R Cd K : EvalDomain F} {M : SparseMatrix F} (hM : M.Bounded
   unfold rowColVal EvalDomain.sizeAsField
   field_simp [R.n_ne_zero, Cd.n_ne_zero]
 
-/-- Matrix sumcheck value. If the rational sumcheck residual is zero on the
-indexer's oracles, the remainder has degree below ` | K | `, and `α ∉ R`,
-`β ∉ C` (both checked by the verifier), then ` | K | σ = M̂(α, β)`. -/
-theorem matrix_sumcheck_value {R Cd K : EvalDomain F} {M : SparseMatrix F}
+/-- Matrix sumcheck value from the domain sum of the remainder, rather than
+from a degree bound. `matrix_sumcheck_value` is this plus
+`sum_eval_of_natDegree_lt`; a selector batch supplies the same sum via
+`batchedSumcheck_extract`. -/
+theorem matrix_sumcheck_value_of_sum {R Cd K : EvalDomain F} {M : SparseMatrix F}
     (hM : M.Bounded R Cd) (hK : M.nK = K.n) {α β σ : F} {g h : F[X]}
     (hα : α ∉ R.elements) (hβ : β ∉ Cd.elements)
     (hres : matrixResidual K
       (matrixAPoly K (R.vanishing.eval α * Cd.vanishing.eval β) (rowColVal R Cd M))
       (matrixBPoly R Cd K α β M.rowIdx M.colIdx) g h σ = 0)
-    (hdeg : (X * g + C σ).natDegree < K.n) :
+    (hsum : ∑ k ∈ range K.n, (X * g + C σ).eval (K.node k) = (K.n : F) * σ) :
     (K.n : F) * σ = (matrixAtAlpha R Cd M α).eval β := by
   rw [eval_matrixAtAlpha, holographicEval, hK]
   have hterm : ∀ k ∈ range K.n, (X * g + C σ).eval (K.node k) =
@@ -176,7 +177,21 @@ theorem matrix_sumcheck_value {R Cd K : EvalDomain F} {M : SparseMatrix F}
         K.node k * g.eval (K.node k) + σ := matrix_rational hres (K.ω_pow_mem k) hb
     rw [← matrix_term hM hα hβ hk' hkM, hrat]
     simp [eval_add, eval_mul, eval_X, eval_C]
-  rw [← sum_congr rfl hterm, K.sum_eval_of_natDegree_lt hdeg]
-  simp
+  rw [← sum_congr rfl hterm, hsum]
+
+/-- Matrix sumcheck value. If the rational sumcheck residual is zero on the
+indexer's oracles, the remainder has degree below ` | K | `, and `α ∉ R`,
+`β ∉ C` (both checked by the verifier), then ` | K | σ = M̂(α, β)`. -/
+theorem matrix_sumcheck_value {R Cd K : EvalDomain F} {M : SparseMatrix F}
+    (hM : M.Bounded R Cd) (hK : M.nK = K.n) {α β σ : F} {g h : F[X]}
+    (hα : α ∉ R.elements) (hβ : β ∉ Cd.elements)
+    (hres : matrixResidual K
+      (matrixAPoly K (R.vanishing.eval α * Cd.vanishing.eval β) (rowColVal R Cd M))
+      (matrixBPoly R Cd K α β M.rowIdx M.colIdx) g h σ = 0)
+    (hdeg : (X * g + C σ).natDegree < K.n) :
+    (K.n : F) * σ = (matrixAtAlpha R Cd M α).eval β := by
+  refine matrix_sumcheck_value_of_sum hM hK hα hβ hres ?_
+  rw [K.sum_eval_of_natDegree_lt hdeg, coeff_add, coeff_C, coeff_X_mul_zero, zero_add,
+    if_pos rfl]
 
 end Varuna

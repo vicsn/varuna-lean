@@ -4,6 +4,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
 import Varuna.Match
+import Varuna.FiatShamir
 
 /-!
 # Knowledge-soundness capstone (VarunaVersion.V2)
@@ -13,9 +14,10 @@ computable extractor that returns either AHP / batch / RO / PC break
 data, or the identities that imply `Az ∘ Bz = Cz` on the constraint
 domain.
 
-The theorem is stated at a generic `Field`. Instantiating the scalar
-field of BLS12-377 is a later pin; the six modelling floors in
-`modellingFloors` remain explicit. Poseidon = RO, pairing / trapdoor
+The theorem is stated at a generic `Field`. `knowledgeSoundness_bls`
+restates it at `ZMod bls12_377_r`; primality of that modulus is a `Fact`
+hypothesis. The six modelling floors in `modellingFloors` remain
+explicit. Poseidon = RO, pairing / trapdoor
 hardness, the algebraic-adversary restriction, SRS well-formedness,
 encodings, and index = circuit are **not** Lean axioms.
 
@@ -201,6 +203,57 @@ theorem knowledgeSoundness [DecidableEq F] {π : ProofView F}
 theorem knowledgeSoundness_toy_typed :
     (⟨⟨0, 0, 0⟩, [], []⟩ : TypedProof ToyField).accepts = true :=
   toy_typed_proof_accepts
+
+/-- One public-coin round of Marlin's preprocessing argument. -/
+structure CoinRound (F : Type*) where
+  /-- Prover message absorbed before the squeeze. -/
+  sent : FSMessage F
+  /-- Verifier challenge squeezed from that prefix. -/
+  challenge : F
+
+/-- The interactive object: public-coin rounds, with `ProofView` the
+algebraic projection of the committed polynomials. -/
+structure PreprocessingAHP (F : Type*) [Field F] where
+  /-- Rounds, in transcript order. -/
+  rounds : List (CoinRound F)
+  /-- Polynomials and challenges read off those rounds. -/
+  view : ProofView F
+
+/-- The challenges of the algebraic view are challenges of the interaction,
+and the view is knowledge-sound. -/
+theorem PreprocessingAHP.sound [DecidableEq F] (π : PreprocessingAHP F)
+    (hα : π.view.α ∈ π.rounds.map (·.challenge))
+    (hβ : π.view.β ∈ π.rounds.map (·.challenge))
+    (hγ : π.view.γ ∈ π.rounds.map (·.challenge))
+    (hacc : π.view.checks.accepts)
+    (hsum : weightedSum π.view.batchWeights π.view.batchClaims = 0)
+    (hI : π.view.inspect = none)
+    (hdeg : (X * π.view.uw.g + C π.view.uw.σ).natDegree < π.view.Vd.n)
+    {κ μ : F} (hκ : κ ∈ π.view.H.elements) (hμ : μ ∈ π.view.K.elements) :
+    π.view.α ∈ π.rounds.map (·.challenge) ∧
+      π.view.β ∈ π.rounds.map (·.challenge) ∧
+      π.view.γ ∈ π.rounds.map (·.challenge) ∧
+      π.view.zA.eval κ * π.view.zB.eval κ = π.view.zC.eval κ ∧
+        (∑ i ∈ range π.view.Vd.n, π.view.f.eval (π.view.Vd.node i) =
+          (π.view.Vd.n : F) * π.view.uw.σ) ∧
+        π.view.a.eval μ = π.view.b.eval μ * (μ * π.view.g.eval μ + π.view.σ) ∧
+        ∀ x ∈ π.view.batchClaims, x = 0 := by
+  refine ⟨hα, hβ, hγ, ?_⟩
+  exact knowledgeSoundness hacc hsum hI hdeg hκ hμ
+
+/-- The capstone at the BLS12-377 scalar field. -/
+theorem knowledgeSoundness_bls [Fact (Nat.Prime bls12_377_r)] [DecidableEq (ZMod bls12_377_r)]
+    {π : ProofView (ZMod bls12_377_r)}
+    (hacc : π.checks.accepts)
+    (hsum : weightedSum π.batchWeights π.batchClaims = 0)
+    (hI : π.inspect = none)
+    (hdeg : (X * π.uw.g + C π.uw.σ).natDegree < π.Vd.n)
+    {κ μ : ZMod bls12_377_r} (hκ : κ ∈ π.H.elements) (hμ : μ ∈ π.K.elements) :
+    π.zA.eval κ * π.zB.eval κ = π.zC.eval κ ∧
+      (∑ i ∈ range π.Vd.n, π.f.eval (π.Vd.node i) = (π.Vd.n : ZMod bls12_377_r) * π.uw.σ) ∧
+      π.a.eval μ = π.b.eval μ * (μ * π.g.eval μ + π.σ) ∧
+      ∀ x ∈ π.batchClaims, x = 0 :=
+  knowledgeSoundness hacc hsum hI hdeg hκ hμ
 
 /-- The capstone still rests on the named modelling floors. -/
 theorem knowledgeSoundness_rests_on_floors :

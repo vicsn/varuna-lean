@@ -55,15 +55,15 @@ S1 is information-theoretic and does not need the AGM. Every theorem here is `as
 
 ## 2. Soundness of AHP + PCS compilation
 
-### 2.1 The primitive P (Partial)
+### 2.1 The primitive P (Lean; algebraic projection)
 
-P is Marlin's public-coin preprocessing argument of knowledge. Lean works in its algebraic-adversary projection, which is Ironwood's model: group elements come with SRS representations ([`represent`](../../../Varuna/Algebraic.lean#L100)), and [`ProofView`](../../../Varuna/Soundness.lean#L89) holds the represented polynomials. P is not defined as an interactive object.
+P is Marlin's public-coin preprocessing argument of knowledge. [`PreprocessingAHP`](../../../Varuna/Soundness.lean#L216) is that interaction: a list of rounds, each an absorbed message and a squeezed challenge, plus [`ProofView`](../../../Varuna/Soundness.lean#L89), the polynomials read off those rounds. [`PreprocessingAHP.sound`](../../../Varuna/Soundness.lean#L224) requires $\alpha$, $\beta$, and $\gamma$ to be challenges of the rounds and applies [`knowledgeSoundness`](../../../Varuna/Soundness.lean#L184). Group elements still come with SRS representations ([`represent`](../../../Varuna/Algebraic.lean#L100)); the object does not carry group elements itself.
 
-### 2.2 The property S2 that step 3 needs (Partial)
+### 2.2 The property S2 that step 3 needs (Lean)
 
-S2 is RBR knowledge soundness, charged per oracle query. [`fs_query_charge`](../../../Varuna/FSBound.lean#L48): with at most $b$ bad answers per query, at most $Q\,b\,|S|^{Q-1}$ of $|S|^Q$ lazy-oracle tapes let a deterministic adversary hit one. [`fs_break_count`](../../../Varuna/FSBound.lean#L83): a V2 output with a break at any squeeze is such a hit, if its challenges were answered on its queries. The per-round bad sets are the inspectors from 1.1. Still open: no single theorem derives every V2 squeeze's bad set from the transcript.
+S2 is RBR knowledge soundness, charged per oracle query. [`fs_query_charge`](../../../Varuna/FSBound.lean#L48): with at most $b$ bad answers per query, at most $Q\,b\,|S|^{Q-1}$ of $|S|^Q$ lazy-oracle tapes let a deterministic adversary hit one. [`fs_break_count`](../../../Varuna/FSBound.lean#L83): a V2 output with a break at any squeeze is such a hit, if its challenges were answered on its queries. [`squeezeBad`](../../../Varuna/FSBound.lean#L108) is the bad set of each of the six squeezes: Schwartz–Zippel roots at $\alpha$, $\beta$, $\gamma$, and one-weight `inspectBatch` breaks at the three combiner squeezes. [`fs_v2_squeeze_charge`](../../../Varuna/FSBound.lean#L222) puts those sets on the transcript prefixes and charges the resulting break count. Poseidon = RO stays a floor.
 
-### 2.3 Compilation yields S2 from S1 (Partial)
+### 2.3 Compilation yields S2 from S1 (Lean)
 
 Under the algebraic restriction, every PC step either gives the polynomial fact S1 uses or a computed trapdoor break:
 
@@ -71,9 +71,9 @@ Under the algebraic restriction, every PC step either gives the polynomial fact 
 - a violated degree bound: [`inspectDegree_break`](../../../Varuna/Algebraic.lean#L302)
 - a batched opening: [`batchedOpening_extract`](../../../Varuna/OpeningBatch.lean#L61) per point, [`acrossPoints_extract`](../../../Varuna/OpeningBatch.lean#L90) across points
 
-[`V2Endpoint.sound`](../../../Varuna/Endpoint.lean#L120) composes the opening reduction with the AHP in one theorem. A no-break opening of the rowcheck quotient $h_0$ ([`value_correct_of_inspect_none`](../../../Varuna/Algebraic.lean#L205)), the three matrix sumchecks with their degree bounds ([`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151)), and [`v2_chain`](../../../Varuna/Composition.lean#L83) give $(Az + e) \circ Bz = Cz$ on $R$. [`V2Endpoint.sound_nonZK`](../../../Varuna/Endpoint.lean#L161) ends at the R1CS relation.
+[`V2Endpoint.sound`](../../../Varuna/Endpoint.lean#L129) composes the opening reduction with the AHP in one theorem. A no-break opening of the rowcheck quotient $h_0$ ([`value_correct_of_inspect_none`](../../../Varuna/Algebraic.lean#L205)), the three matrix sumchecks with their degree bounds ([`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L185)), and [`v2_chain`](../../../Varuna/Composition.lean#L79) give $(Az + e) \circ Bz = Cz$ on $R$. [`V2Endpoint.sound_nonZK`](../../../Varuna/Endpoint.lean#L170) ends at the R1CS relation.
 
-Still open: the endpoint takes the other openings ($\hat z$, $h_1$, $g_1$, the matrix witnesses) as evaluations of the committed polynomials. It also takes the matrix residuals as identities, since the $\gamma$ step is [`matrix_extract`](../../../Varuna/AHP.lean#L379). Each of these reduces the same way as $h_0$. It uses one $K$ for all three matrices, so the selector-batched sumcheck ([`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152)) is not composed in.
+[`V3Endpoint.sound`](../../../Varuna/Endpoint.lean#L221) is the V3 composition. Each matrix has its own nonzero domain. The $\gamma$ check is `matrixEval` $= 0$ plus [`inspectResidual`](../../../Varuna/AHP.lean#L57), which [`inspectResidual_accepts`](../../../Varuna/AHP.lean#L69) turns into the residual identity [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L185) consumes. [`sound_of_openings`](../../../Varuna/Endpoint.lean#L301) does the same for $\hat z$, $h_1$, $g_1$, and the three matrix witnesses: a no-break opening plus the scalar check the verifier runs is the polynomial check. [`sound_of_combined_matrix`](../../../Varuna/Endpoint.lean#L377) replaces the three $\gamma$ checks by one $\delta$-combination ([`inspectBatch_accepts`](../../../Varuna/Batching.lean#L169)). [`matrix_sumcheck_of_selector`](../../../Varuna/Endpoint.lean#L429) turns a selector-batched sum on a common domain ([`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152)) into $|K|\sigma = \hat M(\alpha,\beta)$ via [`matrix_sumcheck_value_of_sum`](../../../Varuna/MatrixSumcheck.lean#L152). [`knowledgeSoundness_bls`](../../../Varuna/Soundness.lean#L245) restates the Marlin capstone at `ZMod bls12_377_r`; primality of the modulus is a `Fact`.
 
 ### 2.4 Properties of SonicPCS (Lean; hiding and SE excluded)
 
@@ -128,9 +128,9 @@ Ironwood makes no ZK claim. As deployed, ZK mode uses hiding commitments with bo
 | 1.2 Unbatched error | Lean | `ahp_error_concrete`, `card_filter_inspectResidual_le` |
 | 1.3 AHP batching error | Lean | `batchedZerocheck_extract`, `batchedSumcheck_extract` |
 | 1.4 Assumptions | Lean | `TrustBoundary.lean` |
-| 2.1 Primitive P | Partial | `represent`, `ProofView` |
-| 2.2 S2 | Partial | `fs_query_charge`, `fs_break_count` |
-| 2.3 Compilation | Partial | `V2Endpoint.sound`, `inspectOpening_break`, `inspectDegree_break` |
+| 2.1 Primitive P | Lean (algebraic projection) | `PreprocessingAHP.sound`, `ProofView` |
+| 2.2 S2 | Lean | `fs_v2_squeeze_charge`, `fs_query_charge` |
+| 2.3 Compilation | Lean | `V3Endpoint.sound_of_openings`, `matrix_sumcheck_of_selector` |
 | 2.4 PCS properties | Lean (hiding, SE excluded) | `inspectOpening_break`, `inspectDegree_break` |
 | 2.5 PC batching loss | Lean | `batchedOpening_extract`, `acrossPoints_extract` |
 | 3 Fiat–Shamir | Lean | `v2Init_injective`, `fs_query_charge` |

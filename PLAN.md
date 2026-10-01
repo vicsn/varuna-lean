@@ -243,51 +243,43 @@ only on `K`.
 `v3_chain` gives `e = 0` and the unshifted rows; `v3_shifted_residual_ne`
 shows the V2 messages do not make the V3 lineval residual identically
 zero when `e ≠ 0` and `η_A ≠ 1`. `V3Endpoint.sound` composes the `h₀`
-opening reduction, the three matrix sumchecks, and `v3_chain`.
-`sound_r1cs` ends at `satisfies` in either mode. `V2Endpoint.sound`
-is the old composition and stops at the shift. `knowledgeSoundness`
-is the earlier Marlin-shaped statement (three domain identities and a
-zero batch sum). `knowledgeSoundness_rests_on_floors` keeps the floors
-explicit. Probability counts are in `Probability.lean`.
+opening, three matrix domains, and `v3_chain`. The `γ` step is
+`matrixEval` plus `inspectResidual`. `sound_of_openings` reduces `ẑ`,
+`h₁`, `g₁`, and the matrix witnesses. `sound_of_combined_matrix` is the
+`δ` batch. `matrix_sumcheck_of_selector` feeds `batchedSumcheck_extract`
+into `matrix_sumcheck_value_of_sum`. `sound_r1cs` ends at `satisfies` in
+either mode. `V2Endpoint.sound` is the old composition and stops at the
+shift. `knowledgeSoundness` is the earlier Marlin-shaped statement.
+`PreprocessingAHP` is that statement as public-coin rounds, with
+`ProofView` the algebraic projection. `knowledgeSoundness_bls` restates
+it at `ZMod bls12_377_r`, whose primality is a `Fact`.
+`Fingerprint.q_eq_bls12_377_r` shows the captured modulus is
+`bls12_377_r`. `fs_v2_squeeze_charge` reads each V2 squeeze's bad set
+off the transcript and charges it. `knowledgeSoundness_rests_on_floors`
+keeps the floors explicit. Probability counts are in `Probability.lean`.
 
 ---
 
 ## 5. What remains
 
-**Endpoint composition.** `V3Endpoint.sound` still takes as hypotheses:
-
-- openings of `ẑ`, `h₁`, `g₁`, and the matrix witnesses (each reduces
-  the same way as `h₀`, via `value_correct_of_inspect_none`)
-- the matrix residuals themselves (the `γ` step is `matrix_extract`)
-- one `K` for all three matrices, so the selector-batched sumcheck
-  (`batchedSumcheck_extract`) is not composed in
-
-**Fiat–Shamir bad sets.** `fs_break_count` says a V2 output with a
-break at any squeeze is a query hit, if its challenges were answered
-on its queries. No single theorem derives every V2 squeeze’s bad set
-from the transcript.
-
-**Interactive primitive.** Marlin’s public-coin preprocessing argument
-of knowledge is not an interactive object in Lean. The development
-works in the algebraic-adversary projection (`represent`, `ProofView`).
-
 **Faithfulness past the LC layer.** The fingerprint covers zero-eval
-LC coefficients of one captured proof. The group-level MSM / pairing
-assembly is outside Lean. Captured Sage proofs are not pinned. Byte
-encodings stay a floor.
+LC coefficients of one captured V2 proof. The fixture has field elements
+only, so the group-level MSM / pairing assembly is outside Lean. Byte
+encodings stay a floor. Sage proofs are not captured: the Sage
+implementation is a readable PIOP, and the only captured proof is the
+snarkVM fixture.
 
-**Concrete field on the generic statements.** Algebraic theorems are
-over an arbitrary `Field`. The BLS12-377 scalar field is the carrier
-of the fingerprint, not of `V3Endpoint.sound`.
+**Primality of the scalar modulus.** `bls12_377_r` is the BLS12-377
+scalar modulus, and `Fingerprint.q_eq_bls12_377_r` shows the captured
+`q` is that number. `knowledgeSoundness_bls` is the capstone at
+`ZMod bls12_377_r`. That `bls12_377_r` is prime is a `Fact` hypothesis:
+trial division is not a practical kernel proof at this size.
 
 **Named floors, not open proofs.** Poseidon = RO, pairing / trapdoor
 hardness, algebraic adversary, SRS, encodings, index = circuit.
 Zero knowledge (a simulator), hiding, and simulation extractability
-are excluded.
-
-**Proof-map check.** A `book/validate-proof-journey.py` (Ironwood has
-one) should check that every `proven` anchor exists in the Lean sources
-and that every edge’s `via` is a real name. Not written yet.
+are excluded. `PreprocessingAHP` is the public-coin interaction in the
+algebraic projection; it does not carry group elements.
 
 ---
 
@@ -311,7 +303,9 @@ Statuses:
 | `goal` | Advertised capstone |
 
 A node is `proven` only when its `anchor` field names a real
-declaration. `maskSum` is proved for V3 (`v3_chain`). The V2 shift
+declaration. `book/validate-proof-journey.py` checks that every
+`proven` anchor, and every edge `via`, names a declaration in
+`Varuna/`. `maskSum` is proved for V3 (`v3_chain`). The V2 shift
 remains a theorem about that schedule (`v2_chain`).
 
 ---
@@ -331,8 +325,8 @@ Pin sources by commit, not by branch.
 | `fixtures/fingerprint/` | One captured snarkVM V2 proof |
 
 The Sage implementation is single-circuit R1CS with ZK and without
-batching or lookups. Lean should not treat Sage as the deployed
-system: it is the readable PIOP, snarkVM is the verifier of record.
+batching or lookups. It is a readable PIOP, and snarkVM is the verifier
+of record. This project does not capture Sage proofs.
 
 ---
 
