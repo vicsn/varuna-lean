@@ -141,6 +141,21 @@ theorem card_tapes (S : Finset F) : ∀ n, (tapes S n).card = S.card ^ n
       rintro _ ⟨t, _, rfl⟩ ⟨t', _, h⟩
       exact haa' (List.cons.inj h).1.symm
 
+/-- A tape of length `n` has length `n` and entries in `S`. -/
+theorem mem_tapes {S : Finset F} :
+    ∀ {n : ℕ} {t : List F}, t ∈ tapes S n → t.length = n ∧ ∀ a ∈ t, a ∈ S
+  | 0, t, h => by
+    rw [tapes, mem_singleton] at h
+    subst h
+    simp
+  | n + 1, t, h => by
+    simp only [tapes, mem_biUnion, mem_image] at h
+    obtain ⟨a, ha, t', ht', rfl⟩ := h
+    obtain ⟨hlen, hS⟩ := mem_tapes ht'
+    refine ⟨by simp [hlen], ?_⟩
+    simp only [List.mem_cons, forall_eq_or_imp]
+    exact ⟨ha, hS⟩
+
 /-- Whether some answer lands in the bad set of its prefix. -/
 def hitsB (Bad : List F → Finset F) : List F → List F → Bool
   | _, [] => false

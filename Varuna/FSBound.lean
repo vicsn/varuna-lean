@@ -3,7 +3,7 @@ Copyright (c) 2026 Provable Inc.
 Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
-import Varuna.Probability
+import Varuna.Combiners
 
 /-!
 # Fiat–Shamir : charging the adversary per oracle query
@@ -16,14 +16,17 @@ given the answers so far.
 
 Round-by-round soundness supplies, for each query prefix, the bad
 challenges that would let a prover out of a doomed state (for Varuna, the
-roots of the residual the prefix determines, or the one lucky combiner;
-see `Probability.lean`). If each query has at most `b` bad answers in `S`,
+roots of the residual the prefix determines, or the one element that ends
+a weight draw's liveness; see `Probability.lean` and `Combiners.lean`). If
+each query has at most `b` bad answers in `S`,
 at most `Q · b · | S | ^{Q-1}` of the ` | S | ^Q` tapes let the adversary hit one
 (`fs_query_charge`): knowledge error `Q · b / | S | `, as in Ironwood.
 
-`fs_break_count` connects that bound to the V2 transcript : if every
-challenge of the adversary's output was answered on one of its queries, an
-output with a break at any challenge is a hit.
+`fs_break_count` connects that bound to the V2 transcript. A squeeze draws
+one element per oracle query, each prefix extended by the elements before it
+(`squeezeN`, `elemBefore`). If every squeezed element of the adversary's
+output was answered on one of its queries, an output with a break at any
+element is a hit.
 -/
 
 set_option linter.unusedSectionVars false
@@ -72,24 +75,65 @@ theorem fsHits_of_bad (A : FSAdversary F) (Bad : Transcript F → Finset F) {tap
 def v2Challenges : List V2Challenge :=
   [.firstCombiners, .alpha, .prepareThird, .beta, .deltas, .gamma]
 
-/-- Whether the output transcript has a bad challenge at some V2 squeeze. -/
-def outputBreaks (Bad : Transcript F → Finset F) (t : V2Transcript F) (chal : V2Challenge → F) :
-    Bool :=
-  v2Challenges.any fun c => decide (chal c ∈ Bad (t.before c))
+theorem mem_v2Challenges (c : V2Challenge) : c ∈ v2Challenges := by
+  cases c <;> simp [v2Challenges]
 
-/-- Fiat–Shamir knowledge error for V2, counting form. If every challenge of the
-output transcript was answered on one of the adversary's `Q` queries, at most
-`Q · b · | S | ^{Q-1}` tapes yield an output with a break at any squeeze. -/
+/-- Query prefix of the next element of squeeze `c`, after its elements `w` : the
+elements already squeezed are appended as `field` messages, as in `squeezeN`. -/
+def V2Transcript.elemBefore (t : V2Transcript F) (c : V2Challenge) (w : List F) :
+    Transcript F :=
+  t.before c ++ w.map FSMessage.field
+
+/-- Element `j` of a squeeze is the oracle's answer at the prefix extended by the
+elements before it. -/
+theorem squeezeN_getElem (ro : RO F) :
+    ∀ (pre : Transcript F) (n j : ℕ) (hj : j < (squeezeN ro pre n).length),
+      (squeezeN ro pre n)[j] = ro (pre ++ ((squeezeN ro pre n).take j).map FSMessage.field)
+  | pre, 0, j, hj => by simp at hj
+  | pre, n + 1, 0, _ => by simp [squeezeN]
+  | pre, n + 1, j + 1, hj => by
+    have hj' : j < (squeezeN ro (pre ++ [FSMessage.field (ro pre)]) n).length := by
+      rw [squeezeN_length]
+      rw [squeezeN_length] at hj
+      omega
+    simp only [squeezeN, List.getElem_cons_succ, List.take_succ_cons, List.map_cons]
+    rw [squeezeN_getElem ro _ n j hj', List.append_assoc, List.singleton_append]
+
+/-- In an honest transcript, element `j` of squeeze `c` is the oracle at `elemBefore`. -/
+theorem squeezeN_before_getElem (ro : RO F) (t : V2Transcript F) (c : V2Challenge) (n j : ℕ)
+    (hj : j < (squeezeN ro (t.before c) n).length) :
+    (squeezeN ro (t.before c) n)[j] =
+      ro (t.elemBefore c ((squeezeN ro (t.before c) n).take j)) :=
+  squeezeN_getElem ro _ n j hj
+
+/-- Whether some squeezed element of the output lands in the bad set of its query
+prefix. `chal c` lists the elements squeezed at `c`. -/
+def outputBreaks (Bad : Transcript F → Finset F) (t : V2Transcript F)
+    (chal : V2Challenge → List F) : Bool :=
+  v2Challenges.any fun c => hitsB (fun w => Bad (t.elemBefore c w)) [] (chal c)
+
+/-- Every squeezed element of the output was answered on one of the adversary's
+queries, at its `elemBefore` prefix. -/
+def OutputFromQueries (A : FSAdversary F) (tape : List F) (t : V2Transcript F)
+    (chal : V2Challenge → List F) : Prop :=
+  ∀ c j (hj : j < (chal c).length),
+    ChallengeFromQuery A tape (t.elemBefore c ((chal c).take j)) (chal c)[j]
+
+/-- Fiat–Shamir knowledge error for V2, counting form. If every squeezed element of
+the output transcript was answered on one of the adversary's `Q` queries, at most
+`Q · b · | S | ^{Q-1}` tapes yield an output with a break at any element. -/
 theorem fs_break_count (S : Finset F) (A : FSAdversary F) (Bad : Transcript F → Finset F) (b : ℕ)
     (hb : ∀ t, (S.filter (· ∈ Bad t)).card ≤ b) (Q : ℕ) (out : List F → V2Transcript F)
-    (chal : List F → V2Challenge → F)
-    (hcons : ∀ tape ∈ tapes S Q, ∀ c, ChallengeFromQuery A tape ((out tape).before c) (chal tape c)) :
+    (chal : List F → V2Challenge → List F)
+    (hcons : ∀ tape ∈ tapes S Q, OutputFromQueries A tape (out tape) (chal tape)) :
     ((tapes S Q).filter fun tape => outputBreaks Bad (out tape) (chal tape) = true).card ≤
       Q * b * S.card ^ (Q - 1) := by
   refine (card_le_card fun tape htape => ?_).trans (fs_query_charge S A Bad b hb Q)
   obtain ⟨hmem, hbr⟩ := mem_filter.mp htape
   obtain ⟨c, _, hc⟩ := List.any_eq_true.mp hbr
-  exact mem_filter.mpr ⟨hmem, fsHits_of_bad A Bad (hcons tape hmem c) (of_decide_eq_true hc)⟩
+  obtain ⟨j, hj, hbad⟩ := (hitsB_iff _ _ _).mp hc
+  rw [List.nil_append] at hbad
+  exact mem_filter.mpr ⟨hmem, fsHits_of_bad A Bad (hcons tape hmem c j hj) hbad⟩
 
 /-- Distinct absorb prefixes, so a transcript prefix names at most one squeeze. -/
 theorem before_injective (t : V2Transcript F) : Function.Injective t.before := by
@@ -98,43 +142,196 @@ theorem before_injective (t : V2Transcript F) : Function.Injective t.before := b
   rw [before_length, before_length] at hlen
   cases c₁ <;> cases c₂ <;> first | rfl | simp [V2Challenge.prefixAbsorbs] at hlen
 
-theorem before_ne (t : V2Transcript F) {c₁ c₂ : V2Challenge} (h : c₁ ≠ c₂) :
-    t.before c₁ ≠ t.before c₂ :=
-  fun heq => h (before_injective t heq)
+/-- The prover's six round messages, in order. -/
+def V2Transcript.messages (t : V2Transcript F) : List (FSMessage F) :=
+  [t.first, t.second, t.prepareThird, t.third, t.fourth, t.fifth]
 
-/-- Bad answers at each V2 squeeze, read off the residuals and the one-weight
-batches that squeeze determines. `α`, `β`, `γ` are Schwartz–Zippel roots.
-The prepare-third and `δ` squeezes are the single root of `a + η b = 0` on a
-live claim. The first combiners weight the batched rowcheck, whose claims are
-functions on the constraint domain `R` : their bad answers make `a + ν b`
-vanish on all of `R` (`inspectBatchOn`), still at most one. -/
-noncomputable def squeezeBad (S : Finset F) (resα resβ resγ : F[X])
-    (aη bη aδ bδ : F) (R : List F) (aν bν : F → F) : V2Challenge → Finset F
-  | .alpha => S.filter (· ∈ szBadSet resα)
-  | .beta => S.filter (· ∈ szBadSet resβ)
-  | .gamma => S.filter (· ∈ szBadSet resγ)
-  | .prepareThird => S.filter fun η => inspectBatch [1, η] [aη, bη] ≠ none
-  | .deltas => S.filter fun δ => inspectBatch [1, δ] [aδ, bδ] ≠ none
-  | .firstCombiners =>
-    S.filter fun ν => inspectBatchOn R [1, ν] (fun x => [aν x, bν x]) ≠ none
+theorem before_eq_take (t : V2Transcript F) (c : V2Challenge) :
+    t.before c = t.init ++ t.messages.take c.prefixAbsorbs := by
+  cases c <;> rfl
 
-/-- Every squeeze's bad set has size at most `max(deg resα, deg resβ, deg resγ, 1)`. -/
-theorem squeezeBad_card (S : Finset F) (resα resβ resγ : F[X])
-    (aη bη aδ bδ : F) (R : List F) (aν bν : F → F) {b : ℕ}
+theorem prefixAbsorbs_injective : Function.Injective V2Challenge.prefixAbsorbs := by
+  intro c₁ c₂ h
+  cases c₁ <;> cases c₂ <;> first | rfl | simp [V2Challenge.prefixAbsorbs] at h
+
+theorem prefixAbsorbs_le (c : V2Challenge) : c.prefixAbsorbs ≤ 6 := by
+  cases c <;> decide
+
+/-- Squeezed elements stand in for a prover message only if it is a lone `field`. -/
+theorem take_append_fields_ne {l : List (FSMessage F)} (hl : ∀ x, FSMessage.field x ∉ l)
+    {a a' : ℕ} (ha : a < a') (ha' : a' ≤ l.length) (w w' : List F) :
+    l.take a ++ w.map FSMessage.field ≠ l.take a' ++ w'.map FSMessage.field := by
+  intro h
+  have hlt : a < l.length := by omega
+  obtain ⟨k, hk⟩ : ∃ k, a' = a + (k + 1) := ⟨a' - a - 1, by omega⟩
+  rw [hk, List.take_add, List.append_assoc, List.drop_eq_getElem_cons hlt,
+    List.take_succ_cons] at h
+  have hmem : l[a] ∈ w.map FSMessage.field := by
+    rw [List.append_cancel_left h]
+    simp
+  obtain ⟨x, -, hx⟩ := List.mem_map.mp hmem
+  exact hl x (hx ▸ List.getElem_mem hlt)
+
+/-- If no prover message is a lone `field`, a query prefix is an element prefix of at
+most one squeeze. -/
+theorem elemBefore_inj {t : V2Transcript F} (hmsg : ∀ x, FSMessage.field x ∉ t.messages)
+    {c c' : V2Challenge} {w w' : List F} (h : t.elemBefore c w = t.elemBefore c' w') :
+    c = c' := by
+  rw [V2Transcript.elemBefore, V2Transcript.elemBefore, before_eq_take, before_eq_take,
+    List.append_assoc, List.append_assoc] at h
+  have h' := List.append_cancel_left h
+  have hlen : t.messages.length = 6 := rfl
+  rcases lt_trichotomy c.prefixAbsorbs c'.prefixAbsorbs with hlt | heq | hgt
+  · exact absurd h' (take_append_fields_ne hmsg hlt (hlen ▸ prefixAbsorbs_le c') w w')
+  · exact prefixAbsorbs_injective heq
+  · exact absurd h'.symm (take_append_fields_ne hmsg hgt (hlen ▸ prefixAbsorbs_le c) w' w)
+
+/-- The elements of a run of `field` messages. -/
+def fieldRun : Transcript F → Option (List F)
+  | [] => some []
+  | .field x :: ms => (fieldRun ms).map (x :: ·)
+  | _ :: _ => none
+
+theorem fieldRun_map : ∀ w : List F, fieldRun (w.map FSMessage.field) = some w
+  | [] => rfl
+  | x :: w => by simp [fieldRun, fieldRun_map w]
+
+theorem eq_map_field_of_fieldRun :
+    ∀ {ms : Transcript F} {w : List F}, fieldRun ms = some w → ms = w.map FSMessage.field
+  | [], w, h => by
+    simp only [fieldRun, Option.some.injEq] at h
+    simp [← h]
+  | .field x :: ms, w, h => by
+    simp only [fieldRun, Option.map_eq_some_iff] at h
+    obtain ⟨w', hw', rfl⟩ := h
+    simp [eq_map_field_of_fieldRun hw']
+  | .tag _ :: _, _, h => by simp [fieldRun] at h
+  | .fields _ :: _, _, h => by simp [fieldRun] at h
+  | .size _ :: _, _, h => by simp [fieldRun] at h
+
+/-- The elements `w` with `pre = t.elemBefore c w`, if any. -/
+def V2Transcript.decodeAt (t : V2Transcript F) (c : V2Challenge) (pre : Transcript F) :
+    Option (List F) :=
+  if pre.take (t.before c).length = t.before c then fieldRun (pre.drop (t.before c).length)
+  else none
+
+theorem decodeAt_elemBefore (t : V2Transcript F) (c : V2Challenge) (w : List F) :
+    t.decodeAt c (t.elemBefore c w) = some w := by
+  simp [V2Transcript.decodeAt, V2Transcript.elemBefore, fieldRun_map]
+
+theorem eq_elemBefore_of_decodeAt {t : V2Transcript F} {c : V2Challenge} {pre : Transcript F}
+    {w : List F} (h : t.decodeAt c pre = some w) : pre = t.elemBefore c w := by
+  unfold V2Transcript.decodeAt at h
+  split_ifs at h with htake
+  rw [V2Transcript.elemBefore, ← eq_map_field_of_fieldRun h]
+  calc pre = pre.take (t.before c).length ++ pre.drop (t.before c).length :=
+        (List.take_append_drop _ _).symm
+    _ = _ := by rw [htake]
+
+/-- The squeeze and the earlier elements of it that a query prefix names, if any. -/
+def V2Transcript.decodeElem (t : V2Transcript F) (pre : Transcript F) :
+    Option (V2Challenge × List F) :=
+  v2Challenges.findSome? fun c => (t.decodeAt c pre).map (c, ·)
+
+theorem findSome?_eq_of_unique {α β : Type*} {f : α → Option β} {a : α} {b : β}
+    (hfa : f a = some b) (huniq : ∀ a', f a' ≠ none → a' = a) :
+    ∀ {l : List α}, a ∈ l → l.findSome? f = some b
+  | [], h => absurd h List.not_mem_nil
+  | x :: l, h => by
+    by_cases hx : f x = none
+    · have hxa : x ≠ a := fun hxa => by rw [hxa, hfa] at hx; cases hx
+      rw [List.findSome?_cons_of_isNone (by simp [hx])]
+      exact findSome?_eq_of_unique hfa huniq ((List.mem_cons.mp h).resolve_left (Ne.symm hxa))
+    · obtain rfl := huniq x hx
+      rw [List.findSome?_cons_of_isSome (by simp [hfa]), hfa]
+
+theorem decodeElem_elemBefore {t : V2Transcript F} (hmsg : ∀ x, FSMessage.field x ∉ t.messages)
+    (c : V2Challenge) (w : List F) : t.decodeElem (t.elemBefore c w) = some (c, w) := by
+  refine findSome?_eq_of_unique (by simp [decodeAt_elemBefore]) (fun c' hc' => ?_)
+    (mem_v2Challenges c)
+  cases hd : t.decodeAt c' (t.elemBefore c w) with
+  | none => simp [hd] at hc'
+  | some w' => exact (elemBefore_inj hmsg (eq_elemBefore_of_decodeAt hd)).symm
+
+/-- The bad set of a query : the bad set of the squeeze element whose prefix it is,
+given the elements of that squeeze before it. A prefix that is no squeeze element
+contributes nothing. -/
+def prefixBad (t : V2Transcript F) (Bad : V2Challenge → List F → Finset F)
+    (pre : Transcript F) : Finset F :=
+  match t.decodeElem pre with
+  | some (c, w) => Bad c w
+  | none => ∅
+
+theorem prefixBad_elemBefore {t : V2Transcript F} (hmsg : ∀ x, FSMessage.field x ∉ t.messages)
+    (Bad : V2Challenge → List F → Finset F) (c : V2Challenge) (w : List F) :
+    prefixBad t Bad (t.elemBefore c w) = Bad c w := by
+  rw [prefixBad, decodeElem_elemBefore hmsg]
+
+theorem card_filter_prefixBad_le {t : V2Transcript F} {Bad : V2Challenge → List F → Finset F}
+    {S : Finset F} {b : ℕ} (hb : ∀ c w, (S.filter (· ∈ Bad c w)).card ≤ b) (pre : Transcript F) :
+    (S.filter (· ∈ prefixBad t Bad pre)).card ≤ b := by
+  unfold prefixBad
+  split
+  · exact hb _ _
+  · simp
+
+/-- A squeezed element of `t` in its bad set makes the output `t` break. -/
+theorem outputBreaks_of_mem_bad {t : V2Transcript F}
+    (hmsg : ∀ x, FSMessage.field x ∉ t.messages) {Bad : V2Challenge → List F → Finset F}
+    {chal : V2Challenge → List F} {c : V2Challenge} {j : ℕ} (hj : j < (chal c).length)
+    (hbad : (chal c)[j] ∈ Bad c ((chal c).take j)) :
+    outputBreaks (prefixBad t Bad) t chal = true :=
+  List.any_eq_true.mpr ⟨c, mem_v2Challenges c, (hitsB_iff _ _ _).mpr
+    ⟨j, hj, by rwa [List.nil_append, prefixBad_elemBefore hmsg]⟩⟩
+
+/-- A lucky weight draw at a squeeze of `t` makes the output `t` break. -/
+theorem outputBreaks_of_lucky {t : V2Transcript F} (hmsg : ∀ x, FSMessage.field x ∉ t.messages)
+    {S : Finset F} {Bad : V2Challenge → List F → Finset F} {d : WeightDraw F} {c : V2Challenge}
+    (hc : Bad c = d.bad S) {chal : V2Challenge → List F} (hl : d.Lucky (chal c))
+    (hS : ∀ a ∈ chal c, a ∈ S) : outputBreaks (prefixBad t Bad) t chal = true := by
+  obtain ⟨j, hj, hbad⟩ := d.exists_bad_of_lucky hl hS
+  exact outputBreaks_of_mem_bad hmsg hj (hc ▸ hbad)
+
+/-- Schwartz–Zippel roots of `res`, at the one element of a single-element squeeze. -/
+noncomputable def szAt (S : Finset F) (res : F[X]) (w : List F) : Finset F :=
+  if w = [] then S.filter (· ∈ szBadSet res) else ∅
+
+theorem card_szAt_le (S : Finset F) (res : F[X]) (w : List F) :
+    (szAt S res w).card ≤ res.natDegree := by
+  unfold szAt
+  split_ifs
+  · exact (card_filter_mem_le _ _).trans (card_szBadSet_le_natDegree res)
+  · simp
+
+/-- Bad answers at each V2 squeeze element. `α`, `β`, `γ` are single elements with
+Schwartz–Zippel roots as bad set. The combiner squeezes draw several elements;
+the bad set of each is the elements that end liveness of that squeeze's weight
+draw (`WeightDraw.bad`), at most one. -/
+noncomputable def squeezeBad (S : Finset F) (resα resβ resγ : F[X]) (dν dη dδ : WeightDraw F) :
+    V2Challenge → List F → Finset F
+  | .alpha => szAt S resα
+  | .beta => szAt S resβ
+  | .gamma => szAt S resγ
+  | .firstCombiners => dν.bad S
+  | .prepareThird => dη.bad S
+  | .deltas => dδ.bad S
+
+/-- Every squeeze element's bad set has size at most
+`max(deg resα, deg resβ, deg resγ, 1)`. -/
+theorem squeezeBad_card (S : Finset F) (resα resβ resγ : F[X]) (dν dη dδ : WeightDraw F)
+    (hν : ∀ x ∈ dν.D, CoordAffine (dν.comb x)) (hη : ∀ x ∈ dη.D, CoordAffine (dη.comb x))
+    (hδ : ∀ x ∈ dδ.D, CoordAffine (dδ.comb x)) {b : ℕ}
     (hα : resα.natDegree ≤ b) (hβ : resβ.natDegree ≤ b) (hγ : resγ.natDegree ≤ b)
     (hb : 1 ≤ b) :
-    ∀ c, (squeezeBad S resα resβ resγ aη bη aδ bδ R aν bν c).card ≤ b := by
-  intro c
+    ∀ c w, (squeezeBad S resα resβ resγ dν dη dδ c w).card ≤ b := by
+  intro c w
   cases c with
-  | alpha =>
-    exact (card_filter_mem_le _ _).trans ((card_szBadSet_le_natDegree resα).trans hα)
-  | beta =>
-    exact (card_filter_mem_le _ _).trans ((card_szBadSet_le_natDegree resβ).trans hβ)
-  | gamma =>
-    exact (card_filter_mem_le _ _).trans ((card_szBadSet_le_natDegree resγ).trans hγ)
-  | prepareThird => exact (card_filter_inspectBatch_pair aη bη S).trans hb
-  | deltas => exact (card_filter_inspectBatch_pair aδ bδ S).trans hb
-  | firstCombiners => exact (card_filter_inspectBatchOn_pair R aν bν S).trans hb
+  | alpha => exact (card_szAt_le S resα w).trans hα
+  | beta => exact (card_szAt_le S resβ w).trans hβ
+  | gamma => exact (card_szAt_le S resγ w).trans hγ
+  | firstCombiners => exact (dν.card_bad_le_one hν S w).trans hb
+  | prepareThird => exact (dη.card_bad_le_one hη S w).trans hb
+  | deltas => exact (dδ.card_bad_le_one hδ S w).trans hb
 
 /-- Outside a squeeze's Schwartz–Zippel set, an accepting evaluation is a zero residual. -/
 theorem squeeze_safe_residual {res : F[X]} {α : F} (hα : α ∉ szBadSet res)
@@ -144,101 +341,48 @@ theorem squeeze_safe_residual {res : F[X]} {α : F} (hα : α ∉ szBadSet res)
     exact eval_ne_zero_of_notMem_szBadSet hne hα hacc
   exact inspectResidual_eq_none_of_zero h0
 
-/-- The bad set of a query is the bad set of the squeeze whose prefix it is.
-A prefix that is none of the six squeezes contributes nothing. -/
-noncomputable def prefixBad (t : V2Transcript F) (Bad : V2Challenge → Finset F)
-    (pre : Transcript F) : Finset F :=
-  if t.before .firstCombiners = pre then Bad .firstCombiners
-  else if t.before .alpha = pre then Bad .alpha
-  else if t.before .prepareThird = pre then Bad .prepareThird
-  else if t.before .beta = pre then Bad .beta
-  else if t.before .deltas = pre then Bad .deltas
-  else if t.before .gamma = pre then Bad .gamma
-  else ∅
-
-theorem prefixBad_before (t : V2Transcript F) (Bad : V2Challenge → Finset F) (c : V2Challenge) :
-    prefixBad t Bad (t.before c) = Bad c := by
-  cases c with
-  | firstCombiners => simp [prefixBad]
-  | alpha =>
-    simp only [prefixBad]
-    rw [if_neg (before_ne t (by decide : V2Challenge.firstCombiners ≠ .alpha))]
-    rw [if_true]
-  | prepareThird =>
-    simp only [prefixBad]
-    rw [if_neg (before_ne t (by decide : V2Challenge.firstCombiners ≠ .prepareThird))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.alpha ≠ .prepareThird))]
-    rw [if_true]
-  | beta =>
-    simp only [prefixBad]
-    rw [if_neg (before_ne t (by decide : V2Challenge.firstCombiners ≠ .beta))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.alpha ≠ .beta))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.prepareThird ≠ .beta))]
-    rw [if_true]
-  | deltas =>
-    simp only [prefixBad]
-    rw [if_neg (before_ne t (by decide : V2Challenge.firstCombiners ≠ .deltas))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.alpha ≠ .deltas))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.prepareThird ≠ .deltas))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.beta ≠ .deltas))]
-    rw [if_true]
-  | gamma =>
-    simp only [prefixBad]
-    rw [if_neg (before_ne t (by decide : V2Challenge.firstCombiners ≠ .gamma))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.alpha ≠ .gamma))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.prepareThird ≠ .gamma))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.beta ≠ .gamma))]
-    rw [if_neg (before_ne t (by decide : V2Challenge.deltas ≠ .gamma))]
-    rw [if_true]
-
-/-- A challenge outside its squeeze's bad set is outside the prefix bad set. -/
-theorem not_mem_prefixBad_of_not_mem {t : V2Transcript F} {Bad : V2Challenge → Finset F}
-    {c : V2Challenge} {x : F} (hx : x ∉ Bad c) :
-    x ∉ prefixBad t Bad (t.before c) := by
-  rw [prefixBad_before]
-  exact hx
-
-/-- Query charging for the six V2 squeezes. `squeezeBad_card` supplies `b`. -/
+/-- Query charging for the V2 squeezes, element by element. `squeezeBad_card`
+supplies `b`. -/
 theorem fs_squeeze_charge (S : Finset F) (A : FSAdversary F) (t : V2Transcript F)
-    (Bad : V2Challenge → Finset F) (b : ℕ)
-    (hb : ∀ c, (S.filter (· ∈ Bad c)).card ≤ b) (Q : ℕ) (out : List F → V2Transcript F)
-    (chal : List F → V2Challenge → F)
-    (hcons : ∀ tape ∈ tapes S Q, ∀ c,
-      ChallengeFromQuery A tape ((out tape).before c) (chal tape c)) :
+    (Bad : V2Challenge → List F → Finset F) (b : ℕ)
+    (hb : ∀ c w, (S.filter (· ∈ Bad c w)).card ≤ b) (Q : ℕ) (out : List F → V2Transcript F)
+    (chal : List F → V2Challenge → List F)
+    (hcons : ∀ tape ∈ tapes S Q, OutputFromQueries A tape (out tape) (chal tape)) :
     ((tapes S Q).filter fun tape =>
       outputBreaks (prefixBad t Bad) (out tape) (chal tape) = true).card ≤
-      Q * b * S.card ^ (Q - 1) := by
-  have hcard : ∀ pre, (S.filter (· ∈ prefixBad t Bad pre)).card ≤ b := by
-    intro pre
-    unfold prefixBad
-    split_ifs
-    · exact hb .firstCombiners
-    · exact hb .alpha
-    · exact hb .prepareThird
-    · exact hb .beta
-    · exact hb .deltas
-    · exact hb .gamma
-    · simp
-  exact fs_break_count S A (prefixBad t Bad) b hcard Q out chal hcons
+      Q * b * S.card ^ (Q - 1) :=
+  fs_break_count S A (prefixBad t Bad) b (card_filter_prefixBad_le hb) Q out chal hcons
 
-/-- The six V2 squeezes, with bad sets read off the residuals and the
-one-weight batches (the first combiners' on all of `R`), charged as one
-query-bounded break count. -/
+/-- The V2 squeezes, element by element, with bad sets read off the residuals and
+the three weight draws, charged as one query-bounded break count. -/
 theorem fs_v2_squeeze_charge (S : Finset F) (A : FSAdversary F) (t : V2Transcript F)
-    (resα resβ resγ : F[X]) (aη bη aδ bδ : F) (R : List F) (aν bν : F → F) {b : ℕ}
+    (resα resβ resγ : F[X]) (dν dη dδ : WeightDraw F)
+    (hν : ∀ x ∈ dν.D, CoordAffine (dν.comb x)) (hη : ∀ x ∈ dη.D, CoordAffine (dη.comb x))
+    (hδ : ∀ x ∈ dδ.D, CoordAffine (dδ.comb x)) {b : ℕ}
     (hα : resα.natDegree ≤ b) (hβ : resβ.natDegree ≤ b) (hγ : resγ.natDegree ≤ b)
     (hb : 1 ≤ b) (Q : ℕ) (out : List F → V2Transcript F)
-    (chal : List F → V2Challenge → F)
-    (hcons : ∀ tape ∈ tapes S Q, ∀ c,
-      ChallengeFromQuery A tape ((out tape).before c) (chal tape c)) :
+    (chal : List F → V2Challenge → List F)
+    (hcons : ∀ tape ∈ tapes S Q, OutputFromQueries A tape (out tape) (chal tape)) :
     ((tapes S Q).filter fun tape =>
-      outputBreaks (prefixBad t (squeezeBad S resα resβ resγ aη bη aδ bδ R aν bν))
+      outputBreaks (prefixBad t (squeezeBad S resα resβ resγ dν dη dδ))
         (out tape) (chal tape) = true).card ≤
-      Q * b * S.card ^ (Q - 1) := by
-  refine fs_squeeze_charge S A t (squeezeBad S resα resβ resγ aη bη aδ bδ R aν bν) b ?_ Q out chal
-    hcons
-  intro c
-  exact (card_filter_mem_le _ _).trans
-    (squeezeBad_card S resα resβ resγ aη bη aδ bδ R aν bν hα hβ hγ hb c)
+      Q * b * S.card ^ (Q - 1) :=
+  fs_squeeze_charge S A t _ b (fun c w => (card_filter_mem_le _ _).trans
+    (squeezeBad_card S resα resβ resγ dν dη dδ hν hη hδ hα hβ hγ hb c w)) Q out chal hcons
+
+/-- `batchedZerocheck_extract` needs no lucky combination on all of `H`. With the
+first-round combiners of the output `t` as weights `ν_i τ_{i,j}`, a lucky one makes
+`t` break at the first-combiners squeeze. -/
+theorem outputBreaks_of_rowcheck_lucky {t : V2Transcript F}
+    (hmsg : ∀ x, FSMessage.field x ∉ t.messages) {S : Finset F} (resα resβ resγ : F[X])
+    {H : EvalDomain F} {sizes : List ℕ} {cs : List (EvalDomain F × F[X])}
+    (hcs : cs.length ≤ (sizes.map (· - 1 + 1)).sum) (dη dδ : WeightDraw F)
+    {chal : V2Challenge → List F} (hlen : (chal .firstCombiners).length = combinerDraws sizes)
+    (hS : ∀ a ∈ chal .firstCombiners, a ∈ S)
+    (h : inspectBatchOn H.nodeList (schemeWeights (combinerScheme sizes) (chal .firstCombiners))
+      (batchedClaims H cs) ≠ none) :
+    outputBreaks (prefixBad t (squeezeBad S resα resβ resγ (rowcheckDraw H sizes cs) dη dδ)) t
+      chal = true :=
+  outputBreaks_of_lucky hmsg rfl (rowcheckDraw_lucky hcs hlen h) hS
 
 end Varuna

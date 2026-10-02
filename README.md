@@ -26,8 +26,9 @@ opening, one nonzero domain per matrix, and `v3_chain`.
 `sound_of_openings` reduces `ẑ`, `h₁`, `g₁`, and the matrix witnesses;
 `sound_of_combined_matrix` is the `δ` batch; `matrix_sumcheck_of_selector`
 is the selector-batched sum. `fs_v2_squeeze_charge` charges every
-squeeze, and `PreprocessingAHP` is the public-coin argument in the
-algebraic projection. `sound_r1cs` ends at the R1CS relation.
+squeezed element, with snarkVM's batch weights `ν_i τ_{i,j}` counted one
+drawn element at a time. `PreprocessingAHP` is the public-coin argument
+in the algebraic projection. `sound_r1cs` ends at the R1CS relation.
 The PC layer is proved under an algebraic adversary (trapdoor breaks),
 probabilities are counted per challenge and per oracle query, and the
 Fiat–Shamir prefix binds the public inputs. `ahp_error_concrete` states
@@ -92,6 +93,7 @@ Varuna/
   Batching.lean                     -- multi-circuit combiners, selectors
   Selectors.lean                    -- selector = indicator; batched checks
   Probability.lean                  -- bad-challenge counts, adaptive union bound
+  Combiners.lean                    -- batch weights drawn element by element
   Degree.lean                       -- concrete residual degrees in ahp_error
   FSBound.lean                      -- Fiat–Shamir query charging
   Statement.lean                    -- init_sponge binds the public inputs
