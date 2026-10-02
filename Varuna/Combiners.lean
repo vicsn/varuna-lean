@@ -689,4 +689,82 @@ theorem card_filter_batchedMatrix_deltas_le (K : EvalDomain F) (n : ℕ)
   card_filter_inspectBatchOn_scheme_le (deltaScheme_valid n) _ _
     (fun x _ => by simpa [batchedClaims, length_deltaScheme] using hcs) S
 
+/-- Weight `1` on the first claim, then `w η_A, w η_B, w η_C` for each `w` of `ws`. -/
+def etaWeights (ws : List F) (ηA ηB ηC : F) : List F :=
+  1 :: ws.flatMap fun w => [w * ηA, w * ηB, w * ηC]
+
+/-- snarkVM's V3 lineval weights (`ahp.rs:316-363`) : `1` on the mask sum, then
+`μ_i ρ_{i,j} η_M` on matrix `M` of instance `(i, j)`, from the prepare-third
+draw. -/
+def linevalScheme (sizes : List ℕ) : List (List ℕ) :=
+  [] :: prepareThirdScheme sizes (freeScheme 3)
+
+theorem SchemeValid.cons_nil {k : ℕ} {sch : List (List ℕ)} (h : SchemeValid k sch)
+    (hne : [] ∉ sch) : SchemeValid k ([] :: sch) where
+  nodup m hm := by
+    rcases List.mem_cons.mp hm with rfl | hm
+    exacts [List.nodup_nil, h.nodup m hm]
+  lt m hm := by
+    rcases List.mem_cons.mp hm with rfl | hm
+    exacts [by simp, h.lt m hm]
+  distinct := by
+    rw [List.map_cons, List.nodup_cons]
+    refine ⟨fun hmem => ?_, h.distinct⟩
+    obtain ⟨m, hm, hm0⟩ := List.mem_map.mp hmem
+    exact hne ((List.toFinset_eq_empty_iff m).mp (by simpa using hm0) ▸ hm)
+
+theorem nil_not_mem_prepareThirdScheme (sizes : List ℕ) :
+    [] ∉ prepareThirdScheme sizes (freeScheme 3) := by
+  simp [prepareThirdScheme, productScheme, freeScheme, shiftMono]
+
+theorem linevalScheme_valid (sizes : List ℕ) :
+    SchemeValid (combinerDraws sizes + 3) (linevalScheme sizes) :=
+  (prepareThirdScheme_valid sizes (freeScheme_valid 3)).cons_nil
+    (nil_not_mem_prepareThirdScheme sizes)
+
+theorem length_linevalScheme (sizes : List ℕ) :
+    (linevalScheme sizes).length = (sizes.map (· - 1 + 1)).sum * 3 + 1 := by
+  simp [linevalScheme, prepareThirdScheme, length_productScheme, length_combinerScheme,
+    freeScheme]
+
+/-- The lineval weights are the third-round combiners times the `η`s, after a `1`. -/
+theorem schemeWeights_linevalScheme (sizes : List ℕ) (ws : List F) :
+    schemeWeights (linevalScheme sizes) ws =
+      etaWeights (schemeWeights (combinerScheme sizes) ws) (ws.getD (combinerDraws sizes) 0)
+        (ws.getD (combinerDraws sizes + 1) 0) (ws.getD (combinerDraws sizes + 2) 0) := by
+  simp [linevalScheme, etaWeights, schemeWeights, prepareThirdScheme, productScheme, freeScheme,
+    shiftMono, List.map_flatMap, List.flatMap_map, monoEval, List.range_succ]
+
+/-- The prepare-third draw : the lineval claims `cs` (the mask sum, then three per
+instance), weighted by `linevalScheme`. -/
+noncomputable def linevalDraw (sizes : List ℕ) (cs : List F) : WeightDraw F :=
+  schemeDraw (combinerDraws sizes + 3) (linevalScheme sizes) [0] fun _ => cs
+
+theorem linevalDraw_coordAffine (sizes : List ℕ) (cs : List F) :
+    ∀ x ∈ (linevalDraw sizes cs).D, CoordAffine ((linevalDraw sizes cs).comb x) :=
+  schemeDraw_coordAffine (linevalScheme_valid sizes).nodup _ _
+
+/-- The lucky event of the batched lineval on snarkVM's weights is a lucky
+prepare-third draw. -/
+theorem linevalDraw_lucky {sizes : List ℕ} {cs : List F}
+    (hcs : cs.length ≤ (sizes.map (· - 1 + 1)).sum * 3 + 1) {ws : List F}
+    (hws : ws.length = combinerDraws sizes + 3)
+    (h : inspectBatch (schemeWeights (linevalScheme sizes) ws) cs ≠ none) :
+    (linevalDraw sizes cs).Lucky ws := by
+  obtain ⟨hzero, hlive⟩ := (inspectBatch_ne_none_iff _ _).1 h
+  exact schemeDraw_lucky (linevalScheme_valid sizes)
+    (fun _ _ => by rwa [length_linevalScheme]) hws
+    ((inspectBatchOn_ne_none_iff _ _ _).2 ⟨by simpa using hzero, 0, by simp, hlive⟩)
+
+/-- The batched lineval over circuits with `sizes` instances : over all draws of
+the prepare-third elements, at most `k · | S | ^{k-1}` are lucky, with `k` the
+number of combiners plus the three `η`s. -/
+theorem card_filter_lineval_weights_le (sizes : List ℕ) (cs : List F)
+    (hcs : cs.length ≤ (sizes.map (· - 1 + 1)).sum * 3 + 1) (S : Finset F) :
+    ((tapes S (combinerDraws sizes + 3)).filter fun ws =>
+      inspectBatch (schemeWeights (linevalScheme sizes) ws) cs ≠ none).card ≤
+      (combinerDraws sizes + 3) * S.card ^ (combinerDraws sizes + 3 - 1) :=
+  card_filter_inspectBatch_scheme_le (linevalScheme_valid sizes) cs
+    (by rwa [length_linevalScheme]) S
+
 end Varuna

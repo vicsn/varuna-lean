@@ -400,4 +400,29 @@ theorem outputBreaks_of_matrix_lucky {t : V2Transcript F}
       chal = true :=
   outputBreaks_of_lucky hmsg rfl (deltaDraw_lucky hcs hlen h) hS
 
+/-- An output with no break leaves the residual of a single-element squeeze with
+no Schwartz–Zippel break at its element. -/
+theorem inspectResidual_eq_none_of_no_break {t : V2Transcript F}
+    (hmsg : ∀ x, FSMessage.field x ∉ t.messages) {S : Finset F}
+    {Bad : V2Challenge → List F → Finset F} {chal : V2Challenge → List F} {c : V2Challenge}
+    {res : F[X]} {α : F} (hc : Bad c = szAt S res) (hα : chal c = [α]) (hS : α ∈ S)
+    (hnb : outputBreaks (prefixBad t Bad) t chal = false) : inspectResidual res α = none := by
+  have hbad : α ∉ szBadSet res := fun h => by
+    have hj : 0 < (chal c).length := by simp [hα]
+    have hmem : (chal c)[0] ∈ Bad c ((chal c).take 0) := by
+      simp [hα, hc, szAt, hS, h]
+    rw [outputBreaks_of_mem_bad hmsg hj hmem] at hnb
+    cases hnb
+  by_cases h0 : res = 0
+  · exact inspectResidual_eq_none_of_zero h0
+  · simp [inspectResidual, h0, eval_ne_zero_of_notMem_szBadSet h0 hbad]
+
+/-- An output with no break draws no lucky weights at a squeeze. -/
+theorem not_lucky_of_no_break {t : V2Transcript F} (hmsg : ∀ x, FSMessage.field x ∉ t.messages)
+    {S : Finset F} {Bad : V2Challenge → List F → Finset F} {d : WeightDraw F} {c : V2Challenge}
+    (hc : Bad c = d.bad S) {chal : V2Challenge → List F} (hS : ∀ a ∈ chal c, a ∈ S)
+    (hnb : outputBreaks (prefixBad t Bad) t chal = false) : ¬d.Lucky (chal c) := fun hl => by
+  rw [outputBreaks_of_lucky hmsg hc hl hS] at hnb
+  cases hnb
+
 end Varuna

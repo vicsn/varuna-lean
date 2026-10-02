@@ -29,6 +29,7 @@ import Varuna.Soundness
 import Varuna.Composition
 import Varuna.Bridge
 import Varuna.Endpoint
+import Varuna.BatchEndpoint
 import Varuna.Fingerprint
 import Varuna.SpotCheck
 import Varuna.ProofSize

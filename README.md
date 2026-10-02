@@ -25,10 +25,15 @@ sum equal to zero, in either mode. `V3Endpoint.sound` composes the `h₀`
 opening, one nonzero domain per matrix, and `v3_chain`.
 `sound_of_openings` reduces `ẑ`, `h₁`, `g₁`, and the matrix witnesses;
 `sound_of_combined_matrix` is the `δ` batch; `matrix_sumcheck_of_selector`
-is the selector-batched sum. `V3Circuit.sound_of_batched_matrix` takes
-snarkVM's one `matrix_sumcheck` over every matrix of every circuit
-(selectors, `δ`s, one `h₂`) to each circuit's matrix claims and its
-`v3_chain` conclusion. `fs_v2_squeeze_charge` charges every
+is the selector-batched sum. `V3Batch.sound` is the endpoint for a
+batch of circuits and instances as snarkVM runs it: the rowcheck,
+lineval, and matrix checks are each one LC over the whole batch
+(selectors, snarkVM's combiners, one quotient), and together they give
+every instance `Az ∘ Bz = Cz` on its circuit's constraint domain.
+`V3Batch.sound_of_transcript` reads the challenges and weights off a V3
+transcript's squeezes, takes "no squeezed element is in its bad set" as
+its one Fiat–Shamir hypothesis, and proves the relation for the
+statement the transcript absorbs. `fs_v2_squeeze_charge` charges every
 squeezed element, with snarkVM's batch weights `ν_i τ_{i,j}` counted one
 drawn element at a time. `PreprocessingAHP` is the public-coin argument
 in the algebraic projection. `sound_r1cs` ends at the R1CS relation.
@@ -53,6 +58,11 @@ The interactive picture is the
   encodings stay a floor. Sage proofs are not captured in this project.
 - `knowledgeSoundness_bls` states the capstone at `ZMod bls12_377_r`.
   Primality of that modulus is a `Fact`, not a kernel proof.
+- `fs_v2_squeeze_charge` counts bad sets fixed before the oracle tape,
+  for one transcript. The batch's bad sets depend on earlier challenges,
+  which query prefixes do not carry, so the no-break hypothesis of
+  `V3Batch.sound_of_transcript` is not yet charged against an adaptive
+  adversary. This is a modelling gap, not a floor.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
   and index = circuit stay floors. The AHP simulator programs one
   opening and absorbs the witness into the ZK mask. A constant blinding
@@ -106,6 +116,7 @@ Varuna/
   Composition.lean                  -- v3_chain: mask sum zero and Az ∘ Bz = Cz
   Bridge.lean                       -- Int R1CS ↔ ZMod p; satisfies from rows
   Endpoint.lean                     -- PC reduction + matrix sumchecks + v3_chain
+  BatchEndpoint.lean                -- the V3 endpoint batched over circuits and instances
   Fingerprint.lean                  -- captured snarkVM batch proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
