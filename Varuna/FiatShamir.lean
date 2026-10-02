@@ -18,8 +18,8 @@ runs, as an absorb/squeeze transcript, and proves :
   is computed data (`inspectFork`)
 
 Forks and collisions are computed data. Query charging of those breaks is
-`Varuna.FSBound`. No single theorem yet derives every V2 squeeze's bad set
-from the transcript.
+`Varuna.FSBound`. `Varuna.BatchFS` derives every V3 squeeze's bad set from
+its query, the history before it.
 -/
 
 set_option linter.unusedSectionVars false

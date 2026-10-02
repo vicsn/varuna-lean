@@ -30,6 +30,8 @@ import Varuna.Composition
 import Varuna.Bridge
 import Varuna.Endpoint
 import Varuna.BatchEndpoint
+import Varuna.AdaptiveFS
+import Varuna.BatchFS
 import Varuna.Fingerprint
 import Varuna.SpotCheck
 import Varuna.ProofSize

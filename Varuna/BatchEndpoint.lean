@@ -32,10 +32,16 @@ gives each circuit's ` | K_M | σ_M = M̂(α, β)` (`batchedMatrix_extract`); th
 lineval, given those, gives each instance's `σ_M` as its lineval target; the
 rowcheck, given those, gives the rows (`batchedZerocheck_extract`).
 
+`V3Batch.sound_of_openings` runs the lineval and matrix LCs on the values the
+verifier reads : the opened `s(β)`, `ŵ_{i,j}(β)`, `h₁(β)`, `g₁(β)`,
+`g_{M,i}(γ)`, `h₂(γ)`, with `ẑ_{i,j}(β) = x̂_{i,j}(β) + v_{X_i}(β) ŵ_{i,j}(β)`
+from the public input. An opening with no break (`OpenedAt`) is the
+polynomial's value, so these are the LCs `sound` consumes.
+
 `V3Batch.sound_of_transcript` reads the challenges and weights off the
 squeezes of a V3 transcript with snarkVM's schemes, and replaces the six
 break hypotheses with one : the output does not break
-(`outputBreaks … = false`, the event `fs_v2_squeeze_charge` counts). The
+(`outputBreaks … = false`, charged in `V3Batch.adaptive_soundness`). The
 transcript's init absorbs the batch's statement (`v3Init`), so the relation
 holds for the one statement the transcript binds, each instance's `ẑ` equal
 to its public input on the input domain.
@@ -49,6 +55,27 @@ namespace Varuna
 
 variable {F : Type*} [Field F]
 
+/-- A matrix term's summand in `matrix_sumcheck` at `γ` on `K`, with `g(γ)` read as `vg`. -/
+noncomputable def MatrixTerm.summandAt (K : EvalDomain F) (t : MatrixTerm F) (γ vg : F) : F :=
+  (selectorPoly K t.K).eval γ * (t.a.eval γ - t.b.eval γ * (γ * vg + t.σ))
+
+/-- `v` opens `p` at `z` with no break : `p` is the polynomial of a representation
+whose opening at `z` to `v` inspection passes. -/
+def OpenedAt [DecidableEq F] (p : F[X]) (z v : F) : Prop :=
+  ∃ rep q : List F, p = toPoly rep ∧ inspectOpening rep q z v = none
+
+theorem OpenedAt.eq_eval [DecidableEq F] {p : F[X]} {z v : F} (h : OpenedAt p z v) :
+    v = p.eval z := by
+  obtain ⟨rep, q, rfl, h⟩ := h
+  exact value_correct_of_inspect_none h
+
+theorem flatMap_congr_mem {α β : Type*} {l : List α} {f g : α → List β}
+    (h : ∀ a ∈ l, f a = g a) : l.flatMap f = l.flatMap g := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    simp only [List.flatMap_cons, h a (by simp), ih fun b hb => h b (by simp [hb])]
+
 /-- One instance of a circuit in a V3 batch. -/
 structure BatchInstance (F : Type*) [Field F] where
   /-- Formatted public input. -/
@@ -61,6 +88,8 @@ structure BatchInstance (F : Type*) [Field F] where
   σB : F
   /-- Prepare-third sum for `C`. -/
   σC : F
+  /-- Opened `ŵ(β)`. -/
+  vw : F
 
 /-- One circuit of a V3 batch, with its instances. -/
 structure BatchCircuit (F : Type*) [Field F] where
@@ -94,6 +123,12 @@ structure BatchCircuit (F : Type*) [Field F] where
   σmB : F
   /-- Fourth-round sum for `C`. -/
   σmC : F
+  /-- Opened `g_A(γ)`. -/
+  vgA : F
+  /-- Opened `g_B(γ)`. -/
+  vgB : F
+  /-- Opened `g_C(γ)`. -/
+  vgC : F
   /-- The instances, in order. -/
   insts : List (BatchInstance F)
 
@@ -123,6 +158,13 @@ noncomputable def target (x : BatchInstance F) (M : SparseMatrix F) (α : F) : F
 def matrixTerms (α β : F) : List (MatrixTerm F) :=
   [⟨c.R, c.Cd, c.KA, c.A, α, β, c.gA, c.σmA⟩, ⟨c.R, c.Cd, c.KB, c.B, α, β, c.gB, c.σmB⟩,
     ⟨c.R, c.Cd, c.KC, c.Cm, α, β, c.gC, c.σmC⟩]
+
+/-- The circuit's three `matrix_sumcheck` summands at `γ` on `K`, from the opened
+`g_M(γ)`. -/
+noncomputable def matrixSummands (K : EvalDomain F) (α β γ : F) : List F :=
+  [MatrixTerm.summandAt K ⟨c.R, c.Cd, c.KA, c.A, α, β, c.gA, c.σmA⟩ γ c.vgA,
+    MatrixTerm.summandAt K ⟨c.R, c.Cd, c.KB, c.B, α, β, c.gB, c.σmB⟩ γ c.vgB,
+    MatrixTerm.summandAt K ⟨c.R, c.Cd, c.KC, c.Cm, α, β, c.gC, c.σmC⟩ γ c.vgC]
 
 theorem sum_linPoly {c : BatchCircuit F} (hA : c.A.Bounded c.R c.Cd)
     (hB : c.B.Bounded c.R c.Cd) (hC : c.Cm.Bounded c.R c.Cd) (x : BatchInstance F)
@@ -170,6 +212,14 @@ structure V3Batch (F : Type*) [Field F] where
   ηB : F
   /-- Lineval weight of `C`. -/
   ηC : F
+  /-- Opened mask `s(β)`. -/
+  vMask : F
+  /-- Opened `h₁(β)`. -/
+  vH1 : F
+  /-- Opened `g₁(β)`. -/
+  vG1 : F
+  /-- Opened `h₂(γ)`. -/
+  vH2 : F
 
 namespace V3Batch
 
@@ -430,6 +480,85 @@ theorem sound (rowWs linWs δs : List F)
     mzPoly_eval_node _ _ _ _ hr] at h
   exact sub_eq_zero.mp h
 
+/-- snarkVM's `lineval_sumcheck` at `β` on the opened values, with
+`ẑ(β) = x̂(β) + v_X(β) ŵ(β)` from the public input. -/
+noncomputable def linOpenedEval (ws : List F) : F :=
+  P.vMask +
+      weightedSum ws (P.instances.map fun p => (selectorPoly P.Cd p.1.Cd).eval P.β *
+        ((P.ηA * ((p.1.KA.n : F) * p.1.σmA) + P.ηB * ((p.1.KB.n : F) * p.1.σmB) +
+          P.ηC * ((p.1.KC.n : F) * p.1.σmC)) *
+          ((p.1.Xd.interpolate fun k => p.2.x.getD k 0).eval P.β +
+            p.1.Xd.vanishing.eval P.β * p.2.vw))) -
+    P.vH1 * P.Cd.vanishing.eval P.β - P.β * P.vG1 - P.linSum ws * P.Cd.sizeInv
+
+/-- snarkVM's `matrix_sumcheck` at `γ` on the opened values. -/
+noncomputable def matOpenedEval (δs : List F) : F :=
+  weightedSum δs (P.circuits.flatMap fun c => c.matrixSummands P.K P.α P.β P.γ) -
+    P.vH2 * P.K.vanishing.eval P.γ
+
+/-- Every polynomial the lineval and matrix checks read, opened with no break. -/
+structure Openings : Prop where
+  mask : OpenedAt (maskPoly P.mode P.mask) P.β P.vMask
+  h1 : OpenedAt P.h1 P.β P.vH1
+  g1 : OpenedAt P.g1 P.β P.vG1
+  h2 : OpenedAt P.h2 P.γ P.vH2
+  w : ∀ p ∈ P.instances, OpenedAt p.2.w P.β p.2.vw
+  gA : ∀ c ∈ P.circuits, OpenedAt c.gA P.γ c.vgA
+  gB : ∀ c ∈ P.circuits, OpenedAt c.gB P.γ c.vgB
+  gC : ∀ c ∈ P.circuits, OpenedAt c.gC P.γ c.vgC
+
+theorem linOpenedEval_eq {P : V3Batch F} (ho : P.Openings) (ws : List F) :
+    P.linOpenedEval ws = P.linEval ws := by
+  have hterm : ∀ p ∈ P.instances, (selectorPoly P.Cd p.1.Cd).eval P.β *
+      ((P.ηA * ((p.1.KA.n : F) * p.1.σmA) + P.ηB * ((p.1.KB.n : F) * p.1.σmB) +
+        P.ηC * ((p.1.KC.n : F) * p.1.σmC)) *
+        ((p.1.Xd.interpolate fun k => p.2.x.getD k 0).eval P.β +
+          p.1.Xd.vanishing.eval P.β * p.2.vw)) =
+      (selectorPoly P.Cd p.1.Cd).eval P.β *
+        ((P.ηA * ((p.1.KA.n : F) * p.1.σmA) + P.ηB * ((p.1.KB.n : F) * p.1.σmB) +
+          P.ηC * ((p.1.KC.n : F) * p.1.σmC)) * (p.1.zhat p.2).eval P.β) := by
+    intro p hp
+    rw [(ho.w p hp).eq_eval, BatchCircuit.zhat, eval_assignmentPoly]
+  rw [linOpenedEval, linEval, List.map_congr_left hterm, ho.mask.eq_eval, ho.h1.eq_eval,
+    ho.g1.eq_eval]
+
+theorem matOpenedEval_eq {P : V3Batch F} (ho : P.Openings) (δs : List F) :
+    P.matOpenedEval δs = batchedMatrixEval P.K δs P.matrixTerms P.h2 P.γ := by
+  have hc : ∀ c ∈ P.circuits, c.matrixSummands P.K P.α P.β P.γ =
+      (c.matrixTerms P.α P.β).map fun t => (selectorPoly P.K t.K).eval P.γ *
+        (t.a.eval P.γ - t.b.eval P.γ * (P.γ * t.g.eval P.γ + t.σ)) := by
+    intro c hc
+    simp only [BatchCircuit.matrixSummands, BatchCircuit.matrixTerms, MatrixTerm.summandAt,
+      List.map_cons, List.map_nil, (ho.gA c hc).eq_eval, (ho.gB c hc).eq_eval,
+      (ho.gC c hc).eq_eval]
+  rw [matOpenedEval, batchedMatrixEval, matrixTerms, List.map_flatMap, flatMap_congr_mem hc,
+    ho.h2.eq_eval]
+
+/-- `sound` on the values the verifier reads. The lineval and matrix checks run on
+the opened `s(β)`, `ŵ_{i,j}(β)`, `h₁(β)`, `g₁(β)`, `g_{M,i}(γ)`, and `h₂(γ)`, with
+`ẑ(β)` assembled from the public input; with every opening free of breaks they
+are the polynomial checks `sound` consumes. -/
+theorem sound_of_openings (rowWs linWs δs : List F) (ho : P.Openings)
+    (hdvdR : ∀ c ∈ P.circuits, c.R.n ∣ P.R.n) (hdvdC : ∀ c ∈ P.circuits, c.Cd.n ∣ P.Cd.n)
+    (hdvdK : ∀ t ∈ P.matrixTerms, t.K.n ∣ P.K.n) (hvalid : ∀ t ∈ P.matrixTerms, t.Valid)
+    (hH0 : inspectOpening P.h0rep [] P.α P.vH0 = none)
+    (hrow : P.rowEval rowWs = 0) (hrowI : inspectResidual (P.rowResidual rowWs) P.α = none)
+    (hrowB : inspectBatchOn P.R.nodeList rowWs (batchedClaims P.R P.rowClaims) = none)
+    (hlin : P.linOpenedEval linWs = 0)
+    (hlinI : inspectResidual (P.linResidual linWs) P.β = none)
+    (hdegL : (X * P.g1 + C (P.linSum linWs * P.Cd.sizeInv)).natDegree < P.Cd.n)
+    (hlinB : inspectBatch (etaWeights linWs P.ηA P.ηB P.ηC) P.linClaims = none)
+    (hmat : P.matOpenedEval δs = 0)
+    (hmatI : inspectResidual (batchedMatrixResidual P.K δs P.matrixTerms P.h2) P.γ = none)
+    (hmatB : inspectBatchOn P.K.nodeList δs
+      (batchedClaims P.K (P.matrixTerms.map MatrixTerm.claim)) = none) :
+    P.e = 0 ∧ ∀ p ∈ P.instances, ∀ r, r < p.1.R.n →
+      mzRow p.1.Cd p.1.A (p.1.zhat p.2) r * mzRow p.1.Cd p.1.B (p.1.zhat p.2) r =
+        mzRow p.1.Cd p.1.Cm (p.1.zhat p.2) r :=
+  P.sound rowWs linWs δs hdvdR hdvdC hdvdK hvalid hH0 hrow hrowI hrowB
+    ((linOpenedEval_eq ho linWs).symm.trans hlin) hlinI hdegL hlinB
+    ((matOpenedEval_eq ho δs).symm.trans hmat) hmatI hmatB
+
 /-- The first-round weights `ν_i τ_{i,j}` from the first-combiners squeeze. -/
 def rowWeights (chal : V2Challenge → List F) : List F :=
   schemeWeights (combinerScheme P.sizes) (chal .firstCombiners)
@@ -454,8 +583,8 @@ noncomputable def squeezeBad (S : Finset F) (chal : V2Challenge → List F) :
 
 /-- End-to-end soundness of a V3 batch on its transcript. The challenges and weights
 are the transcript's squeezes, read with snarkVM's schemes; the init absorbs the
-batch's statement. If the three LCs accept, `h₀` opens with no break, and no
-squeezed element lands in its bad set, then the transcript binds exactly this
+batch's statement. If the three LCs accept on the opened values, every opening has
+no break, and no squeezed element lands in its bad set, then the transcript binds exactly this
 statement, the mask sum is zero, and every instance has `ẑ` equal to its public
 input on the input domain and satisfies `Az ∘ Bz = Cz` on its constraint domain. -/
 theorem sound_of_transcript (S : Finset F) (t : V2Transcript F) (chal : V2Challenge → List F)
@@ -472,10 +601,10 @@ theorem sound_of_transcript (S : Finset F) (t : V2Transcript F) (chal : V2Challe
     (hdvdR : ∀ c ∈ P.circuits, c.R.n ∣ P.R.n) (hdvdC : ∀ c ∈ P.circuits, c.Cd.n ∣ P.Cd.n)
     (hdvdK : ∀ t ∈ P.matrixTerms, t.K.n ∣ P.K.n) (hvalid : ∀ t ∈ P.matrixTerms, t.Valid)
     (hgen : ∀ c ∈ P.circuits, c.Xd.ω = c.Cd.ω ^ (c.Cd.n / c.Xd.n))
-    (hH0 : inspectOpening P.h0rep [] P.α P.vH0 = none)
-    (hrow : P.rowEval (P.rowWeights chal) = 0) (hlin : P.linEval (P.linWeights chal) = 0)
+    (hH0 : inspectOpening P.h0rep [] P.α P.vH0 = none) (ho : P.Openings)
+    (hrow : P.rowEval (P.rowWeights chal) = 0) (hlin : P.linOpenedEval (P.linWeights chal) = 0)
     (hdegL : (X * P.g1 + C (P.linSum (P.linWeights chal) * P.Cd.sizeInv)).natDegree < P.Cd.n)
-    (hmat : batchedMatrixEval P.K (P.deltaWeights chal) P.matrixTerms P.h2 P.γ = 0) :
+    (hmat : P.matOpenedEval (P.deltaWeights chal) = 0) :
     (∀ inputs comms', t.init = v3Init inputs comms' → inputs = P.statement) ∧ P.e = 0 ∧
       ∀ p ∈ P.instances,
         (∀ k < p.1.Xd.n, (p.1.zhat p.2).eval
@@ -506,8 +635,8 @@ theorem sound_of_transcript (S : Finset F) (t : V2Transcript F) (chal : V2Challe
     by_contra h
     exact not_lucky_of_no_break hmsg (c := .deltas) rfl (hS _) hnb
       (deltaDraw_lucky (by rw [List.length_map, length_matrixTerms]; omega) hδ h)
-  obtain ⟨he, hrows⟩ := P.sound _ _ _ hdvdR hdvdC hdvdK hvalid hH0 hrow hrowI hrowB hlin hlinI
-    hdegL hlinB hmat hmatI hmatB
+  obtain ⟨he, hrows⟩ := P.sound_of_openings _ _ _ ho hdvdR hdvdC hdvdK hvalid hH0 hrow hrowI
+    hrowB hlin hlinI hdegL hlinB hmat hmatI hmatB
   refine ⟨fun inputs comms' h => (v3Init_injective (h.symm.trans hinit)).1, he,
     fun p hp => ⟨fun k hk => ?_, hrows p hp⟩⟩
   exact assignment_at_input_position p.1.Xd p.1.Cd (hgen _ (P.fst_mem_circuits hp)) _ _ hk

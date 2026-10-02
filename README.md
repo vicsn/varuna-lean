@@ -30,13 +30,17 @@ batch of circuits and instances as snarkVM runs it: the rowcheck,
 lineval, and matrix checks are each one LC over the whole batch
 (selectors, snarkVM's combiners, one quotient), and together they give
 every instance `Az ∘ Bz = Cz` on its circuit's constraint domain.
-`V3Batch.sound_of_transcript` reads the challenges and weights off a V3
-transcript's squeezes, takes "no squeezed element is in its bad set" as
-its one Fiat–Shamir hypothesis, and proves the relation for the
-statement the transcript absorbs. `fs_v2_squeeze_charge` charges every
-squeezed element, with snarkVM's batch weights `ν_i τ_{i,j}` counted one
-drawn element at a time. `PreprocessingAHP` is the public-coin argument
-in the algebraic projection. `sound_r1cs` ends at the R1CS relation.
+`V3Batch.sound_of_transcript` runs the checks on the opened values,
+reads the challenges and weights off a V3 transcript's squeezes, takes
+"no squeezed element is in its bad set" as its one Fiat–Shamir
+hypothesis, and proves the relation for the statement the transcript
+absorbs. `V3Batch.adaptive_soundness` charges that hypothesis against an
+adaptive prover: queries carry the earlier challenges, each squeeze's
+bad set is read off its query, and at most `Q · b · |S|^{Q-1}` of the
+`|S|^Q` oracle tapes yield an accepted transcript for a false statement.
+snarkVM's batch weights `ν_i τ_{i,j}` are counted one drawn element at a
+time. `PreprocessingAHP` is the public-coin argument in the algebraic
+projection. `sound_r1cs` ends at the R1CS relation.
 The PC layer is proved under an algebraic adversary (trapdoor breaks),
 probabilities are counted per challenge and per oracle query, and the
 Fiat–Shamir prefix binds the public inputs. `ahp_error_concrete` states
@@ -58,11 +62,12 @@ The interactive picture is the
   encodings stay a floor. Sage proofs are not captured in this project.
 - `knowledgeSoundness_bls` states the capstone at `ZMod bls12_377_r`.
   Primality of that modulus is a `Fact`, not a kernel proof.
-- `fs_v2_squeeze_charge` counts bad sets fixed before the oracle tape,
-  for one transcript. The batch's bad sets depend on earlier challenges,
-  which query prefixes do not carry, so the no-break hypothesis of
-  `V3Batch.sound_of_transcript` is not yet charged against an adaptive
-  adversary. This is a modelling gap, not a floor.
+- `V3Batch.adaptive_soundness` takes the residual degree bound `b` as a
+  hypothesis on the extractor. Concrete degrees are derived for one
+  circuit (`ahp_error_concrete`), not yet for the batch. Its queries
+  carry the earlier challenges, the standard multi-round Fiat–Shamir
+  encoding. snarkVM's sponge absorbs only the messages; identifying the
+  two is part of the Poseidon = RO floor.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
   and index = circuit stay floors. The AHP simulator programs one
   opening and absorbs the witness into the ZK mask. A constant blinding
@@ -110,6 +115,7 @@ Varuna/
   Combiners.lean                    -- batch weights drawn element by element
   Degree.lean                       -- concrete residual degrees in ahp_error
   FSBound.lean                      -- Fiat–Shamir query charging
+  AdaptiveFS.lean                   -- queries carry the history; adaptive charging
   Statement.lean                    -- init_sponge binds the public inputs
   Match.lean                        -- typed accept, floors, toy fixtures
   Soundness.lean                    -- knowledge-soundness capstone
@@ -117,6 +123,7 @@ Varuna/
   Bridge.lean                       -- Int R1CS ↔ ZMod p; satisfies from rows
   Endpoint.lean                     -- PC reduction + matrix sumchecks + v3_chain
   BatchEndpoint.lean                -- the V3 endpoint batched over circuits and instances
+  BatchFS.lean                      -- adaptive Fiat–Shamir soundness of the batch
   Fingerprint.lean                  -- captured snarkVM batch proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
