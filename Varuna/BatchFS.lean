@@ -4,7 +4,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
 import Varuna.AdaptiveFS
-import Varuna.BatchEndpoint
+import Varuna.BatchDegree
 
 /-!
 # Adaptive Fiat–Shamir for the V3 batch
@@ -27,12 +27,16 @@ The challenges are the squeezes, read as the verifier reads them
 (`withChallenges`). Each squeeze's bad set then reads only data absorbed before it
 (`squeezeBad_upTo`) and challenges squeezed before it (`badAt_congr`), so it is a
 function of the statement and the history (`batchBad`, `batchBad_history`).
-`fs_rounds_charge` charges it per query.
+`fs_rounds_charge` charges it per query. `batchBad` keeps a bad set only if it has
+at most `b` elements, so the charge holds for any `ext`; the prover's own batch
+has its bad sets that small when its residuals have degree at most `b`.
 
 `V3Batch.adaptive_soundness` : if every squeezed element was answered on one of
 the adversary's `Q` queries, at most `Q · b · | S | ^{Q-1}` of the ` | S | ^Q` tapes
 yield a transcript the verifier accepts while the relation fails, where `b ≥ 1`
-bounds the degrees of the three batched residuals.
+bounds the degrees of the three batched residuals of the prover's batch.
+`V3Batch.adaptive_soundness_concrete` takes `b` from `DegreeBounds` : `D` SRS
+powers and the largest domains (`Varuna.BatchDegree`).
 -/
 
 set_option linter.unusedSectionVars false
@@ -315,6 +319,20 @@ theorem badAt_absorbed (S : Finset F) (chal : V2Challenge → List F) (c : V2Cha
   rw [← upTo_withChallenges]
   exact squeezeBad_upTo (P.withChallenges chal) S chal c w
 
+theorem Within.withChallenges {Q : V3Batch F} {d : DegreeBounds} (hW : Q.Within d)
+    (chal : V2Challenge → List F) : (Q.withChallenges chal).Within d :=
+  ⟨hW.R, hW.Cd, hW.K, hW.circR, hW.circC, hW.circX, hW.circK, hW.w, hW.mask, hW.h0, hW.h1,
+    hW.g1, hW.g, hW.h2⟩
+
+/-- With its three residuals at most `b ≥ 1`, every squeeze's bad set has at most
+`b` elements. -/
+theorem card_badAt_le {Q : V3Batch F} {chal : V2Challenge → List F} {b : ℕ} (hb : 1 ≤ b)
+    (h : (Q.withChallenges chal).ResidualsBounded chal b) (S : Finset F) (c : V2Challenge)
+    (w : List F) : (Q.badAt S chal c w).card ≤ b := by
+  obtain ⟨h1, h2, h3⟩ := h
+  exact squeezeBad_card S _ _ _ _ _ _ (rowcheckDraw_coordAffine _ _ _)
+    (linevalDraw_coordAffine _ _) (deltaDraw_coordAffine _ _ _) h1 h2 h3 hb c w
+
 /-- A squeeze's bad set reads only challenges squeezed before it. -/
 theorem badAt_congr (Q : V3Batch F) (S : Finset F) {chal chal' : V2Challenge → List F}
     {c : V2Challenge} (h : ∀ c', c'.prefixAbsorbs < c.prefixAbsorbs → chal c' = chal' c')
@@ -355,11 +373,14 @@ end V3Batch
 
 /-- The batch bad set of a history : at the squeeze after its last message, for the
 batch `ext` reads off the statement and the history's messages, with the history's
-squeezes as challenges. -/
+squeezes as challenges; kept if it has at most `b` elements. -/
 noncomputable def batchBad (ext : V3Stmt F → List (FSMessage F) → V3Batch F) (S : Finset F)
-    (s : V3Stmt F) (hist : List (Round F)) : Finset F :=
+    (b : ℕ) (s : V3Stmt F) (hist : List (Round F)) : Finset F :=
   match squeezeAfter hist.length with
-  | some c => (ext s (hist.map Prod.fst)).badAt S (histChal hist) c (histChal hist c)
+  | some c =>
+    if ((ext s (hist.map Prod.fst)).badAt S (histChal hist) c (histChal hist c)).card ≤ b then
+      (ext s (hist.map Prod.fst)).badAt S (histChal hist) c (histChal hist c)
+    else ∅
   | none => ∅
 
 /-- `ext` reads off the statement and the messages before each squeeze what they fix
@@ -369,49 +390,45 @@ def ExtractsBefore (ext : V3Stmt F → List (FSMessage F) → V3Batch F) (s : V3
   ∀ c : V2Challenge, B.absorbed c.prefixAbsorbs =
     (ext s (t.messages.take c.prefixAbsorbs)).absorbed c.prefixAbsorbs
 
-/-- At an element's history, the batch bad set is `B`'s bad set at that element. -/
+/-- At an element's history, the batch bad set is `B`'s bad set at that element, if
+that has at most `b` elements. -/
 theorem batchBad_history {ext : V3Stmt F → List (FSMessage F) → V3Batch F} {s : V3Stmt F}
-    {t : V2Transcript F} {B : V3Batch F} (hB : ExtractsBefore ext s t B) (S : Finset F)
-    (chal : V2Challenge → List F) (c : V2Challenge) (j : ℕ) :
-    batchBad ext S s (t.history chal c j) = B.badAt S chal c ((chal c).take j) := by
+    {t : V2Transcript F} {B : V3Batch F} (hB : ExtractsBefore ext s t B) (S : Finset F) (b : ℕ)
+    (chal : V2Challenge → List F) (c : V2Challenge) (j : ℕ)
+    (hcard : (B.badAt S chal c ((chal c).take j)).card ≤ b) :
+    batchBad ext S b s (t.history chal c j) = B.badAt S chal c ((chal c).take j) := by
+  have key : (ext s (t.messages.take c.prefixAbsorbs)).badAt S (histChal (t.history chal c j)) c
+      ((chal c).take j) = B.badAt S chal c ((chal c).take j) := by
+    rw [← V3Batch.badAt_absorbed, ← hB, V3Batch.badAt_absorbed]
+    exact V3Batch.badAt_congr _ _ (fun c' hc' => t.histChal_history_lt chal hc' j) _
   rw [batchBad, t.length_history, squeezeAfter_prefixAbsorbs]
   simp only
-  rw [t.map_fst_history, t.histChal_history_self, ← V3Batch.badAt_absorbed, ← hB,
-    V3Batch.badAt_absorbed]
-  exact V3Batch.badAt_congr _ _ (fun c' hc' => t.histChal_history_lt chal hc' j) _
-
-/-- The three batched residuals of `Q` have degree at most `b`. -/
-def V3Batch.ResidualsBounded (Q : V3Batch F) (chal : V2Challenge → List F) (b : ℕ) : Prop :=
-  (Q.rowResidual (Q.rowWeights chal)).natDegree ≤ b ∧
-    (Q.linResidual (Q.linWeights chal)).natDegree ≤ b ∧
-    (batchedMatrixResidual Q.K (Q.deltaWeights chal) Q.matrixTerms Q.h2).natDegree ≤ b
+  rw [t.map_fst_history, t.histChal_history_self, key, if_pos hcard]
 
 theorem card_batchBad_le (ext : V3Stmt F → List (FSMessage F) → V3Batch F) (S : Finset F)
-    {b : ℕ} (hb : 1 ≤ b)
-    (hdeg : ∀ s msgs chal, ((ext s msgs).withChallenges chal).ResidualsBounded chal b)
-    (s : V3Stmt F) (hist : List (Round F)) : (S.filter (· ∈ batchBad ext S s hist)).card ≤ b :=
-      by
+    (b : ℕ) (s : V3Stmt F) (hist : List (Round F)) :
+    (S.filter (· ∈ batchBad ext S b s hist)).card ≤ b := by
   unfold batchBad
   split
-  · obtain ⟨h1, h2, h3⟩ := hdeg s (hist.map Prod.fst) (histChal hist)
-    exact (card_filter_mem_le _ _).trans (squeezeBad_card S _ _ _ _ _ _
-      (rowcheckDraw_coordAffine _ _ _) (linevalDraw_coordAffine _ _) (deltaDraw_coordAffine _ _ _)
-      h1 h2 h3 hb _ _)
+  · split_ifs with h
+    · exact (card_filter_mem_le _ _).trans h
+    · simp
   · simp
 
 /-- A break of the output against `B`'s bad sets is a break of its rounds against
-the history bad sets. -/
+the history bad sets, when `B`'s residuals have degree at most `b ≥ 1`. -/
 theorem roundsBreak_of_outputBreaks {ext : V3Stmt F → List (FSMessage F) → V3Batch F}
     {s : V3Stmt F} {t : V2Transcript F} {B : V3Batch F} (hB : ExtractsBefore ext s t B)
-    (hmsg : ∀ x, FSMessage.field x ∉ t.messages) (S : Finset F) {chal : V2Challenge → List F}
+    (hmsg : ∀ x, FSMessage.field x ∉ t.messages) (S : Finset F) {b : ℕ} (hb : 1 ≤ b)
+    {chal : V2Challenge → List F} (hres : (B.withChallenges chal).ResidualsBounded chal b)
     (h : outputBreaks (prefixBad t (B.badAt S chal)) t chal = true) :
-    RoundsBreak (batchBad ext S s) (t.rounds chal) := by
+    RoundsBreak (batchBad ext S b s) (t.rounds chal) := by
   obtain ⟨c, -, hc⟩ := List.any_eq_true.mp h
   obtain ⟨j, hj, hbad⟩ := (hitsB_iff _ _ _).mp hc
   rw [List.nil_append, prefixBad_elemBefore hmsg] at hbad
   refine ⟨_, _, _, _, t.rounds_split chal c, j, hj, ?_⟩
-  show (chal c)[j] ∈ batchBad ext S s (t.history chal c j)
-  rw [batchBad_history hB]
+  show (chal c)[j] ∈ batchBad ext S b s (t.history chal c j)
+  rw [batchBad_history hB S b chal c j (V3Batch.card_badAt_le hb hres S c _)]
   exact hbad
 
 /-! ## Adaptive soundness -/
@@ -477,32 +494,53 @@ On each tape the prover outputs a statement, a transcript, and a batch `B` : the
 polynomials and sums behind its messages and the values it opens, every message
 picked after the challenges before it. `ext` reads off the statement and the
 messages before each squeeze what they fix of `B` (`ExtractsBefore`); `b ≥ 1` bounds
-the degrees of the three batched residuals of every batch `ext` returns. If every
-squeezed element was answered on one of the adversary's `Q` queries, at most
-`Q · b · | S | ^{Q-1}` of the ` | S | ^Q` tapes yield an output the verifier accepts
-while the relation fails : knowledge error `Q · b / | S | `. -/
+the degrees of `B`'s three batched residuals. If every squeezed element was
+answered on one of the adversary's `Q` queries, at most `Q · b · | S | ^{Q-1}` of the
+` | S | ^Q` tapes yield an output the verifier accepts while the relation fails :
+knowledge error `Q · b / | S | `. -/
 theorem adaptive_soundness (ext : V3Stmt F → List (FSMessage F) → V3Batch F) (S : Finset F)
-    {b : ℕ} (hb : 1 ≤ b)
-    (hdeg : ∀ s msgs chal, ((ext s msgs).withChallenges chal).ResidualsBounded chal b)
-    (A : FSAdversary F) (Q : ℕ) (stmt : List F → V3Stmt F) (B : List F → V3Batch F)
-    (out : List F → V2Transcript F) (chal : List F → V2Challenge → List F)
+    {b : ℕ} (hb : 1 ≤ b) (A : FSAdversary F) (Q : ℕ) (stmt : List F → V3Stmt F)
+    (B : List F → V3Batch F) (out : List F → V2Transcript F)
+    (chal : List F → V2Challenge → List F)
     (hstmt : ∀ tape ∈ tapes S Q,
       (out tape).init = v3Init (stmt tape).1 (stmt tape).2 ∧ V3StmtWF (stmt tape))
     (hB : ∀ tape ∈ tapes S Q, ExtractsBefore ext (stmt tape) (out tape) (B tape))
     (hcons : ∀ tape ∈ tapes S Q,
       RoundsFromQueries A tape (out tape).init ((out tape).rounds (chal tape)))
+    (hdeg : ∀ tape ∈ tapes S Q,
+      ((B tape).withChallenges (chal tape)).ResidualsBounded (chal tape) b)
     [DecidablePred fun tape => Fools S (stmt tape) (B tape) (out tape) (chal tape)] :
     ((tapes S Q).filter fun tape => Fools S (stmt tape) (B tape) (out tape) (chal tape)).card ≤
       Q * b * S.card ^ (Q - 1) := by
   refine fs_rounds_charge (fun s => v3Init s.1 s.2) V3StmtWF
-    (fun _ _ _ _ hs hs' hr hr' h => v3Init_rounds_inj hs hs' hr hr' h) S A (batchBad ext S) b
-    (card_batchBad_le ext S hb hdeg) Q stmt (fun tape => (out tape).rounds (chal tape))
+    (fun _ _ _ _ hs hs' hr hr' h => v3Init_rounds_inj hs hs' hr hr' h) S A (batchBad ext S b) b
+    (card_batchBad_le ext S b) Q stmt (fun tape => (out tape).rounds (chal tape))
     (fun tape h => (hstmt tape h).1 ▸ hcons tape h) _ fun tape h hf => ?_
   obtain ⟨hacc, hnot⟩ := hf
   refine ⟨(hstmt tape h).2, V2Transcript.noLoneField_rounds hacc.msg _,
-    roundsBreak_of_outputBreaks (hB tape h) hacc.msg S ?_⟩
+    roundsBreak_of_outputBreaks (hB tape h) hacc.msg S hb (hdeg tape h) ?_⟩
   by_contra hne
   exact hnot (holds_of_accepts hacc (Bool.eq_false_iff.mpr hne))
+
+/-- `adaptive_soundness` with `b` computed. Every polynomial the prover commits to
+has degree below `d.D`, the SRS's number of powers, and every domain is at most
+`d`'s sizes (`Within`); then `b = max(d_R, d_L, d_M, 1)` with
+`d_R = max(2R − 2, D + R − 1)`, `d_L = D + C + X − 2`, `d_M = D + 2K − 2`. -/
+theorem adaptive_soundness_concrete (ext : V3Stmt F → List (FSMessage F) → V3Batch F)
+    (S : Finset F) (d : DegreeBounds) (hX : 1 ≤ d.X) (A : FSAdversary F) (Q : ℕ)
+    (stmt : List F → V3Stmt F) (B : List F → V3Batch F) (out : List F → V2Transcript F)
+    (chal : List F → V2Challenge → List F)
+    (hstmt : ∀ tape ∈ tapes S Q,
+      (out tape).init = v3Init (stmt tape).1 (stmt tape).2 ∧ V3StmtWF (stmt tape))
+    (hB : ∀ tape ∈ tapes S Q, ExtractsBefore ext (stmt tape) (out tape) (B tape))
+    (hcons : ∀ tape ∈ tapes S Q,
+      RoundsFromQueries A tape (out tape).init ((out tape).rounds (chal tape)))
+    (hW : ∀ tape ∈ tapes S Q, (B tape).Within d)
+    [DecidablePred fun tape => Fools S (stmt tape) (B tape) (out tape) (chal tape)] :
+    ((tapes S Q).filter fun tape => Fools S (stmt tape) (B tape) (out tape) (chal tape)).card ≤
+      Q * d.b * S.card ^ (Q - 1) :=
+  adaptive_soundness ext S d.one_le_b A Q stmt B out chal hstmt hB hcons fun tape h =>
+    ((hW tape h).withChallenges (chal tape)).residualsBounded hX (chal tape)
 
 end V3Batch
 

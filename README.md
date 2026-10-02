@@ -38,6 +38,9 @@ absorbs. `V3Batch.adaptive_soundness` charges that hypothesis against an
 adaptive prover: queries carry the earlier challenges, each squeeze's
 bad set is read off its query, and at most `Q · b · |S|^{Q-1}` of the
 `|S|^Q` oracle tapes yield an accepted transcript for a false statement.
+`V3Batch.adaptive_soundness_concrete` computes `b` for the batch from
+the SRS size (every committed polynomial below `D` powers) and the
+largest domains.
 snarkVM's batch weights `ν_i τ_{i,j}` are counted one drawn element at a
 time. `PreprocessingAHP` is the public-coin argument in the algebraic
 projection. `sound_r1cs` ends at the R1CS relation.
@@ -62,12 +65,14 @@ The interactive picture is the
   encodings stay a floor. Sage proofs are not captured in this project.
 - `knowledgeSoundness_bls` states the capstone at `ZMod bls12_377_r`.
   Primality of that modulus is a `Fact`, not a kernel proof.
-- `V3Batch.adaptive_soundness` takes the residual degree bound `b` as a
-  hypothesis on the extractor. Concrete degrees are derived for one
-  circuit (`ahp_error_concrete`), not yet for the batch. Its queries
-  carry the earlier challenges, the standard multi-round Fiat–Shamir
-  encoding. snarkVM's sponge absorbs only the messages; identifying the
-  two is part of the Poseidon = RO floor.
+- `V3Batch.adaptive_soundness`'s queries carry the earlier challenges,
+  the standard multi-round Fiat–Shamir encoding. snarkVM's sponge
+  absorbs only the messages; identifying the two is part of the
+  Poseidon = RO floor.
+- The matrix check models `b` with the product `row · col`; snarkVM's
+  verifier uses the committed `row_col`. They agree on `K` but not at
+  `γ` (`product_form_differs`), so the check at `γ`, its residual
+  degree, and its bad set are those of the product form.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
   and index = circuit stay floors. The AHP simulator programs one
   opening and absorbs the witness into the ZK mask. A constant blinding
@@ -123,6 +128,7 @@ Varuna/
   Bridge.lean                       -- Int R1CS ↔ ZMod p; satisfies from rows
   Endpoint.lean                     -- PC reduction + matrix sumchecks + v3_chain
   BatchEndpoint.lean                -- the V3 endpoint batched over circuits and instances
+  BatchDegree.lean                  -- batched residual degrees from D and the domains
   BatchFS.lean                      -- adaptive Fiat–Shamir soundness of the batch
   Fingerprint.lean                  -- captured snarkVM batch proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
