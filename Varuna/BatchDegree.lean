@@ -18,12 +18,12 @@ batched residuals. This file computes `b` from two kinds of bound on a batch
 
 The selector `s_{H,H_i}` has degree ` | H | − | H_i | `, so a claim of degree
 ` | H_i | − 1 + e` on `H_i` has degree at most `N − 1 + e` lifted to `H`, for any `N`
-bounding both domains (`natDegree_selectorPoly_mul_le`). With the matrix `b` in
-product form :
+bounding both domains (`natDegree_selectorPoly_mul_le`). The batched residuals :
 
 * rowcheck : `max(2R − 2, D + R − 1)` (`V3Batch.natDegree_rowResidual_le`);
 * lineval : `D + C + X − 2` (`V3Batch.natDegree_linResidual_le`);
-* matrix : `D + 2K − 2` (`V3Batch.natDegree_matrixResidual_le`).
+* matrix : `D + K − 1` (`V3Batch.natDegree_matrixResidual_le`), since the matrix
+  `a` and `b` are `K`-interpolants.
 
 `V3Batch.Within.residualsBounded` : a batch within the bounds has all three
 residuals at most `b = max(d_R, d_L, d_M, 1)`, for any weights.
@@ -125,15 +125,19 @@ theorem natDegree_a_le : t.a.natDegree ≤ t.K.n - 1 := by
   unfold a matrixAPoly valOracle
   exact (natDegree_C_mul_le _ _).trans (t.K.natDegree_interpolate_le _)
 
-theorem natDegree_b_le : t.b.natDegree ≤ t.K.n - 1 + (t.K.n - 1) := by
-  unfold b matrixBPoly rowOracle colOracle
-  exact natDegree_mul_le.trans (add_le_add
-    ((natDegree_C_mul_le _ _).trans (natDegree_C_sub_le _ (t.K.natDegree_interpolate_le _)))
-    (natDegree_C_sub_le _ (t.K.natDegree_interpolate_le _)))
+theorem natDegree_b_le : t.b.natDegree ≤ t.K.n - 1 := by
+  unfold b matrixBPoly rowOracle colOracle rowColOracle
+  have hi := t.K.natDegree_interpolate_le
+  refine (natDegree_C_mul_le _ _).trans ((natDegree_add_le _ _).trans (max_le ?_ (hi _)))
+  refine (natDegree_sub_le _ _).trans (max_le ((natDegree_sub_le _ _).trans (max_le ?_ ?_)) ?_)
+  · rw [natDegree_C]
+    exact Nat.zero_le _
+  · exact (natDegree_C_mul_le _ _).trans (hi _)
+  · exact (natDegree_C_mul_le _ _).trans (hi _)
 
 /-- The numerator `a − b (X g + σ)` with `deg g < D`. -/
 theorem natDegree_numer_le {D : ℕ} (hg : t.g.natDegree < D) :
-    t.numer.natDegree ≤ t.K.n - 1 + (t.K.n - 1 + D) := by
+    t.numer.natDegree ≤ t.K.n - 1 + D := by
   unfold numer
   have ha := t.natDegree_a_le
   have hbr :=
@@ -198,9 +202,9 @@ def dR : ℕ :=
 def dL : ℕ :=
   d.D + d.C + d.X - 2
 
-/-- Matrix residual degree `D + 2K − 2`. -/
+/-- Matrix residual degree `D + K − 1`. -/
 def dM : ℕ :=
-  d.D + 2 * d.K - 2
+  d.D + d.K - 1
 
 /-- The per-squeeze charge `max(d_R, d_L, d_M, 1)`. -/
 def b : ℕ :=

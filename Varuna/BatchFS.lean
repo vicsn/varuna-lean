@@ -525,7 +525,7 @@ theorem adaptive_soundness (ext : V3Stmt F → List (FSMessage F) → V3Batch F)
 /-- `adaptive_soundness` with `b` computed. Every polynomial the prover commits to
 has degree below `d.D`, the SRS's number of powers, and every domain is at most
 `d`'s sizes (`Within`); then `b = max(d_R, d_L, d_M, 1)` with
-`d_R = max(2R − 2, D + R − 1)`, `d_L = D + C + X − 2`, `d_M = D + 2K − 2`. -/
+`d_R = max(2R − 2, D + R − 1)`, `d_L = D + C + X − 2`, `d_M = D + K − 1`. -/
 theorem adaptive_soundness_concrete (ext : V3Stmt F → List (FSMessage F) → V3Batch F)
     (S : Finset F) (d : DegreeBounds) (hX : 1 ≤ d.X) (A : FSAdversary F) (Q : ℕ)
     (stmt : List F → V3Stmt F) (B : List F → V3Batch F) (out : List F → V2Transcript F)

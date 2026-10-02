@@ -286,25 +286,14 @@ noncomputable def matrixAPoly (H_K : EvalDomain F) (vRC : F) (rowColVal : Nat �
     F[X] :=
   C vRC * valOracle H_K rowColVal
 
-/-- `b(X)` in snarkVM: `|R| |C| (αβ − α col − β row + row_col)`.
-The product form `(α − row)(β − col)` agrees with that expansion; the
-deployed LC uses a committed `row_col` interpolant in place of `row*col`. -/
+/-- `b(X)` in snarkVM: `|R| |C| (αβ − α col − β row + row_col)`, with the committed
+`row_col` (`construct_matrix_linear_combinations`). On `K` it is the product form
+`(α − row)(β − col)` scaled (`eval_matrixBPoly`); off `K`, `row_col ≠ row · col`. -/
 noncomputable def matrixBPoly (H_R H_C H_K : EvalDomain F) (α β : F)
     (rowIdx colIdx : Nat → Nat) : F[X] :=
   C (H_R.sizeAsField * H_C.sizeAsField) *
-    (C α - rowOracle H_R H_K rowIdx) * (C β - colOracle H_C H_K colIdx)
-
-/-- The product form expands to snarkVM's four-term `b` LC. -/
-theorem matrixBPoly_four_terms (H_R H_C H_K : EvalDomain F) (α β : F)
-    (rowIdx colIdx : Nat → Nat) :
-    matrixBPoly H_R H_C H_K α β rowIdx colIdx =
-      C (H_R.sizeAsField * H_C.sizeAsField) *
-        (C (α * β) - C α * colOracle H_C H_K colIdx -
-          C β * rowOracle H_R H_K rowIdx +
-          rowOracle H_R H_K rowIdx * colOracle H_C H_K colIdx) := by
-  unfold matrixBPoly
-  simp [C_mul]
-  ring
+    (C (α * β) - C α * colOracle H_C H_K colIdx - C β * rowOracle H_R H_K rowIdx +
+      rowColOracle H_R H_C H_K rowIdx colIdx)
 
 /-- Residual of `a − b (X g + σ) = h v_K` (single matrix, selector `= 1`). -/
 noncomputable def matrixResidual (K : EvalDomain F) (a b : F[X])
@@ -366,7 +355,9 @@ theorem eval_matrixBPoly (H_R H_C H_K : EvalDomain F) (α β : F)
     (matrixBPoly H_R H_C H_K α β rowIdx colIdx).eval (H_K.node k) =
       H_R.sizeAsField * H_C.sizeAsField *
         (α - H_R.node (rowIdx k)) * (β - H_C.node (colIdx k)) := by
-  simp [matrixBPoly, eval_mul, eval_sub, eval_C, rowOracle_eval, colOracle_eval, hk]
+  simp only [matrixBPoly, eval_mul, eval_add, eval_sub, eval_C, rowOracle_eval _ _ _ hk,
+    colOracle_eval _ _ _ hk, rowColOracle_eval _ _ _ _ _ hk]
+  ring
 
 /-- Soundness at a good challenge for the matrix residual. -/
 theorem matrix_sound [DecidableEq F] {K : EvalDomain F} {a b g h : F[X]} {σ γ : F}

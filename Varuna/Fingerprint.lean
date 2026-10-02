@@ -39,8 +39,9 @@ the selectors at `α`, `β`, and `γ`, the per-circuit `δ`s, and the per-circui
 Everything is kernel `decide` over `ZMod q`, the BLS12-377 scalar field : no
 `native_decide`, so the census stays standard. The fixture also pins one
 modelling fact : at `γ`, `row(γ) col(γ) ≠ row_col(γ)` (`product_form_differs`).
-The Lean `matrixBPoly` uses the product, the deployed verifier the committed
-`row_col`. They agree on `K`, which is all `matrix_sumcheck_value` needs.
+So `b` cannot be modelled by the product `(α − row)(β − col)`, which agrees with
+the deployed `b` only on `K`; `matrixBPoly` uses the committed `row_col`, as the
+deployed verifier does.
 -/
 
 set_option linter.unusedSectionVars false
@@ -85,16 +86,15 @@ theorem eval_selectorBatch (H : EvalDomain F) (ws : List F) (ps : List (EvalDoma
   rw [eval_weightedSumPoly, List.map_map]
   simp only [Function.comp_def, eval_mul]
 
-/-- The matrix term the Lean model uses is `matrixTermScalar` with `row_col := row · col`. -/
+/-- The matrix term the Lean model uses is `matrixTermScalar` with the committed `row_col`. -/
 theorem matrixTerm_eq_scalar (R Cd K : EvalDomain F) (vRC : F) (rcv : Nat → F) (α β : F)
     (rowIdx colIdx : Nat → Nat) (g : F[X]) (σ γ : F) :
     (matrixAPoly K vRC rcv).eval γ -
         (matrixBPoly R Cd K α β rowIdx colIdx).eval γ * (γ * g.eval γ + σ) =
       matrixTermScalar vRC (R.sizeAsField * Cd.sizeAsField) α β ((valOracle K rcv).eval γ)
         ((colOracle Cd K colIdx).eval γ) ((rowOracle R K rowIdx).eval γ)
-        ((rowOracle R K rowIdx).eval γ * (colOracle Cd K colIdx).eval γ) (g.eval γ) σ γ := by
-  simp only [matrixAPoly, matrixBPoly, matrixTermScalar, eval_mul, eval_sub, eval_C]
-  ring
+        ((rowColOracle R Cd K rowIdx colIdx).eval γ) (g.eval γ) σ γ := by
+  simp only [matrixAPoly, matrixBPoly, matrixTermScalar, eval_mul, eval_add, eval_sub, eval_C]
 
 /-- The selector the model uses is `v_H(γ) H_i.n · (v_{H_i}(γ) H.n)^{-1}`, the
 form the fixture checks with an inverse witness. -/
@@ -370,7 +370,8 @@ theorem selectors_scaled :
 theorem input_domains_differ : c0.vX ≠ c1.vX := by decide
 
 /-- Off `K`, the product of the row and column oracles is not the committed
-`row_col` : the Lean `matrixBPoly` and the deployed `b` differ at `γ`. -/
+`row_col` : a product-form `b` would differ from the deployed one at `γ`, so
+`matrixBPoly` uses `rowColOracle`. -/
 theorem product_form_differs :
     ∀ c ∈ circuits, c.rowAAtGamma * c.colAAtGamma ≠ c.rowColAAtGamma := by
   decide

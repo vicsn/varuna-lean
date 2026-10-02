@@ -57,7 +57,7 @@ variable (t : MatrixTerm F)
 noncomputable def a : F[X] :=
   matrixAPoly t.K (t.R.vanishing.eval t.α * t.Cd.vanishing.eval t.β) (rowColVal t.R t.Cd t.M)
 
-/-- `b(X) = |R| |C| (α − row(X)) (β − col(X))`. -/
+/-- `b(X) = |R| |C| (αβ − α col(X) − β row(X) + row_col(X))`. -/
 noncomputable def b : F[X] :=
   matrixBPoly t.R t.Cd t.K t.α t.β t.M.rowIdx t.M.colIdx
 

@@ -69,10 +69,6 @@ The interactive picture is the
   the standard multi-round Fiat–Shamir encoding. snarkVM's sponge
   absorbs only the messages; identifying the two is part of the
   Poseidon = RO floor.
-- The matrix check models `b` with the product `row · col`; snarkVM's
-  verifier uses the committed `row_col`. They agree on `K` but not at
-  `γ` (`product_form_differs`), so the check at `γ`, its residual
-  degree, and its bad set are those of the product form.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
   and index = circuit stay floors. The AHP simulator programs one
   opening and absorbs the witness into the ZK mask. A constant blinding

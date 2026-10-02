@@ -68,6 +68,7 @@ assert_axioms Varuna.holographicEval_at_nodes
 assert_axioms Varuna.rowOracle_eval
 assert_axioms Varuna.colOracle_eval
 assert_axioms Varuna.valOracle_eval
+assert_axioms Varuna.rowColOracle_eval
 assert_axioms Varuna.matrixAt
 assert_computable Varuna.CircuitInfo.maxNonZero
 assert_axioms Varuna.EvalDomain.vanishing_dvd_of_eval_eq_zero
@@ -161,7 +162,8 @@ assert_axioms Varuna.EvalDomain.node_zero
 assert_axioms Varuna.sample_padEntry_indices
 assert_axioms Varuna.selectorPoly_eval
 assert_axioms Varuna.sample_selector_self
-assert_axioms Varuna.matrixBPoly_four_terms
+assert_axioms Varuna.sample_matrixB_four_terms
+assert_axioms Varuna.sample_row_col_at_node
 assert_axioms Varuna.sample_kzg_equation
 assert_axioms Varuna.sample_toy_vanishing_at_one
 assert_axioms Varuna.sample_toy_size_ratio

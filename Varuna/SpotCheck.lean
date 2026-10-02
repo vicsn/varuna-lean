@@ -160,23 +160,24 @@ theorem sample_selector_self (H : EvalDomain F) : selectorPoly H H = 1 :=
 
 /-! ## Matrix `b` LC (`ahp.rs` `construct_matrix_linear_combinations`) -/
 
-/-- Deployed four-term `b`: `|R||C|(αβ − α col − β row + row·col)`. -/
+/-- Deployed four-term `b`: `|R||C|(αβ − α col − β row + row_col)`. -/
 theorem sample_matrixB_four_terms (H_R H_C H_K : EvalDomain F) (α β : F)
     (rowIdx colIdx : Nat → Nat) :
     matrixBPoly H_R H_C H_K α β rowIdx colIdx =
       C (H_R.sizeAsField * H_C.sizeAsField) *
         (C (α * β) - C α * colOracle H_C H_K colIdx -
           C β * rowOracle H_R H_K rowIdx +
-          rowOracle H_R H_K rowIdx * colOracle H_C H_K colIdx) :=
-  matrixBPoly_four_terms H_R H_C H_K α β rowIdx colIdx
+          rowColOracle H_R H_C H_K rowIdx colIdx) :=
+  rfl
 
-/-- On `K`, `row*col` recovers the stored nodes (the committed `row_col`
-interpolant agrees here; off `K` it may differ). -/
+/-- On `K`, the committed `row_col` and the product `row * col` both recover the
+stored nodes' product; off `K` they may differ (`Fingerprint.product_form_differs`). -/
 theorem sample_row_col_at_node (H_R H_C H_K : EvalDomain F)
     (rowIdx colIdx : Nat → Nat) {k : Nat} (hk : k < H_K.n) :
-    (rowOracle H_R H_K rowIdx * colOracle H_C H_K colIdx).eval (H_K.node k) =
-      H_R.node (rowIdx k) * H_C.node (colIdx k) := by
-  simp [eval_mul, rowOracle_eval, colOracle_eval, hk]
+    (rowColOracle H_R H_C H_K rowIdx colIdx).eval (H_K.node k) =
+        (rowOracle H_R H_K rowIdx * colOracle H_C H_K colIdx).eval (H_K.node k) := by
+  rw [rowColOracle_eval _ _ _ _ _ hk, eval_mul, rowOracle_eval _ _ _ hk,
+    colOracle_eval _ _ _ hk]
 
 /-! ## KZG check (`polycommit/kzg10/mod.rs`) -/
 

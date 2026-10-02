@@ -112,6 +112,11 @@ noncomputable def colOracle (H_C H_K : EvalDomain F) (colIdx : Nat → Nat) : F[
 noncomputable def valOracle (H_K : EvalDomain F) (value : Nat → F) : F[X] :=
   H_K.interpolate value
 
+/-- `row_col` oracle: LDE of the entry-wise product of the row and column nodes
+(snarkVM `arithmetize_matrix`, padding `1 · 1`). -/
+noncomputable def rowColOracle (H_R H_C H_K : EvalDomain F) (rowIdx colIdx : Nat → Nat) : F[X] :=
+  H_K.interpolate (fun k => H_R.node (rowIdx k) * H_C.node (colIdx k))
+
 /-- Evaluating the row oracle at a `K`-node recovers the stored row node. -/
 theorem rowOracle_eval (H_R H_K : EvalDomain F) (rowIdx : Nat → Nat)
     {k : Nat} (hk : k < H_K.n) :
@@ -129,6 +134,14 @@ theorem valOracle_eval (H_K : EvalDomain F) (value : Nat → F)
     {k : Nat} (hk : k < H_K.n) :
     (valOracle H_K value).eval (H_K.node k) = value k :=
   H_K.eval_interpolate value hk
+
+/-- Evaluating the `row_col` oracle at a `K`-node recovers the product of the stored
+row and column nodes. -/
+theorem rowColOracle_eval (H_R H_C H_K : EvalDomain F) (rowIdx colIdx : Nat → Nat)
+    {k : Nat} (hk : k < H_K.n) :
+    (rowColOracle H_R H_C H_K rowIdx colIdx).eval (H_K.node k) =
+      H_R.node (rowIdx k) * H_C.node (colIdx k) :=
+  H_K.eval_interpolate (fun k => H_R.node (rowIdx k) * H_C.node (colIdx k)) hk
 
 /-- Padding used by snarkVM `matrix_evals`: field elements `1` (row/col node 0)
 and value `0`. Index `0` is `ω^0 = 1`. -/
