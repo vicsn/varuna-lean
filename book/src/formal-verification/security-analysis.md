@@ -139,7 +139,7 @@ $S$ is where snarkVM's 252-bit AHP challenges enter (`crypto_hash/poseidon.rs:47
 - **Selectors are indicators of $H_i$ on $H$:** [`selectorPoly_eval_indicator`](../../../Varuna/Selectors.lean#L59).
 - **Batched zerocheck:** [`batchedZerocheck_extract`](../../../Varuna/Selectors.lean#L81). A batched rowcheck that is a multiple of $v_H$ gives each circuit's rowcheck on its own domain, or a lucky combination at some point.
 - **Batched sumchecks:** [`batchedSumcheck_extract`](../../../Varuna/Selectors.lean#L152) and [`sum_selectorPoly_mul`](../../../Varuna/Selectors.lean#L112). This covers lineval ($\mu, \rho$) and matrix ($\delta$) batching: per-circuit sums, or a lucky combination.
-- **Cost of a lucky combination:** at most 1 per free weight ([`card_filter_linear_le_one`](../../../Varuna/Probability.lean#L59), [`card_filter_inspectBatch_pair`](../../../Varuna/Probability.lean#L68)), i.e. $1/|S|$ per family.
+- **Cost of a lucky combination:** for two claims with weights $[1, \eta]$, at most one bad $\eta$ ([`card_filter_linear_le_one`](../../../Varuna/Probability.lean#L59), [`card_filter_inspectBatch_pair`](../../../Varuna/Probability.lean#L68)), i.e. $1/|S|$. Only that shape is counted: draws of several weights at once, the nested products $\nu_i \tau_{i,j}$, and the batched rowcheck have no count of their own ([below](#what-remains)).
 - **Prepare-third round:** [`alpha_independent_of_prepareThird`](../../../Varuna/Batching.lean#L345) and [`prepareThird_challenge_eq`](../../../Varuna/Batching.lean#L353). $\alpha$ is squeezed before that round; $\eta_A, \eta_B, \eta_C$ are squeezed there ([`prepareThirdEtaSqueeze_V3`](../../../Varuna/Batching.lean#L341)).
 
 ### 1.4 Assumptions underpinning S1 (Lean)
@@ -154,7 +154,7 @@ P is Marlin's public-coin preprocessing argument of knowledge. [`PreprocessingAH
 
 ### 2.2 The property S2 that step 3 needs (Lean)
 
-S2 is RBR knowledge soundness, charged per oracle query. [`fs_query_charge`](../../../Varuna/FSBound.lean#L48): with at most $b$ bad answers per query, at most $Q\,b\,|S|^{Q-1}$ of $|S|^Q$ lazy-oracle tapes let a deterministic adversary hit one. [`fs_break_count`](../../../Varuna/FSBound.lean#L83): an output with a break at any squeeze is such a hit, if its challenges were answered on its queries. [`squeezeBad`](../../../Varuna/FSBound.lean#L108) is the bad set of each squeeze: Schwartz–Zippel roots at $\alpha$, $\beta$, $\gamma$, and one-weight `inspectBatch` breaks at the combiner squeezes. [`fs_v2_squeeze_charge`](../../../Varuna/FSBound.lean#L222) puts those sets on the transcript prefixes and charges the resulting break count. Poseidon = RO stays a floor.
+S2 is RBR knowledge soundness, charged per oracle query. [`fs_query_charge`](../../../Varuna/FSBound.lean#L48): with at most $b$ bad answers per query, at most $Q\,b\,|S|^{Q-1}$ of $|S|^Q$ lazy-oracle tapes let a deterministic adversary hit one. [`fs_break_count`](../../../Varuna/FSBound.lean#L83): an output with a break at any squeeze is such a hit, if its challenges were answered on its queries. [`squeezeBad`](../../../Varuna/FSBound.lean#L108) is the bad set of each squeeze: Schwartz–Zippel roots at $\alpha$, $\beta$, $\gamma$, and one-weight `inspectBatch` breaks at the combiner squeezes, each squeeze modelled as one pair $[1, \eta]$ (see [What remains](#what-remains)). [`fs_v2_squeeze_charge`](../../../Varuna/FSBound.lean#L222) puts those sets on the transcript prefixes and charges the resulting break count. Poseidon = RO stays a floor.
 
 ### 2.3 Compilation yields S2 from S1 (Lean)
 
@@ -176,7 +176,7 @@ Under the algebraic restriction, every PC step either gives the polynomial fact 
 
 ### 2.5 Loss from batching SonicPCS openings (Lean)
 
-Both levels reduce to a lucky combination: [`batchedOpening_extract`](../../../Varuna/OpeningBatch.lean#L61) and [`acrossPoints_extract`](../../../Varuna/OpeningBatch.lean#L90). With one free 168-bit challenge per combination (`sonic_pc/mod.rs:301, 505-546`), each costs at most $1/|S|$ ([`card_filter_linear_le_one`](../../../Varuna/Probability.lean#L59)), so the three points cost about $2^{-166}$. The randomizers are transcript-derived, so [`fs_query_charge`](../../../Varuna/FSBound.lean#L48) multiplies by $Q$: $Q = 2^{64}$ gives about $2^{-102}$. The target security level should be fixed together with $Q$.
+Both levels reduce to a lucky combination: [`batchedOpening_extract`](../../../Varuna/OpeningBatch.lean#L61) and [`acrossPoints_extract`](../../../Varuna/OpeningBatch.lean#L90). With one free 168-bit challenge per combination (`sonic_pc/mod.rs:280, 373-414`), each costs at most $1/|S|$ ([`card_filter_linear_le_one`](../../../Varuna/Probability.lean#L59)), so the three points cost about $2^{-166}$. The randomizers are transcript-derived, so [`fs_query_charge`](../../../Varuna/FSBound.lean#L48) multiplies by $Q$: $Q = 2^{64}$ gives about $2^{-102}$. The target security level should be fixed together with $Q$.
 
 ## 3. Soundness of the Fiat–Shamir transform (Lean; Poseidon = RO excluded)
 
@@ -208,16 +208,21 @@ The hiding commitment of that polynomial is the non-hiding commitment plus a con
 5. **Public input and reindexing (Lean).** [`reindexBySubdomain`](../../../Varuna/PublicInput.lean#L34), [`reindex_witness_mod_ne_zero`](../../../Varuna/PublicInput.lean#L46), [`assignment_at_input_position`](../../../Varuna/PublicInput.lean#L73): $\hat z$ equals the verifier's $\hat x$ at every input position, given canonical generators (`hgen`).
 6. **Index = circuit (floor, now precise).** The hypotheses `hidx*` of [`satisfies_of_rows`](../../../Varuna/Bridge.lean#L96) state exactly what the floor assumes.
 7. **Completeness (Lean).** [`rowcheckResidual_honest`](../../../Varuna/AHP.lean#L127), [`univariateResidual_honest`](../../../Varuna/AHP.lean#L200), [`matrixResidual_honest`](../../../Varuna/AHP.lean#L342), [`kzgCheck_honest`](../../../Varuna/SonicPC.lean#L259), [`accepts_of_residuals_zero`](../../../Varuna/AHP.lean#L401).
-8. **Lean vs snarkVM (Lean fingerprint).** [`Fingerprint.lean`](../../../Varuna/Fingerprint.lean) re-checks one captured snarkVM V3 hiding-mode proof ([`fixtures/fingerprint`](../../../fixtures/fingerprint/PROVENANCE.md), from the pinned tree with test-only instrumentation). The verifier sees only combined openings, so the capture is on the prover side, re-assembled in the verifier's LC shape. Kernel `decide` over the BLS12-377 scalar field checks three things:
-   - every coefficient snarkVM assembles equals Lean's formula ([`matrix_coeffs`](../../../Varuna/Fingerprint.lean#L203), [`lineval_coeffs`](../../../Varuna/Fingerprint.lean#L195), [`rowcheck_coeffs`](../../../Varuna/Fingerprint.lean#L189));
-   - each LC vanishes, both as snarkVM assembled it and in Lean's scalar form ([`matrix_vanishes`](../../../Varuna/Fingerprint.lean#L231), [`matrix_model`](../../../Varuna/Fingerprint.lean#L244));
-   - the scalar forms are the model ([`linevalEval_eq_scalar`](../../../Varuna/Fingerprint.lean#L87), [`matrixTerm_eq_scalar`](../../../Varuna/Fingerprint.lean#L97)).
+8. **Lean vs snarkVM (Lean fingerprint).** [`Fingerprint.lean`](../../../Varuna/Fingerprint.lean) re-checks one captured snarkVM V3 hiding-mode batch proof over two circuits with two instances each ([`batch_shape`](../../../Varuna/Fingerprint.lean#L260); [`fixtures/fingerprint`](../../../fixtures/fingerprint/PROVENANCE.md), from the pinned tree with test-only instrumentation). The verifier sees only combined openings, so the capture is on the prover side, re-assembled in the verifier's LC shape. Kernel `decide` over the BLS12-377 scalar field checks three things:
+   - every coefficient snarkVM assembles equals Lean's formula, with circuits and instances combined by `weightedSum` ([`matrix_coeffs`](../../../Varuna/Fingerprint.lean#L297), [`lineval_coeffs`](../../../Varuna/Fingerprint.lean#L286), [`rowcheck_coeffs`](../../../Varuna/Fingerprint.lean#L280));
+   - each LC vanishes, both as snarkVM assembled it and in Lean's batched scalar form ([`matrix_vanishes`](../../../Varuna/Fingerprint.lean#L331), [`matrix_model`](../../../Varuna/Fingerprint.lean#L341));
+   - the scalar forms are the model ([`eval_selectorBatch`](../../../Varuna/Fingerprint.lean#L81), [`matrixTerm_eq_scalar`](../../../Varuna/Fingerprint.lean#L89)).
 
-   The fixture uses unequal $|K_M|$, so the selector scale is exercised ([`selB_ne_one`](../../../Varuna/Fingerprint.lean#L263)). It also shows $\mathrm{row}(\gamma)\,\mathrm{col}(\gamma) \ne \mathrm{row\_col}(\gamma)$ ([`product_form_differs`](../../../Varuna/Fingerprint.lean#L267)): Lean's `matrixBPoly` agrees with the deployed $b$ only on $K$, which is all [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151) uses. [`SpotCheck.lean`](../../../Varuna/SpotCheck.lean) samples the source. The fixture has field elements only, so the group-level MSM / pairing assembly is outside Lean, and byte encodings stay a floor. Sage proofs are not captured: the Sage implementation is a readable single-circuit PIOP, and snarkVM is the verifier of record.
+   The two circuits differ on every domain, so each batching ingredient is exercised. The first combiner of each family is $1$ and the rest are squeezed, with fresh third-round combiners ([`first_combiners_eq_one`](../../../Varuna/Fingerprint.lean#L348), [`later_combiners_squeezed`](../../../Varuna/Fingerprint.lean#L355)). The selector scale is non-trivial at $\alpha$, $\beta$, and $\gamma$ ([`selectors_scaled`](../../../Varuna/Fingerprint.lean#L364)), and $v_{X_i}(\beta)$ is per circuit ([`input_domains_differ`](../../../Varuna/Fingerprint.lean#L370)). The fixture also shows $\mathrm{row}(\gamma)\,\mathrm{col}(\gamma) \ne \mathrm{row\_col}(\gamma)$ in both circuits ([`product_form_differs`](../../../Varuna/Fingerprint.lean#L374)): Lean's `matrixBPoly` agrees with the deployed $b$ only on $K$, which is all [`matrix_sumcheck_value`](../../../Varuna/MatrixSumcheck.lean#L151) uses. [`SpotCheck.lean`](../../../Varuna/SpotCheck.lean) samples the source. The fixture has field elements only, so the group-level MSM / pairing assembly is outside Lean, and byte encodings stay a floor. Sage proofs are not captured: the Sage implementation is a readable single-circuit PIOP, and snarkVM is the verifier of record.
 
 ## What remains
 
-**Faithfulness past the LC layer.** The fingerprint covers zero-eval LC coefficients of one captured proof. The group-level MSM / pairing assembly, byte encodings, and Sage proofs are outside that capture. See the fingerprint item above.
+**Faithfulness past the LC layer.** The fingerprint covers zero-eval LC coefficients of one captured batch proof (two circuits, two instances each). The group-level MSM / pairing assembly, byte encodings, and Sage proofs are outside that capture. See the fingerprint item above.
+
+**Batching counts.** The batching extractors (§1.3) are proved, but two of their error counts are not:
+
+- *The weight count covers two claims.* [`card_filter_inspectBatch_pair`](../../../Varuna/Probability.lean#L68) is proved for the shape $[1, \eta]$. snarkVM draws several weights at once: every instance combiner $\tau_{i,j}$ and circuit combiner $\nu_i$ of a round in one squeeze (`sample_batch_combiners`, `verifier.rs:50-76`), and all the $\delta$s at `verifier.rs:241-246`. The rowcheck weights are the nested products $\nu_i \tau_{i,j}$. [`squeezeBad`](../../../Varuna/FSBound.lean#L108) models each such draw as one pair. The batched rowcheck has no matching count.
+- *The batched zerocheck is counted point by point.* [`batchedZerocheck_extract`](../../../Varuna/Selectors.lean#L81) requires no lucky combination at every point of the constraint domain $R$. Counted point by point, that allows up to $|R|$ bad weights. The tight bound is one bad weight, using the identity on all of $R$, and Lean does not prove it. This is negligible at 252-bit challenges, so it is a hole in the proof, not in the protocol.
 
 **Primality of the scalar modulus.** `knowledgeSoundness_bls` is the capstone at `ZMod bls12_377_r`, and `Fingerprint.q_eq_bls12_377_r` shows the captured `q` is that number. Primality is a `Fact`, as in §2.3.
 
@@ -229,7 +234,7 @@ The hiding commitment of that polynomial is the non-hiding commitment plus a con
 | --- | --- | --- |
 | 1.1 S1 notion | Lean | `inspectResidual`, `ahp_error` |
 | 1.2 Unbatched error | Lean | `ahp_error_concrete`, `card_filter_inspectResidual_le` |
-| 1.3 AHP batching error | Lean | `batchedZerocheck_extract`, `batchedSumcheck_extract` |
+| 1.3 AHP batching error | Lean extractors; count for $[1, \eta]$ only | `batchedZerocheck_extract`, `batchedSumcheck_extract`, `card_filter_inspectBatch_pair` |
 | 1.4 Assumptions | Lean | `TrustBoundary.lean` |
 | 2.1 Primitive P | Lean (algebraic projection) | `PreprocessingAHP.sound`, `ProofView` |
 | 2.2 S2 | Lean | `fs_v2_squeeze_charge`, `fs_query_charge` |
@@ -252,7 +257,7 @@ Pin sources by commit, not by branch.
 | `ProvableHQ/snarkVM` submodule (`Varuna.snarkVMPin`) `algorithms/src/snark/varuna/` | Deployed AHP, FS, PC, batching (target: `VarunaVersion.V3`); sampled in `SpotCheck.lean` |
 | `ProvableHQ/snarkVM` `algorithms/src/polycommit/sonic_pc/` and `kzg10/` | PC interface and pairing check |
 | `leanprover-community/mathlib4` tag `v4.33.0` | Field, `Polynomial`, roots of unity, Lagrange |
-| `fixtures/fingerprint/` | One captured snarkVM V3 hiding-mode proof |
+| `fixtures/fingerprint/` | One captured snarkVM V3 hiding-mode batch proof: two circuits, two instances each |
 
 The Sage implementation is single-circuit R1CS with ZK, and without batching or lookups. It is a readable PIOP. snarkVM is the verifier of record, and this project does not capture Sage proofs.
 

@@ -1,8 +1,8 @@
 diff --git a/algorithms/src/snark/varuna/tests.rs b/algorithms/src/snark/varuna/tests.rs
-index 3e28db5ed..28dfca90a 100644
+index 4789fe980..65326d402 100644
 --- a/algorithms/src/snark/varuna/tests.rs
 +++ b/algorithms/src/snark/varuna/tests.rs
-@@ -1056,3 +1056,74 @@ mod varuna_test_vectors {
+@@ -1271,3 +1271,122 @@ mod varuna_test_vectors {
          test_varuna_with_all_circuits(false);
      }
  }
@@ -18,6 +18,7 @@ index 3e28db5ed..28dfca90a 100644
 +    };
 +    use snarkvm_curves::bls12_377::{Bls12_377, Fq, Fr};
 +    use snarkvm_utilities::rand::TestRng;
++    use std::collections::BTreeMap;
 +
 +    type FS = PoseidonSponge<Fq, 2, 1>;
 +    type Inst = VarunaSNARK<Bls12_377, FS, VarunaHidingMode>;
@@ -25,31 +26,68 @@ index 3e28db5ed..28dfca90a 100644
 +    /// Fixed seed so the capture is reproducible.
 +    const SEED: u64 = 0x07A0_2026;
 +
-+    /// A satisfiable circuit whose `A` rows carry several terms, so the three
-+    /// non-zero domains differ (`|K_A| = 16`, `|K_B| = |K_C| = 8`) and the
-+    /// matrix-sumcheck selectors carry a real `|K_M| / |K|` scale.
++    /// The two circuits of the batch. `prove_batch` takes one constraint type,
++    /// so both are variants of one enum.
++    ///
++    /// `Unbalanced`: one public input, five constraints, and `A` rows with
++    /// several terms, so its three non-zero domains differ (`|K_A| = 16`,
++    /// `|K_B| = |K_C| = 8`) and the matrix-sumcheck selectors carry a real
++    /// `|K_M| / |K|` scale.
++    ///
++    /// `Product`: three public inputs `p, q, r = (pq)^2` and one private
++    /// `u = pq`. With the three randomizing variables and the extra constraint
++    /// of hiding mode, its constraint, variable, and non-zero domains are all
++    /// smaller than `Unbalanced`'s and its input domain is larger, so the
++    /// selectors at `alpha`, `beta`, and `gamma` all carry a scale.
 +    #[derive(Clone)]
-+    struct Unbalanced {
-+        x: Fr,
++    enum Fixture {
++        Unbalanced { x: u64, a: u64, b: u64 },
++        Product { p: u64, q: u64 },
 +    }
 +
-+    impl ConstraintSynthesizer<Fr> for Unbalanced {
++    impl Fixture {
++        /// Public inputs, with the leading constant `1` the verifier expects.
++        fn inputs(&self) -> Vec<Fr> {
++            let f = |v: u64| Fr::from(v);
++            match *self {
++                Self::Unbalanced { x, .. } => vec![f(1), f(x)],
++                Self::Product { p, q } => vec![f(1), f(p), f(q), f(p * q * p * q)],
++            }
++        }
++    }
++
++    impl ConstraintSynthesizer<Fr> for Fixture {
 +        fn generate_constraints<CS: ConstraintSystem<Fr>>(&self, cs: &mut CS) -> Result<(), SynthesisError> {
 +            let f = |v: u64| Fr::from(v);
-+            let x = cs.alloc_input(|| "x", || Ok(self.x))?; // x = 3
-+            let a = cs.alloc(|| "a", || Ok(f(1)))?;
-+            let b = cs.alloc(|| "b", || Ok(f(2)))?;
-+            let c = cs.alloc(|| "c", || Ok(f(6)))?; // (a + b + x) * 1
-+            let d = cs.alloc(|| "d", || Ok(f(3)))?; // (a + b) * a
-+            let e = cs.alloc(|| "e", || Ok(f(12)))?; // (a + b + c + d) * 1
-+            let g = cs.alloc(|| "g", || Ok(f(9)))?; // x * x
-+            let h = cs.alloc(|| "h", || Ok(f(21)))?; // (e + g) * 1
 +            let one = CS::one();
-+            cs.enforce(|| "c", |lc| lc + a + b + x, |lc| lc + one, |lc| lc + c);
-+            cs.enforce(|| "d", |lc| lc + a + b, |lc| lc + a, |lc| lc + d);
-+            cs.enforce(|| "e", |lc| lc + a + b + c + d, |lc| lc + one, |lc| lc + e);
-+            cs.enforce(|| "g", |lc| lc + x, |lc| lc + x, |lc| lc + g);
-+            cs.enforce(|| "h", |lc| lc + e + g, |lc| lc + one, |lc| lc + h);
++            match *self {
++                Self::Unbalanced { x: xv, a: av, b: bv } => {
++                    let (cv, dv, gv) = (av + bv + xv, (av + bv) * av, xv * xv);
++                    let ev = av + bv + cv + dv;
++                    let x = cs.alloc_input(|| "x", || Ok(f(xv)))?;
++                    let a = cs.alloc(|| "a", || Ok(f(av)))?;
++                    let b = cs.alloc(|| "b", || Ok(f(bv)))?;
++                    let c = cs.alloc(|| "c", || Ok(f(cv)))?; // (a + b + x) * 1
++                    let d = cs.alloc(|| "d", || Ok(f(dv)))?; // (a + b) * a
++                    let e = cs.alloc(|| "e", || Ok(f(ev)))?; // (a + b + c + d) * 1
++                    let g = cs.alloc(|| "g", || Ok(f(gv)))?; // x * x
++                    let h = cs.alloc(|| "h", || Ok(f(ev + gv)))?; // (e + g) * 1
++                    cs.enforce(|| "c", |lc| lc + a + b + x, |lc| lc + one, |lc| lc + c);
++                    cs.enforce(|| "d", |lc| lc + a + b, |lc| lc + a, |lc| lc + d);
++                    cs.enforce(|| "e", |lc| lc + a + b + c + d, |lc| lc + one, |lc| lc + e);
++                    cs.enforce(|| "g", |lc| lc + x, |lc| lc + x, |lc| lc + g);
++                    cs.enforce(|| "h", |lc| lc + e + g, |lc| lc + one, |lc| lc + h);
++                }
++                Self::Product { p: pv, q: qv } => {
++                    let uv = pv * qv;
++                    let p = cs.alloc_input(|| "p", || Ok(f(pv)))?;
++                    let q = cs.alloc_input(|| "q", || Ok(f(qv)))?;
++                    let r = cs.alloc_input(|| "r", || Ok(f(uv * uv)))?; // u * u
++                    let u = cs.alloc(|| "u", || Ok(f(uv)))?; // p * q
++                    cs.enforce(|| "u", |lc| lc + p, |lc| lc + q, |lc| lc + u);
++                    cs.enforce(|| "r", |lc| lc + u, |lc| lc + u, |lc| lc + r);
++                }
++            }
 +            Ok(())
 +        }
 +    }
@@ -62,23 +100,33 @@ index 3e28db5ed..28dfca90a 100644
 +        let prover = &srs.to_universal_prover().unwrap();
 +        let verifier = &srs.to_universal_verifier().unwrap();
 +        let fs = FS::sample_parameters();
-+        let x = Fr::from(3u64);
-+        let circuit = Unbalanced { x };
-+        let (pk, vk) = Inst::circuit_setup(&srs, &circuit).unwrap();
++
++        // Two circuits, two instances each.
++        let unbalanced = [Fixture::Unbalanced { x: 3, a: 1, b: 2 }, Fixture::Unbalanced { x: 5, a: 2, b: 7 }];
++        let product = [Fixture::Product { p: 2, q: 3 }, Fixture::Product { p: 5, q: 7 }];
++        let (pk_u, vk_u) = Inst::circuit_setup(&srs, &unbalanced[0]).unwrap();
++        let (pk_p, vk_p) = Inst::circuit_setup(&srs, &product[0]).unwrap();
++        let keys_to_constraints = BTreeMap::from([(&pk_u, &unbalanced[..]), (&pk_p, &product[..])]);
 +
 +        let path = std::env::var("VARUNA_FINGERPRINT_OUT").unwrap_or_else(|_| "/tmp/varuna_lc_fingerprint.json".into());
 +        fingerprint::set(Some(path.clone()));
-+        let proof = Inst::prove(prover, &fs, &pk, VarunaVersion::V3, &circuit, rng);
++        let proof = Inst::prove_batch(prover, &fs, VarunaVersion::V3, &keys_to_constraints, rng);
 +        fingerprint::set(None);
 +        let proof = proof.unwrap();
 +
-+        let inputs = vec![Fr::from(1u64), x];
-+        assert!(Inst::verify(verifier, &fs, &vk, VarunaVersion::V3, inputs, &proof).unwrap(), "captured proof verifies");
++        let inputs_u = unbalanced.iter().map(Fixture::inputs).collect::<Vec<_>>();
++        let inputs_p = product.iter().map(Fixture::inputs).collect::<Vec<_>>();
++        let keys_to_inputs = BTreeMap::from([(&vk_u, &inputs_u[..]), (&vk_p, &inputs_p[..])]);
++        assert!(
++            Inst::verify_batch(verifier, &fs, VarunaVersion::V3, &keys_to_inputs, &proof).unwrap(),
++            "captured proof verifies"
++        );
 +        println!("wrote fingerprint to {path}");
++        println!("circuit ids: Unbalanced = {}, Product = {}", pk_u.circuit.id, pk_p.circuit.id);
 +    }
 +}
 diff --git a/algorithms/src/snark/varuna/varuna.rs b/algorithms/src/snark/varuna/varuna.rs
-index d8e1cdae6..4cf38e5c7 100644
+index 2a637c696..7ab30c4fa 100644
 --- a/algorithms/src/snark/varuna/varuna.rs
 +++ b/algorithms/src/snark/varuna/varuna.rs
 @@ -53,6 +53,20 @@ use itertools::Itertools;
@@ -102,7 +150,7 @@ index d8e1cdae6..4cf38e5c7 100644
  use crate::srs::UniversalProver;
  
  /// The Varuna proof system.
-@@ -690,6 +704,107 @@ where
+@@ -696,6 +710,142 @@ where
              varuna_version,
          )?;
  
@@ -114,15 +162,17 @@ index d8e1cdae6..4cf38e5c7 100644
 +            };
 +            use snarkvm_fields::{Field, One, PrimeField, Zero};
 +            let n = |x: E::Fr| x.to_bigint().to_string();
++            let scalars = |kv: &[(String, E::Fr)]| kv.iter().map(|(k, v)| format!("\"{k}\":\"{}\"", n(*v))).join(",");
 +            // Verifier view: without the prover-only matrix numerators/denominators,
-+            // plus the index polynomials, so the LCs take the deployed verifier's form.
-+            let pk = keys_to_constraints.keys().next().unwrap();
++            // plus every circuit's index polynomials, so the LCs take the deployed verifier's form.
 +            let mut view: Vec<_> = polynomials
 +                .iter()
 +                .filter(|p| !p.label().contains("_a_poly_") && !p.label().contains("_b_poly_"))
 +                .cloned()
 +                .collect();
-+            view.extend(pk.circuit.interpolate_matrix_evals()?);
++            for pk in keys_to_constraints.keys() {
++                view.extend(pk.circuit.interpolate_matrix_evals()?);
++            }
 +            let lc_s = AHPForR1CS::<_, SM>::construct_linear_combinations(
 +                &public_inputs,
 +                &view,
@@ -134,49 +184,82 @@ index d8e1cdae6..4cf38e5c7 100644
 +            let ev = |label: &str, point: E::Fr| -> Result<E::Fr> {
 +                view.get_lc_eval(&LinearCombination::new(label.to_string(), [(E::Fr::one(), label.to_string())]), point)
 +            };
-+            ensure!(verifier_state.circuit_specific_states.len() == 1, "capture expects one circuit");
-+            let (id, cs) = verifier_state.circuit_specific_states.iter().next().unwrap();
-+            ensure!(cs.batch_size == 1, "capture expects one instance");
 +            let alpha = verifier_state.second_round_message.as_ref().unwrap().alpha;
++            let first = verifier_state.first_round_message.as_ref().unwrap();
 +            let prep = verifier_state.prepare_third_round_message.as_ref().unwrap();
 +            let beta = verifier_state.third_round_message.unwrap().beta;
 +            let gamma = verifier_state.gamma.unwrap();
 +            let fourth = verifier_state.fourth_round_message.as_ref().unwrap();
-+            let s3 = &prover_third_message.sums[0][0];
-+            let s4 = &prover_fourth_message.sums[0];
-+            let (x_dom, c_dom, r_dom) = (cs.input_domain, cs.variable_domain, cs.constraint_domain);
++            let r_max = verifier_state.max_constraint_domain;
++            let c_max = verifier_state.max_variable_domain;
 +            let k_max = verifier_state.max_non_zero_domain;
-+            let k_doms = [cs.non_zero_a_domain, cs.non_zero_b_domain, cs.non_zero_c_domain];
-+            // x̂(β) exactly as `construct_linear_combinations` computes it.
-+            let formatted = prover::ConstraintSystem::format_public_input(&public_inputs[id][0]);
-+            let lag = x_dom.evaluate_all_lagrange_coefficients(beta);
-+            let x_at_beta: E::Fr = formatted.iter().zip_eq(&lag).map(|(x, l)| *x * l).sum();
-+            let label = |m: &str| witness_label(*id, m, 0);
-+            let idx = |kind: &str, m: &str| format!("circuit_{id}_{kind}_{m}");
++            // `(v_{H_i}(point) |H|)^{-1}`, the inverse in a selector `s_{H,H_i}(point)`.
++            let inv_selden = |h_i: EvaluationDomain<E::Fr>, h: EvaluationDomain<E::Fr>, point: E::Fr| {
++                (h_i.evaluate_vanishing_polynomial(point) * h.size_as_field_element).inverse().unwrap()
++            };
 +
-+            let mut kv: Vec<(String, E::Fr)> = vec![
++            let globals: Vec<(String, E::Fr)> = vec![
 +                ("alpha".into(), alpha), ("beta".into(), beta), ("gamma".into(), gamma),
 +                ("eta_a".into(), prep.eta_a), ("eta_b".into(), prep.eta_b), ("eta_c".into(), prep.eta_c),
-+                ("delta_a".into(), fourth.delta_a[0]), ("delta_b".into(), fourth.delta_b[0]),
-+                ("delta_c".into(), fourth.delta_c[0]),
-+                ("sigma_a".into(), s3.sum_a), ("sigma_b".into(), s3.sum_b), ("sigma_c".into(), s3.sum_c),
-+                ("sum4_a".into(), s4.sum_a), ("sum4_b".into(), s4.sum_b), ("sum4_c".into(), s4.sum_c),
-+                ("x_at_beta".into(), x_at_beta),
 +                ("h_0@alpha".into(), ev("h_0", alpha)?), ("mask@beta".into(), ev("mask_poly", beta)?),
-+                ("w@beta".into(), ev(&label("w"), beta)?), ("h_1@beta".into(), ev("h_1", beta)?),
-+                ("g_1@beta".into(), ev("g_1", beta)?), ("h_2@gamma".into(), ev("h_2", gamma)?),
-+                ("inv_C".into(), c_dom.size_as_field_element.inverse().unwrap()),
++                ("h_1@beta".into(), ev("h_1", beta)?), ("g_1@beta".into(), ev("g_1", beta)?),
++                ("h_2@gamma".into(), ev("h_2", gamma)?),
++                ("inv_C".into(), c_max.size_as_field_element.inverse().unwrap()),
 +            ];
-+            for (m, k_dom) in ["a", "b", "c"].into_iter().zip_eq(k_doms) {
-+                kv.push((format!("g_{m}@gamma"), ev(&label(&format!("g_{m}")), gamma)?));
-+                for kind in ["row", "col", "row_col", "row_col_val"] {
-+                    kv.push((format!("{kind}_{m}@gamma"), ev(&idx(kind, m), gamma)?));
++            let sizes = format!("\"R\":{},\"C\":{},\"K\":{}", r_max.size, c_max.size, k_max.size);
++
++            // Circuits in `CircuitId` order, the order of every per-circuit list in the
++            // proof; circuit `i`'s labels are renamed from `circuit_{id}_` to `c{i}_`.
++            let mut circuits_json = Vec::new();
++            let mut renames = Vec::new();
++            for (i, (id, cs)) in verifier_state.circuit_specific_states.iter().enumerate() {
++                let (first_i, third_i) = (&first.first_round_batch_combiners[id], &prep.third_round_batch_combiners[id]);
++                let s4 = &prover_fourth_message.sums[i];
++                let k_doms = [cs.non_zero_a_domain, cs.non_zero_b_domain, cs.non_zero_c_domain];
++                let mut kv: Vec<(String, E::Fr)> = vec![
++                    ("combiner_1".into(), first_i.circuit_combiner),
++                    ("combiner_3".into(), third_i.circuit_combiner),
++                    ("delta_a".into(), fourth.delta_a[i]), ("delta_b".into(), fourth.delta_b[i]),
++                    ("delta_c".into(), fourth.delta_c[i]),
++                    ("sum4_a".into(), s4.sum_a), ("sum4_b".into(), s4.sum_b), ("sum4_c".into(), s4.sum_c),
++                    ("inv_selden_R".into(), inv_selden(cs.constraint_domain, r_max, alpha)),
++                    ("inv_selden_C".into(), inv_selden(cs.variable_domain, c_max, beta)),
++                ];
++                for (m, k_dom) in ["a", "b", "c"].into_iter().zip_eq(k_doms) {
++                    kv.push((format!("g_{m}@gamma"), ev(&witness_label(*id, &format!("g_{m}"), 0), gamma)?));
++                    for kind in ["row", "col", "row_col", "row_col_val"] {
++                        kv.push((format!("{kind}_{m}@gamma"), ev(&format!("circuit_{id}_{kind}_{m}"), gamma)?));
++                    }
++                    kv.push((format!("inv_selden_K{}", m.to_uppercase()), inv_selden(k_dom, k_max, gamma)));
 +                }
-+                let den = k_dom.evaluate_vanishing_polynomial(gamma) * k_max.size_as_field_element;
-+                kv.push((format!("inv_selden_{m}"), den.inverse().unwrap()));
++                // x̂(β) exactly as `construct_linear_combinations` computes it.
++                let lag = cs.input_domain.evaluate_all_lagrange_coefficients(beta);
++                let mut instances = Vec::new();
++                for j in 0..cs.batch_size {
++                    let s3 = &prover_third_message.sums[i][j];
++                    let formatted = prover::ConstraintSystem::format_public_input(&public_inputs[id][j]);
++                    let x_at_beta: E::Fr = formatted.iter().zip_eq(&lag).map(|(x, l)| *x * l).sum();
++                    let inst: Vec<(String, E::Fr)> = vec![
++                        ("combiner_1".into(), first_i.instance_combiners[j]),
++                        ("combiner_3".into(), third_i.instance_combiners[j]),
++                        ("sigma_a".into(), s3.sum_a), ("sigma_b".into(), s3.sum_b), ("sigma_c".into(), s3.sum_c),
++                        ("x_at_beta".into(), x_at_beta), ("w@beta".into(), ev(&witness_label(*id, "w", j), beta)?),
++                    ];
++                    instances.push(format!("{{{}}}", scalars(&inst)));
++                }
++                let sizes_i = format!(
++                    "\"R\":{},\"C\":{},\"X\":{},\"KA\":{},\"KB\":{},\"KC\":{}",
++                    cs.constraint_domain.size, cs.variable_domain.size, cs.input_domain.size,
++                    k_doms[0].size, k_doms[1].size, k_doms[2].size
++                );
++                circuits_json.push(format!(
++                    "{{\"label\":\"c{i}\",\"id\":\"{id}\",\"sizes\":{{{sizes_i}}},\"scalars\":{{{}}},\"instances\":[{}]}}",
++                    scalars(&kv),
++                    instances.join(",")
++                ));
++                renames.push((format!("circuit_{id}_"), format!("c{i}_")));
 +            }
-+            let sizes = [("R", r_dom.size), ("C", c_dom.size), ("X", x_dom.size), ("K", k_max.size),
-+                ("KA", k_doms[0].size), ("KB", k_doms[1].size), ("KC", k_doms[2].size)];
++            let rename = |l: &str| renames.iter().fold(l.to_string(), |l, (from, to)| l.replace(from, to));
 +
 +            let point_of: BTreeMap<String, E::Fr> =
 +                query_set.to_set().into_iter().map(|(l, (_, q))| (l, q)).collect();
@@ -189,7 +272,7 @@ index d8e1cdae6..4cf38e5c7 100644
 +                for (term, coeff) in &lc.terms {
 +                    let (value, tl) = match term {
 +                        LCTerm::One => (E::Fr::one(), "1".to_string()),
-+                        LCTerm::PolyLabel(l) => (ev(l, q)?, l.replace(&format!("circuit_{id}_"), "")),
++                        LCTerm::PolyLabel(l) => (ev(l, q)?, rename(l)),
 +                    };
 +                    acc += *coeff * value;
 +                    terms.push(format!("{{\"term\":\"{tl}\",\"coeff\":\"{}\",\"value\":\"{}\"}}", n(*coeff), n(value)));
@@ -197,11 +280,11 @@ index d8e1cdae6..4cf38e5c7 100644
 +                ensure!(acc.is_zero(), "zero-eval LC {name} did not vanish on the honest proof");
 +                lcs_json.push(format!("{{\"label\":\"{name}\",\"terms\":[{}]}}", terms.join(",")));
 +            }
-+            let scalars = kv.iter().map(|(k, v)| format!("\"{k}\":\"{}\"", n(*v))).collect::<Vec<_>>().join(",");
-+            let sizes = sizes.iter().map(|(k, v)| format!("\"{k}\":{v}")).collect::<Vec<_>>().join(",");
 +            let json = format!(
-+                "{{\"protocol\":\"VARUNA-2026-V3\",\"modulus\":\"{}\",\"sizes\":{{{sizes}}},\"scalars\":{{{scalars}}},\"lcs\":[{}]}}\n",
++                "{{\"protocol\":\"VARUNA-2026-V3\",\"modulus\":\"{}\",\"sizes\":{{{sizes}}},\"scalars\":{{{}}},\"circuits\":[{}],\"lcs\":[{}]}}\n",
 +                <E::Fr as PrimeField>::modulus(),
++                scalars(&globals),
++                circuits_json.join(","),
 +                lcs_json.join(",")
 +            );
 +            std::fs::write(&path, json).expect("write fingerprint");

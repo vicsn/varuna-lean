@@ -16,7 +16,7 @@ of the identities snarkVM actually runs, checked against the Lean defs.
 
 It is *not* a BLS12-377 proof capture. Byte encodings, Poseidon, and
 pairing hardness stay floors. Each sample names a path in the pinned
-`snarkVM/` submodule (`8e86fb2b3414f7a16fa2d47d723e918f70aff0cc`).
+`snarkVM/` submodule (`29343ebbb7970e4240b4444346aeb26e31009bd7`, v4.11.0).
 -/
 
 set_option linter.unusedSectionVars false
@@ -29,9 +29,9 @@ variable {F : Type*} [Field F]
 
 /-- Pinned snarkVM git object the samples were read from. -/
 def snarkVMPin : String :=
-  "8e86fb2b3414f7a16fa2d47d723e918f70aff0cc"
+  "29343ebbb7970e4240b4444346aeb26e31009bd7"
 
-/-- The pin is the 40-character SHA recorded in `.gitmodules`. -/
+/-- The pin is the 40-character SHA of the `snarkVM` submodule commit. -/
 @[simp] theorem snarkVMPin_length : snarkVMPin.length = 40 :=
   rfl
 

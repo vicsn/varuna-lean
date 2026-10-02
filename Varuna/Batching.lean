@@ -104,35 +104,43 @@ def DeltaCombiners.first (deltaB deltaC : F) : DeltaCombiners F :=
 
 /-! ## Weighted sums and batch-break data -/
 
-/-- Weighted sum `∑ wᵢ cᵢ` (snarkVM batch combination of field claims). -/
-def weightedSum : List F → List F → F
+section CommRing
+
+variable {R : Type*} [CommRing R]
+
+/-- Weighted sum `∑ wᵢ cᵢ` (snarkVM batch combination of field claims). Over a
+commutative ring : the captured proof is over `ZMod q`, a field only under a
+primality `Fact`. -/
+def weightedSum : List R → List R → R
   | [], _ => 0
   | _, [] => 0
   | w :: ws, c :: cs => w * c + weightedSum ws cs
 
 /-- Empty weights yield zero. -/
-@[simp] theorem weightedSum_nil_weights (cs : List F) : weightedSum [] cs = 0 :=
+@[simp] theorem weightedSum_nil_weights (cs : List R) : weightedSum [] cs = 0 :=
   rfl
 
 /-- Empty claims yield zero. -/
-@[simp] theorem weightedSum_nil_claims : ∀ ws : List F, weightedSum ws [] = 0
+@[simp] theorem weightedSum_nil_claims : ∀ ws : List R, weightedSum ws [] = 0
   | [] => rfl
   | _ :: _ => rfl
 
 /-- Cons cell of a weighted sum. -/
-@[simp] theorem weightedSum_cons (w c : F) (ws cs : List F) :
+@[simp] theorem weightedSum_cons (w c : R) (ws cs : List R) :
     weightedSum (w :: ws) (c :: cs) = w * c + weightedSum ws cs :=
   rfl
 
 /-- A list of zeros is a zero combination, for any weights. -/
 theorem weightedSum_all_zero :
-    ∀ (ws cs : List F), (∀ x ∈ cs, x = 0) → weightedSum ws cs = 0
+    ∀ (ws cs : List R), (∀ x ∈ cs, x = 0) → weightedSum ws cs = 0
   | [], _, _ => rfl
   | _ :: _, [], _ => rfl
   | w :: ws, c :: cs, h => by
     have hc : c = 0 := h c (by simp)
     have hcs : ∀ x ∈ cs, x = 0 := fun x hx => h x (by simp [hx])
     simp [hc, weightedSum_all_zero ws cs hcs]
+
+end CommRing
 
 /-- Whether a claim list has a nonzero entry (Bool, for `inspectBatch`). -/
 def hasNonzero [DecidableEq F] : List F → Bool

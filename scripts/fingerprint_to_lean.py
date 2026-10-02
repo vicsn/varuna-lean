@@ -20,6 +20,25 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "fixtures/fingerprint/v3_lc_capture.json"
 OUT = ROOT / "Varuna/Fingerprint/Capture.lean"
 
+# What the less self-explanatory capture keys are.
+DOC = {
+    "combiner_1": "First-round batch combiner (`rowcheck_zerocheck`); `1` when first.",
+    "combiner_3": "Third-round batch combiner (`lineval_sumcheck`); `1` when first.",
+    "sigma_a": "Prepare-third sum `σ_A`.",
+    "sigma_b": "Prepare-third sum `σ_B`.",
+    "sigma_c": "Prepare-third sum `σ_C`.",
+    "sum4_a": "Fourth-round sum `σ^K_A`.",
+    "sum4_b": "Fourth-round sum `σ^K_B`.",
+    "sum4_c": "Fourth-round sum `σ^K_C`.",
+    "x_at_beta": "`x̂(β)` from the formatted public input.",
+    "inv_C": "Inverse witness `|C|^{-1}`.",
+    "inv_selden_R": "Inverse witness `(v_{R_i}(α) |R|)^{-1}`.",
+    "inv_selden_C": "Inverse witness `(v_{C_i}(β) |C|)^{-1}`.",
+    "inv_selden_KA": "Inverse witness `(v_{K_A}(γ) |K|)^{-1}`.",
+    "inv_selden_KB": "Inverse witness `(v_{K_B}(γ) |K|)^{-1}`.",
+    "inv_selden_KC": "Inverse witness `(v_{K_C}(γ) |K|)^{-1}`.",
+}
+
 
 def lean_name(key: str) -> str:
     """`row_col_val_a@gamma` -> `rowColValAAtGamma`, `inv_C` -> `invC`."""
@@ -29,6 +48,10 @@ def lean_name(key: str) -> str:
     if point:
         name += "At" + point[:1].upper() + point[1:]
     return name
+
+
+def doc(key: str) -> str:
+    return DOC.get(key, f"Captured `{key}`.")
 
 
 def lc_name(label: str) -> str:
@@ -42,6 +65,8 @@ def main() -> None:
     raw = src.read_bytes()
     d = json.loads(raw)
     sha = hashlib.sha256(raw).hexdigest()
+    circuits = d["circuits"]
+    shape = ", ".join(f"`{c['label']}` with {len(c['instances'])} instances" for c in circuits)
     lines = [
         "/-",
         "Copyright (c) 2026 Provable Inc.",
@@ -53,8 +78,9 @@ def main() -> None:
         "/-!",
         "# Captured V3 proof (generated; do not edit)",
         "",
-        "Field elements of one honest snarkVM `VarunaVersion::V3` proof in hiding",
-        "mode, transcribed by `scripts/fingerprint_to_lean.py` from",
+        "Field elements of one honest snarkVM `VarunaVersion::V3` batch proof in",
+        f"hiding mode over {len(circuits)} circuits ({shape}).",
+        "Transcribed by `scripts/fingerprint_to_lean.py` from",
         f"`fixtures/fingerprint/v3_lc_capture.json` (SHA-256 `{sha}`).",
         "Provenance and regeneration: `fixtures/fingerprint/PROVENANCE.md`.",
         "-/",
@@ -69,9 +95,46 @@ def main() -> None:
         "",
     ]
     for k, v in d["sizes"].items():
-        lines += [f"/-- Captured domain size `|{k}|`. -/", f"def size{k} : ℕ := {v}", ""]
+        lines += [f"/-- Captured batch domain size `|{k}|` (the largest circuit's). -/",
+                  f"def size{k} : ℕ := {v}", ""]
     for k, v in d["scalars"].items():
-        lines += [f"/-- Captured `{k}`. -/", f"def {lean_name(k)} : Fr := {v}", ""]
+        lines += [f"/-- {doc(k)} -/", f"def {lean_name(k)} : Fr := {v}", ""]
+
+    inst_keys = list(circuits[0]["instances"][0])
+    lines += ["/-- One instance of a captured circuit. -/", "structure CapturedInstance where"]
+    for k in inst_keys:
+        lines += [f"  /-- {doc(k)} -/", f"  {lean_name(k)} : Fr"]
+    lines.append("")
+    size_keys, scalar_keys = list(circuits[0]["sizes"]), list(circuits[0]["scalars"])
+    lines += ["/-- One captured circuit: its domain sizes, its per-circuit scalars, and its",
+              "instances. -/", "structure CapturedCircuit where"]
+    for k in size_keys:
+        lines += [f"  /-- Domain size `|{k}|` of this circuit. -/", f"  size{k} : ℕ"]
+    for k in scalar_keys:
+        lines += [f"  /-- {doc(k)} -/", f"  {lean_name(k)} : Fr"]
+    lines += ["  /-- The circuit's instances, in proof order. -/",
+              "  instances : List CapturedInstance", ""]
+
+    for c in circuits:
+        label = c["label"]
+        assert list(c["sizes"]) == size_keys and list(c["scalars"]) == scalar_keys
+        names = []
+        for j, inst in enumerate(c["instances"]):
+            assert list(inst) == inst_keys
+            name = f"{label}i{j}"
+            names.append(name)
+            lines += [f"/-- Captured instance {j} of circuit `{label}`. -/",
+                      f"def {name} : CapturedInstance where"]
+            lines += [f"  {lean_name(k)} := {v}" for k, v in inst.items()]
+            lines.append("")
+        lines += [f"/-- Captured circuit `{label}` (snarkVM id `{c['id']}`). -/",
+                  f"def {label} : CapturedCircuit where"]
+        lines += [f"  size{k} := {v}" for k, v in c["sizes"].items()]
+        lines += [f"  {lean_name(k)} := {v}" for k, v in c["scalars"].items()]
+        lines += [f"  instances := [{', '.join(names)}]", ""]
+    lines += ["/-- The captured circuits, in `CircuitId` order. -/",
+              f"def circuits : List CapturedCircuit := [{', '.join(c['label'] for c in circuits)}]", ""]
+
     for lc in d["lcs"]:
         lines.append(f"/-- Captured `{lc['label']}` terms `(label, coefficient, value)`. -/")
         lines.append(f"def {lc_name(lc['label'])} : List (String × Fr × Fr) := [")

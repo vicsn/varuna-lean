@@ -32,9 +32,9 @@ The PC layer is proved under an algebraic adversary (trapdoor breaks),
 probabilities are counted per challenge and per oracle query, and the
 Fiat–Shamir prefix binds the public inputs. `ahp_error_concrete` states
 the AHP error with concrete residual degrees. `Fingerprint.lean`
-kernel-checks a captured snarkVM V3 proof: every coefficient of the three
-zero-eval LCs is Lean's formula, and each LC vanishes over the BLS12-377
-scalar field. Poseidon = RO, pairing hardness, and the algebraic-adversary
+kernel-checks a captured snarkVM V3 batch proof over two circuits with two
+instances each: every coefficient of the three zero-eval LCs is Lean's
+formula, and each LC vanishes over the BLS12-377 scalar field. Poseidon = RO, pairing hardness, and the algebraic-adversary
 restriction stay floors.
 
 The scope, the soundness spine, and how each security-analysis item is covered
@@ -100,13 +100,13 @@ Varuna/
   Composition.lean                  -- v3_chain: mask sum zero and Az ∘ Bz = Cz
   Bridge.lean                       -- Int R1CS ↔ ZMod p; satisfies from rows
   Endpoint.lean                     -- PC reduction + matrix sumchecks + v3_chain
-  Fingerprint.lean                  -- captured snarkVM proof vs Lean LC formulas
+  Fingerprint.lean                  -- captured snarkVM batch proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
   ProofSize.lean                    -- proof element counts vs the spec
   AxiomCheck.lean                   -- assert_axioms / assert_computable
   TrustBoundary.lean                -- axiom-census (build-checked)
-fixtures/fingerprint/               -- captured proof, capture patch, provenance
+fixtures/fingerprint/               -- captured batch proof, capture patch, provenance
 scripts/fingerprint_to_lean.py      -- fixture → Fingerprint/Capture.lean
 protocol-docs/                      -- algorithm spec (git submodule)
 snarkVM/                            -- deployed verifier (git submodule)
