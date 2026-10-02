@@ -160,6 +160,15 @@ theorem injOn_node : Set.InjOn H.node H.indexSet := by
   intro i hi j hj hij
   exact H.hω.pow_inj (Finset.mem_range.mp hi) (Finset.mem_range.mp hj) hij
 
+/-- The nodes `ω^0, …, ω^{n-1}` as a list, in snarkVM's `elements` order. -/
+def nodeList : List F :=
+  (List.range H.n).map H.node
+
+/-- The node list enumerates the domain. -/
+theorem mem_nodeList_iff {x : F} : x ∈ H.nodeList ↔ x ∈ H.elements := by
+  rw [nodeList, List.mem_map, mem_elements_iff_pow]
+  simp only [List.mem_range, node]
+
 /-- Vanishing polynomial `v_H(X) = X^n - 1`. Matches snarkVM `vanishing_polynomial`. -/
 noncomputable def vanishing : F[X] :=
   X ^ H.n - C 1

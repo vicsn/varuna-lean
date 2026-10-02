@@ -104,22 +104,26 @@ theorem before_ne (t : V2Transcript F) {c₁ c₂ : V2Challenge} (h : c₁ ≠ c
 
 /-- Bad answers at each V2 squeeze, read off the residuals and the one-weight
 batches that squeeze determines. `α`, `β`, `γ` are Schwartz–Zippel roots.
-The three combiner squeezes are the single root of `a + η b = 0` on a live claim. -/
+The prepare-third and `δ` squeezes are the single root of `a + η b = 0` on a
+live claim. The first combiners weight the batched rowcheck, whose claims are
+functions on the constraint domain `R` : their bad answers make `a + ν b`
+vanish on all of `R` (`inspectBatchOn`), still at most one. -/
 noncomputable def squeezeBad (S : Finset F) (resα resβ resγ : F[X])
-    (aη bη aδ bδ aν bν : F) : V2Challenge → Finset F
+    (aη bη aδ bδ : F) (R : List F) (aν bν : F → F) : V2Challenge → Finset F
   | .alpha => S.filter (· ∈ szBadSet resα)
   | .beta => S.filter (· ∈ szBadSet resβ)
   | .gamma => S.filter (· ∈ szBadSet resγ)
   | .prepareThird => S.filter fun η => inspectBatch [1, η] [aη, bη] ≠ none
   | .deltas => S.filter fun δ => inspectBatch [1, δ] [aδ, bδ] ≠ none
-  | .firstCombiners => S.filter fun ν => inspectBatch [1, ν] [aν, bν] ≠ none
+  | .firstCombiners =>
+    S.filter fun ν => inspectBatchOn R [1, ν] (fun x => [aν x, bν x]) ≠ none
 
 /-- Every squeeze's bad set has size at most `max(deg resα, deg resβ, deg resγ, 1)`. -/
 theorem squeezeBad_card (S : Finset F) (resα resβ resγ : F[X])
-    (aη bη aδ bδ aν bν : F) {b : ℕ}
+    (aη bη aδ bδ : F) (R : List F) (aν bν : F → F) {b : ℕ}
     (hα : resα.natDegree ≤ b) (hβ : resβ.natDegree ≤ b) (hγ : resγ.natDegree ≤ b)
     (hb : 1 ≤ b) :
-    ∀ c, (squeezeBad S resα resβ resγ aη bη aδ bδ aν bν c).card ≤ b := by
+    ∀ c, (squeezeBad S resα resβ resγ aη bη aδ bδ R aν bν c).card ≤ b := by
   intro c
   cases c with
   | alpha =>
@@ -130,7 +134,7 @@ theorem squeezeBad_card (S : Finset F) (resα resβ resγ : F[X])
     exact (card_filter_mem_le _ _).trans ((card_szBadSet_le_natDegree resγ).trans hγ)
   | prepareThird => exact (card_filter_inspectBatch_pair aη bη S).trans hb
   | deltas => exact (card_filter_inspectBatch_pair aδ bδ S).trans hb
-  | firstCombiners => exact (card_filter_inspectBatch_pair aν bν S).trans hb
+  | firstCombiners => exact (card_filter_inspectBatchOn_pair R aν bν S).trans hb
 
 /-- Outside a squeeze's Schwartz–Zippel set, an accepting evaluation is a zero residual. -/
 theorem squeeze_safe_residual {res : F[X]} {α : F} (hα : α ∉ szBadSet res)
@@ -218,21 +222,23 @@ theorem fs_squeeze_charge (S : Finset F) (A : FSAdversary F) (t : V2Transcript F
   exact fs_break_count S A (prefixBad t Bad) b hcard Q out chal hcons
 
 /-- The six V2 squeezes, with bad sets read off the residuals and the
-one-weight batches, charged as one query-bounded break count. -/
+one-weight batches (the first combiners' on all of `R`), charged as one
+query-bounded break count. -/
 theorem fs_v2_squeeze_charge (S : Finset F) (A : FSAdversary F) (t : V2Transcript F)
-    (resα resβ resγ : F[X]) (aη bη aδ bδ aν bν : F) {b : ℕ}
+    (resα resβ resγ : F[X]) (aη bη aδ bδ : F) (R : List F) (aν bν : F → F) {b : ℕ}
     (hα : resα.natDegree ≤ b) (hβ : resβ.natDegree ≤ b) (hγ : resγ.natDegree ≤ b)
     (hb : 1 ≤ b) (Q : ℕ) (out : List F → V2Transcript F)
     (chal : List F → V2Challenge → F)
     (hcons : ∀ tape ∈ tapes S Q, ∀ c,
       ChallengeFromQuery A tape ((out tape).before c) (chal tape c)) :
     ((tapes S Q).filter fun tape =>
-      outputBreaks (prefixBad t (squeezeBad S resα resβ resγ aη bη aδ bδ aν bν))
+      outputBreaks (prefixBad t (squeezeBad S resα resβ resγ aη bη aδ bδ R aν bν))
         (out tape) (chal tape) = true).card ≤
       Q * b * S.card ^ (Q - 1) := by
-  refine fs_squeeze_charge S A t (squeezeBad S resα resβ resγ aη bη aδ bδ aν bν) b ?_ Q out chal hcons
+  refine fs_squeeze_charge S A t (squeezeBad S resα resβ resγ aη bη aδ bδ R aν bν) b ?_ Q out chal
+    hcons
   intro c
   exact (card_filter_mem_le _ _).trans
-    (squeezeBad_card S resα resβ resγ aη bη aδ bδ aν bν hα hβ hγ hb c)
+    (squeezeBad_card S resα resβ resγ aη bη aδ bδ R aν bν hα hβ hγ hb c)
 
 end Varuna

@@ -75,23 +75,34 @@ noncomputable def batchedClaims (H : EvalDomain F) (cs : List (EvalDomain F × F
     List F :=
   cs.map fun c => (selectorPoly H c.1 * c.2).eval x
 
-/-- Batched zerocheck soundness. If the batched numerator is a multiple of
-`v_H` and no point of `H` yields a lucky combination, every circuit's
-numerator vanishes on its own domain. -/
-theorem batchedZerocheck_extract [DecidableEq F] {H : EvalDomain F} {ws : List F}
-    {cs : List (EvalDomain F × F[X])} (hdvd : ∀ c ∈ cs, c.1.n ∣ H.n) {h : F[X]}
-    (hid : batchedZerocheck H ws cs = h * H.vanishing)
-    (hnone : ∀ x ∈ H.elements, inspectBatch ws (batchedClaims H cs x) = none) :
-    ∀ c ∈ cs, ∀ x ∈ c.1.elements, c.2.eval x = 0 := by
-  intro c hc x hxi
-  have hx : x ∈ H.elements := elements_subset_of_dvd (hdvd c hc) hxi
+/-- A batched numerator that is a multiple of `v_H` combines the claims to zero at
+every point of `H`. -/
+theorem weightedSum_batchedClaims_eq_zero {H : EvalDomain F} {ws : List F}
+    {cs : List (EvalDomain F × F[X])} {h : F[X]}
+    (hid : batchedZerocheck H ws cs = h * H.vanishing) :
+    ∀ x ∈ H.elements, weightedSum ws (batchedClaims H cs x) = 0 := by
+  intro x hx
   have hev := congrArg (eval x) hid
   rw [batchedZerocheck, eval_weightedSumPoly, eval_mul, (H.vanishing_eq_zero_iff x).2 hx,
     mul_zero, List.map_map] at hev
-  have hall := inspectBatch_accepts hev (hnone x hx)
+  exact hev
+
+/-- Batched zerocheck soundness. If the batched numerator is a multiple of
+`v_H` and the combination is not lucky on `H` as a whole (`inspectBatchOn`),
+every circuit's numerator vanishes on its own domain. No lucky combination at
+any single point implies the hypothesis (`inspectBatchOn_eq_none_of_pointwise`). -/
+theorem batchedZerocheck_extract [DecidableEq F] {H : EvalDomain F} {ws : List F}
+    {cs : List (EvalDomain F × F[X])} (hdvd : ∀ c ∈ cs, c.1.n ∣ H.n) {h : F[X]}
+    (hid : batchedZerocheck H ws cs = h * H.vanishing)
+    (hnone : inspectBatchOn H.nodeList ws (batchedClaims H cs) = none) :
+    ∀ c ∈ cs, ∀ x ∈ c.1.elements, c.2.eval x = 0 := by
+  have hacc : ∀ x ∈ H.nodeList, weightedSum ws (batchedClaims H cs x) = 0 := fun x hx =>
+    weightedSum_batchedClaims_eq_zero hid x (H.mem_nodeList_iff.1 hx)
+  intro c hc x hxi
+  have hx : x ∈ H.nodeList := H.mem_nodeList_iff.2 (elements_subset_of_dvd (hdvd c hc) hxi)
   have hmem : (selectorPoly H c.1 * c.2).eval x ∈ batchedClaims H cs x :=
     List.mem_map_of_mem (f := fun c : EvalDomain F × F[X] => (selectorPoly H c.1 * c.2).eval x) hc
-  have hzero := hall _ hmem
+  have hzero := inspectBatchOn_accepts hacc hnone x hx _ hmem
   rwa [eval_mul, selectorPoly_eval_of_mem (hdvd c hc) hxi, one_mul] at hzero
 
 /-! ## Batched sumcheck -/

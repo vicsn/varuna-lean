@@ -84,6 +84,43 @@ theorem card_filter_inspectBatch_pair (a b : F) (S : Finset F) :
     simp only [weightedSum_cons, weightedSum_nil_weights, add_zero, one_mul] at hs
     exact mem_filter.mpr ⟨(mem_filter.mp hη).1, hs⟩
 
+/-- Two claims on a domain `D` combined as `a + η b`, with `η` drawn from `S` : at most
+one bad `η`, however large `D` is. A point where `b` is live fixes `η`; if `b`
+vanishes on `D`, no `η` is bad. -/
+theorem card_filter_inspectBatchOn_pair (D : List F) (a b : F → F) (S : Finset F) :
+    (S.filter fun η => inspectBatchOn D [1, η] (fun x => [a x, b x]) ≠ none).card ≤ 1 := by
+  by_cases hb : ∃ x ∈ D, b x ≠ 0
+  · obtain ⟨x₀, hx₀, hb₀⟩ := hb
+    refine (card_le_card fun η hη => ?_).trans (card_filter_linear_le_one (a := a x₀) hb₀ S)
+    obtain ⟨hacc, _⟩ := (inspectBatchOn_ne_none_iff _ _ _).1 (mem_filter.mp hη).2
+    have h₀ := hacc x₀ hx₀
+    simp only [weightedSum_cons, weightedSum_nil_weights, add_zero, one_mul] at h₀
+    exact mem_filter.mpr ⟨(mem_filter.mp hη).1, h₀⟩
+  · push Not at hb
+    have hempty :
+        (S.filter fun η => inspectBatchOn D [1, η] (fun x => [a x, b x]) ≠ none) = ∅ := by
+      refine filter_eq_empty_iff.mpr fun η _ h => ?_
+      obtain ⟨hacc, x, hx, c, hc, hne⟩ := (inspectBatchOn_ne_none_iff _ _ _).1 h
+      have hs := hacc x hx
+      simp only [weightedSum_cons, weightedSum_nil_weights, hb x hx, mul_zero, add_zero,
+        one_mul] at hs
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+      rcases hc with rfl | rfl
+      · exact hne hs
+      · exact hne (hb x hx)
+    rw [hempty, card_empty]
+    exact zero_le_one
+
+/-- The batched rowcheck over two circuits, with first-round weights `[1, ν]` : at
+most one bad `ν ∈ S` on all of `H`. Counted point by point, the same event could
+cost one bad `ν` per point of `H`. -/
+theorem card_filter_batchedZerocheck_pair (H : EvalDomain F) (c₀ c₁ : EvalDomain F × F[X])
+    (S : Finset F) :
+    (S.filter fun ν =>
+      inspectBatchOn H.nodeList [1, ν] (batchedClaims H [c₀, c₁]) ≠ none).card ≤ 1 :=
+  card_filter_inspectBatchOn_pair H.nodeList (fun x => (selectorPoly H c₀.1 * c₀.2).eval x)
+    (fun x => (selectorPoly H c₁.1 * c₁.2).eval x) S
+
 /-! ## Challenge tapes -/
 
 /-- All answer tapes of length `n` with entries in `S`. -/

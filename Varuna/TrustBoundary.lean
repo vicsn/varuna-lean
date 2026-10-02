@@ -51,6 +51,8 @@ assert_axioms Varuna.toy_mul_holds
 assert_axioms Varuna.formatted_toy_holds
 assert_axioms Varuna.formatted_toy_iff
 assert_axioms Varuna.EvalDomain.vanishing_eq_zero_iff
+assert_axioms Varuna.EvalDomain.mem_nodeList_iff
+assert_computable Varuna.EvalDomain.nodeList
 assert_axioms Varuna.schwartzZippel_card
 assert_axioms Varuna.card_szBadSet_le_natDegree
 assert_axioms Varuna.eval_ne_zero_of_notMem_szBadSet
@@ -106,6 +108,9 @@ assert_axioms Varuna.circuitCombiners_head
 assert_axioms Varuna.etaA_eq_one
 assert_axioms Varuna.inspectBatch_accepts
 assert_axioms Varuna.inspectBatch_some
+assert_axioms Varuna.inspectBatchOn_ne_none_iff
+assert_axioms Varuna.inspectBatchOn_accepts
+assert_axioms Varuna.inspectBatchOn_eq_none_of_pointwise
 assert_axioms Varuna.nested_domain_card_dvd
 assert_axioms Varuna.selector_mul_vanishing
 assert_axioms Varuna.lift_residual
@@ -114,6 +119,7 @@ assert_axioms Varuna.alpha_independent_of_prepareThird
 assert_axioms Varuna.prepareThird_challenge_eq
 assert_axioms Varuna.hasPrepareThird_iff
 assert_computable Varuna.inspectBatch
+assert_computable Varuna.inspectBatchOn
 assert_computable Varuna.weightedSum
 assert_axioms Varuna.lcNames_match_snarkVM
 assert_axioms Varuna.typedAHPAccepts_iff
@@ -183,6 +189,7 @@ assert_axioms Varuna.elements_subset_of_dvd
 assert_axioms Varuna.selectorPoly_eval_of_mem
 assert_axioms Varuna.selectorPoly_eval_of_not_mem
 assert_axioms Varuna.selectorPoly_eval_indicator
+assert_axioms Varuna.weightedSum_batchedClaims_eq_zero
 assert_axioms Varuna.batchedZerocheck_extract
 assert_axioms Varuna.sum_range_node
 assert_axioms Varuna.sum_selectorPoly_mul
@@ -216,6 +223,8 @@ assert_axioms Varuna.card_filter_inspectResidual_le
 assert_axioms Varuna.inspectBatch_ne_none_iff
 assert_axioms Varuna.card_filter_linear_le_one
 assert_axioms Varuna.card_filter_inspectBatch_pair
+assert_axioms Varuna.card_filter_inspectBatchOn_pair
+assert_axioms Varuna.card_filter_batchedZerocheck_pair
 assert_axioms Varuna.card_tapes
 assert_axioms Varuna.hitsB_iff
 assert_axioms Varuna.card_hits_le

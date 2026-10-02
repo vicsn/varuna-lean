@@ -182,6 +182,43 @@ theorem inspectBatch_accepts [DecidableEq F] {ws cs : List F}
   have := inspectBatch_some hacc ⟨c, hc, hne⟩
   simp [this] at hnone
 
+/-- Inspect a combination of claims indexed by the points of `D`, on all of `D` at
+once : `some ws` iff the combination vanishes at every point of `D` but some
+claim is live at some point. `D` is a list because deciding a quantifier over a
+`Finset` goes through `Classical.choice`. -/
+def inspectBatchOn [DecidableEq F] (D : List F) (ws : List F) (claims : F → List F) :
+    Option (List F) :=
+  if (∀ x ∈ D, weightedSum ws (claims x) = 0) ∧ ∃ x ∈ D, ∃ c ∈ claims x, c ≠ 0 then some ws
+  else none
+
+/-- `inspectBatchOn` reports data exactly when the combination vanishes on `D` and a
+claim is live. -/
+theorem inspectBatchOn_ne_none_iff [DecidableEq F] (D : List F) (ws : List F)
+    (claims : F → List F) :
+    inspectBatchOn D ws claims ≠ none ↔
+      (∀ x ∈ D, weightedSum ws (claims x) = 0) ∧
+        ∃ x ∈ D, ∃ c ∈ claims x, c ≠ 0 := by
+  unfold inspectBatchOn
+  split_ifs with h
+  · exact iff_of_true (by simp) h
+  · exact iff_of_false (by simp) h
+
+/-- Accepting on all of `D` with no break data means every claim is zero on `D`. -/
+theorem inspectBatchOn_accepts [DecidableEq F] {D : List F} {ws : List F}
+    {claims : F → List F} (hacc : ∀ x ∈ D, weightedSum ws (claims x) = 0)
+    (hnone : inspectBatchOn D ws claims = none) : ∀ x ∈ D, ∀ c ∈ claims x, c = 0 := by
+  intro x hx c hc
+  by_contra hne
+  exact (inspectBatchOn_ne_none_iff D ws claims).2 ⟨hacc, x, hx, c, hc, hne⟩ hnone
+
+/-- No break at any single point of `D` means no break on `D`. -/
+theorem inspectBatchOn_eq_none_of_pointwise [DecidableEq F] {D : List F} {ws : List F}
+    {claims : F → List F} (h : ∀ x ∈ D, inspectBatch ws (claims x) = none) :
+    inspectBatchOn D ws claims = none := by
+  by_contra hne
+  obtain ⟨hacc, x, hx, c, hc, hc0⟩ := (inspectBatchOn_ne_none_iff D ws claims).1 hne
+  exact hc0 (inspectBatch_accepts (hacc x hx) (h x hx) c hc)
+
 /-! ## Selector polynomials `s_{H, H_i}` -/
 
 /-- Nested FFT domains : a smaller power-of-two size divides a larger one. -/
