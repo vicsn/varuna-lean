@@ -9,6 +9,7 @@ import Varuna.Algebraic
 import Varuna.OpeningBatch
 import Varuna.Lineval
 import Varuna.MatrixSumcheck
+import Varuna.MatrixBatch
 import Varuna.Composition
 import Varuna.Selectors
 import Varuna.Probability
@@ -260,6 +261,10 @@ assert_axioms Varuna.deltaScheme_valid
 assert_axioms Varuna.length_combinerScheme
 assert_axioms Varuna.rowcheckDraw_lucky
 assert_axioms Varuna.card_filter_batchedZerocheck_combiners_le
+assert_axioms Varuna.length_deltaScheme
+assert_axioms Varuna.deltaDraw_coordAffine
+assert_axioms Varuna.deltaDraw_lucky
+assert_axioms Varuna.card_filter_batchedMatrix_deltas_le
 assert_computable Varuna.monoEval
 assert_computable Varuna.schemeWeights
 assert_computable Varuna.freeScheme
@@ -313,6 +318,12 @@ assert_axioms Varuna.V2Endpoint.sound_nonZK
 assert_axioms Varuna.v3_chain
 assert_axioms Varuna.v3_shifted_residual_ne
 assert_axioms Varuna.matrix_sumcheck_value_of_sum
+assert_axioms Varuna.matrix_sumcheck_value_of_numer
+assert_axioms Varuna.sum_remainder_of_natDegree_lt
+assert_axioms Varuna.MatrixTerm.value_of_numer
+assert_axioms Varuna.batchedMatrixEval_eq
+assert_axioms Varuna.batchedMatrix_extract
+assert_axioms Varuna.V3Endpoint.sound_of_matrix_claims
 assert_axioms Varuna.V3Endpoint.sound
 assert_axioms Varuna.V3Endpoint.linevalEvalEta_of_openings
 assert_axioms Varuna.V3Endpoint.matrixEval_of_openings
@@ -320,6 +331,9 @@ assert_axioms Varuna.V3Endpoint.sound_of_openings
 assert_axioms Varuna.V3Endpoint.sound_of_combined_matrix
 assert_axioms Varuna.V3Endpoint.matrix_sumcheck_of_selector
 assert_axioms Varuna.V3Endpoint.sound_r1cs
+assert_axioms Varuna.V3Circuit.length_batchTerms
+assert_axioms Varuna.V3Circuit.sound_of_batched_matrix
+assert_axioms Varuna.V3Circuit.card_filter_batch_deltas_le
 assert_axioms Varuna.before_injective
 assert_axioms Varuna.squeezeBad_card
 assert_axioms Varuna.squeeze_safe_residual
@@ -337,6 +351,7 @@ assert_axioms Varuna.card_filter_prefixBad_le
 assert_axioms Varuna.outputBreaks_of_mem_bad
 assert_axioms Varuna.outputBreaks_of_lucky
 assert_axioms Varuna.outputBreaks_of_rowcheck_lucky
+assert_axioms Varuna.outputBreaks_of_matrix_lucky
 assert_computable Varuna.V2Transcript.elemBefore
 assert_computable Varuna.V2Transcript.decodeElem
 assert_computable Varuna.prefixBad

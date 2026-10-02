@@ -653,4 +653,40 @@ theorem card_filter_batchedZerocheck_combiners_le (H : EvalDomain F) (sizes : Li
   card_filter_inspectBatchOn_scheme_le (combinerScheme_valid sizes) _ _
     (fun x _ => by simpa [batchedClaims, length_combinerScheme] using hcs) S
 
+theorem length_deltaScheme (n : ℕ) : (deltaScheme n).length = 3 * n - 1 + 1 := by
+  simp [deltaScheme, flatScheme, freeScheme]
+
+/-- The fourth-round draw : the batched matrix sumcheck over the numerators `cs`
+of `n` circuits (three per circuit, `A, B, C` in order), weighted by snarkVM's
+`δ`s and checked on all of the largest nonzero domain `K`. -/
+noncomputable def deltaDraw (K : EvalDomain F) (n : ℕ) (cs : List (EvalDomain F × F[X])) :
+    WeightDraw F :=
+  schemeDraw (3 * n - 1) (deltaScheme n) K.nodeList (batchedClaims K cs)
+
+theorem deltaDraw_coordAffine (K : EvalDomain F) (n : ℕ) (cs : List (EvalDomain F × F[X])) :
+    ∀ x ∈ (deltaDraw K n cs).D, CoordAffine ((deltaDraw K n cs).comb x) :=
+  schemeDraw_coordAffine (deltaScheme_valid n).nodup _ _
+
+/-- The lucky event of `batchedMatrix_extract` on snarkVM's `δ`s is a lucky
+fourth-round draw. -/
+theorem deltaDraw_lucky {K : EvalDomain F} {n : ℕ} {cs : List (EvalDomain F × F[X])}
+    (hcs : cs.length ≤ 3 * n - 1 + 1) {ws : List F} (hws : ws.length = 3 * n - 1)
+    (h : inspectBatchOn K.nodeList (schemeWeights (deltaScheme n) ws) (batchedClaims K cs) ≠
+      none) :
+    (deltaDraw K n cs).Lucky ws :=
+  schemeDraw_lucky (deltaScheme_valid n)
+    (fun x _ => by simpa [batchedClaims, length_deltaScheme] using hcs) hws h
+
+/-- The batched matrix sumcheck over `n` circuits, each matrix weighted by its
+`δ` : over all draws of the `3n − 1` squeezed `δ`s, at most
+`(3n − 1) · | S | ^{3n-2}` are lucky on all of `K`. -/
+theorem card_filter_batchedMatrix_deltas_le (K : EvalDomain F) (n : ℕ)
+    (cs : List (EvalDomain F × F[X])) (hcs : cs.length ≤ 3 * n - 1 + 1) (S : Finset F) :
+    ((tapes S (3 * n - 1)).filter fun ws =>
+      inspectBatchOn K.nodeList (schemeWeights (deltaScheme n) ws)
+        (batchedClaims K cs) ≠ none).card ≤
+      (3 * n - 1) * S.card ^ (3 * n - 1 - 1) :=
+  card_filter_inspectBatchOn_scheme_le (deltaScheme_valid n) _ _
+    (fun x _ => by simpa [batchedClaims, length_deltaScheme] using hcs) S
+
 end Varuna

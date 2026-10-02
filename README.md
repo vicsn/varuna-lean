@@ -25,7 +25,10 @@ sum equal to zero, in either mode. `V3Endpoint.sound` composes the `h₀`
 opening, one nonzero domain per matrix, and `v3_chain`.
 `sound_of_openings` reduces `ẑ`, `h₁`, `g₁`, and the matrix witnesses;
 `sound_of_combined_matrix` is the `δ` batch; `matrix_sumcheck_of_selector`
-is the selector-batched sum. `fs_v2_squeeze_charge` charges every
+is the selector-batched sum. `V3Circuit.sound_of_batched_matrix` takes
+snarkVM's one `matrix_sumcheck` over every matrix of every circuit
+(selectors, `δ`s, one `h₂`) to each circuit's matrix claims and its
+`v3_chain` conclusion. `fs_v2_squeeze_charge` charges every
 squeezed element, with snarkVM's batch weights `ν_i τ_{i,j}` counted one
 drawn element at a time. `PreprocessingAHP` is the public-coin argument
 in the algebraic projection. `sound_r1cs` ends at the R1CS relation.
@@ -85,6 +88,7 @@ Varuna/
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck
   Lineval.lean                      -- lineval polynomial with M̂(α, X)
   MatrixSumcheck.lean               -- Lagrange closed form; |K| σ = M̂(α, β)
+  MatrixBatch.lean                  -- one δ-batched matrix sumcheck over all circuits
   PublicInput.lean                  -- input subdomain, reindex_by_subdomain
   SonicPC.lean                      -- labeled polynomials, KZG, binding breaks
   Algebraic.lean                    -- KZG under an algebraic adversary, degree bounds

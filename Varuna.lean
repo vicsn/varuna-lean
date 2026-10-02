@@ -12,6 +12,7 @@ import Varuna.AHP
 import Varuna.Lineval
 import Varuna.PublicInput
 import Varuna.MatrixSumcheck
+import Varuna.MatrixBatch
 import Varuna.SonicPC
 import Varuna.Algebraic
 import Varuna.OpeningBatch

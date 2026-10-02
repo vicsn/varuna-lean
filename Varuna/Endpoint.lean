@@ -8,6 +8,8 @@ import Varuna.MatrixSumcheck
 import Varuna.Algebraic
 import Varuna.Bridge
 import Varuna.Selectors
+import Varuna.MatrixBatch
+import Varuna.Combiners
 
 /-!
 # End-to-end V2 endpoint
@@ -39,6 +41,13 @@ and matrix-witness openings the way `h₀` is reduced.
 `sound_of_combined_matrix` is the `δ` batch of the three matrix checks.
 `matrix_sumcheck_of_selector` turns a selector-batched sum on a common
 domain into ` | K | σ = M̂(α, β)`.
+
+`V3Circuit.sound_of_batched_matrix` is snarkVM's matrix sumcheck for a batch
+of circuits : one LC over every matrix of every circuit, selector-lifted to the
+largest nonzero domain, `δ`-weighted, with one `h₂` (`batchedMatrix_extract`).
+Each circuit's three matrix claims go to `sound_of_matrix_claims`, the
+rowcheck and lineval half of `sound`. `card_filter_batch_deltas_le` counts the
+`δ` draws.
 -/
 
 set_option linter.unusedSectionVars false
@@ -214,6 +223,36 @@ private noncomputable def bPoly (K : EvalDomain F) (M : SparseMatrix F) : F[X] :
 private noncomputable def e : F :=
   maskSum P.Cd P.mode P.mask
 
+/-- The rowcheck and lineval half of `sound`, from the three matrix claims
+` | K_M | σ_M = M̂(α, β)`, however the matrix sumchecks established them. -/
+theorem sound_of_matrix_claims (KA KB KC : EvalDomain F)
+    (hA : P.A.Bounded P.R P.Cd) (hB : P.B.Bounded P.R P.Cd) (hC : P.Cm.Bounded P.R P.Cd)
+    (hτA : (KA.n : F) * P.σmA = (matrixAtAlpha P.R P.Cd P.A P.α).eval P.β)
+    (hτB : (KB.n : F) * P.σmB = (matrixAtAlpha P.R P.Cd P.B P.α).eval P.β)
+    (hτC : (KC.n : F) * P.σmC = (matrixAtAlpha P.R P.Cd P.Cm P.α).eval P.β)
+    (hH0 : inspectOpening P.h0rep [] P.α P.vH0 = none)
+    (hrowScalar : P.σA * P.σB - P.σC - P.vH0 * P.R.vanishing.eval P.α = 0)
+    (hrowI : inspectResidual
+      (shiftedRowResidual P.R P.Cd P.A P.B P.Cm P.zhat (toPoly P.h0rep) 0) P.α = none)
+    (hlin : linevalEvalEta P.mode P.mask P.zhat P.Cd P.ηA P.ηB P.ηC
+      ((KA.n : F) * P.σmA) ((KB.n : F) * P.σmB) ((KC.n : F) * P.σmC)
+      (linevalWitnessEta P.Cd P.h1 P.g1 P.ηA P.ηB P.ηC P.σA P.σB P.σC) P.β = 0)
+    (hlinI : inspectResidual (univariateResidual P.Cd
+      (linevalPolyEta P.mode P.mask P.zhat (matrixAtAlpha P.R P.Cd P.A P.α)
+        (matrixAtAlpha P.R P.Cd P.B P.α) (matrixAtAlpha P.R P.Cd P.Cm P.α) P.ηA P.ηB P.ηC)
+      (linevalWitnessEta P.Cd P.h1 P.g1 P.ηA P.ηB P.ηC P.σA P.σB P.σC)) P.β = none)
+    (hdegL : (X * P.g1 +
+      C ((P.ηA * P.σA + P.ηB * P.σB + P.ηC * P.σC) * P.Cd.sizeInv)).natDegree < P.Cd.n)
+    (hη : inspectBatch [1, P.ηA, P.ηB, P.ηC]
+      (v3Claims P.R P.Cd P.A P.B P.Cm P.zhat P.α P.e P.σA P.σB P.σC) = none) :
+    P.e = 0 ∧ ∀ r, r < P.R.n →
+      mzRow P.Cd P.A P.zhat r * mzRow P.Cd P.B P.zhat r = mzRow P.Cd P.Cm P.zhat r := by
+  have hvH0 : P.vH0 = (toPoly P.h0rep).eval P.α := value_correct_of_inspect_none hH0
+  have hrow : rowcheckV2Eval P.R (toPoly P.h0rep) P.σA P.σB P.σC P.α = 0 := by
+    unfold rowcheckV2Eval
+    rw [← hvH0]; exact hrowScalar
+  exact v3_chain hA hB hC P.mode hτA hτB hτC hlin hlinI hdegL hη hrow hrowI
+
 /-- End-to-end soundness of the V3 endpoint. Each matrix has its own nonzero
 domain. The `γ` check is an accepting evaluation plus `inspectResidual`,
 which `matrix_extract` turns into the residual identity. No PC or AHP break
@@ -252,10 +291,6 @@ theorem sound
       (v3Claims P.R P.Cd P.A P.B P.Cm P.zhat P.α P.e P.σA P.σB P.σC) = none) :
     P.e = 0 ∧ ∀ r, r < P.R.n →
       mzRow P.Cd P.A P.zhat r * mzRow P.Cd P.B P.zhat r = mzRow P.Cd P.Cm P.zhat r := by
-  have hvH0 : P.vH0 = (toPoly P.h0rep).eval P.α := value_correct_of_inspect_none hH0
-  have hrow : rowcheckV2Eval P.R (toPoly P.h0rep) P.σA P.σB P.σC P.α = 0 := by
-    unfold rowcheckV2Eval
-    rw [← hvH0]; exact hrowScalar
   have hmA := inspectResidual_accepts
     (matrixEval_eq KA (P.aPoly KA P.A) (P.bPoly KA P.A) P.gA P.hA2 P.σmA γ ▸ hγA) hγIA
   have hmB := inspectResidual_accepts
@@ -265,7 +300,8 @@ theorem sound
   have hτA := matrix_sumcheck_value hA hKA hαR hβC hmA hdegA
   have hτB := matrix_sumcheck_value hB hKB hαR hβC hmB hdegB
   have hτC := matrix_sumcheck_value hC hKC hαR hβC hmC hdegC
-  exact v3_chain hA hB hC P.mode hτA hτB hτC hlin hlinI hdegL hη hrow hrowI
+  exact P.sound_of_matrix_claims KA KB KC hA hB hC hτA hτB hτC hH0 hrowScalar hrowI hlin hlinI
+    hdegL hη
 
 /-- An opened `ẑ`, `h₁`, and `g₁` make the scalar lineval check the polynomial one. -/
 theorem linevalEvalEta_of_openings (mode : SNARKMode) (mask : F[X])
@@ -471,6 +507,108 @@ theorem sound_r1cs {p : ℕ} [Fact p.Prime] (P : V3Endpoint (ZMod p))
     satisfies cs asg p :=
   satisfies_of_rows hA hB hC hfmt hbnd hlen hidxA hidxB hidxC hz hrows
 
+/-- The three terms circuit `P` contributes to snarkVM's `matrix_sumcheck`, with
+nonzero domains `KA, KB, KC`. -/
+def matrixTerms (KA KB KC : EvalDomain F) : List (MatrixTerm F) :=
+  [⟨P.R, P.Cd, KA, P.A, P.α, P.β, P.gA, P.σmA⟩, ⟨P.R, P.Cd, KB, P.B, P.α, P.β, P.gB, P.σmB⟩,
+    ⟨P.R, P.Cd, KC, P.Cm, P.α, P.β, P.gC, P.σmC⟩]
+
+/-- The rowcheck and lineval checks `sound_of_matrix_claims` consumes, with the
+lineval reading the matrix sums ` | K_M | σ_M` on nonzero domains `KA, KB, KC`. -/
+structure RowLinevalChecks (KA KB KC : EvalDomain F) : Prop where
+  h0 : inspectOpening P.h0rep [] P.α P.vH0 = none
+  rowScalar : P.σA * P.σB - P.σC - P.vH0 * P.R.vanishing.eval P.α = 0
+  rowI : inspectResidual
+    (shiftedRowResidual P.R P.Cd P.A P.B P.Cm P.zhat (toPoly P.h0rep) 0) P.α = none
+  lin : linevalEvalEta P.mode P.mask P.zhat P.Cd P.ηA P.ηB P.ηC
+    ((KA.n : F) * P.σmA) ((KB.n : F) * P.σmB) ((KC.n : F) * P.σmC)
+    (linevalWitnessEta P.Cd P.h1 P.g1 P.ηA P.ηB P.ηC P.σA P.σB P.σC) P.β = 0
+  linI : inspectResidual (univariateResidual P.Cd
+    (linevalPolyEta P.mode P.mask P.zhat (matrixAtAlpha P.R P.Cd P.A P.α)
+      (matrixAtAlpha P.R P.Cd P.B P.α) (matrixAtAlpha P.R P.Cd P.Cm P.α) P.ηA P.ηB P.ηC)
+    (linevalWitnessEta P.Cd P.h1 P.g1 P.ηA P.ηB P.ηC P.σA P.σB P.σC)) P.β = none
+  degL : (X * P.g1 +
+    C ((P.ηA * P.σA + P.ηB * P.σB + P.ηC * P.σC) * P.Cd.sizeInv)).natDegree < P.Cd.n
+  eta : inspectBatch [1, P.ηA, P.ηB, P.ηC]
+    (v3Claims P.R P.Cd P.A P.B P.Cm P.zhat P.α P.e P.σA P.σB P.σC) = none
+
 end V3Endpoint
+
+/-- One circuit of a V3 batch: its proof data and the nonzero domains of `A, B, C`. -/
+structure V3Circuit (F : Type*) [Field F] where
+  /-- The circuit's proof data. -/
+  P : V3Endpoint F
+  /-- Nonzero domain of `A`. -/
+  KA : EvalDomain F
+  /-- Nonzero domain of `B`. -/
+  KB : EvalDomain F
+  /-- Nonzero domain of `C`. -/
+  KC : EvalDomain F
+
+namespace V3Circuit
+
+variable {F : Type*} [Field F] [DecidableEq F]
+
+/-- The matrix terms of a batch, circuit by circuit and `A, B, C` within each,
+in the order snarkVM adds them to `matrix_sumcheck` (`ahp.rs:365-397`) and draws
+their `δ`s (`deltaScheme`). -/
+def batchTerms (cs : List (V3Circuit F)) : List (MatrixTerm F) :=
+  cs.flatMap fun c => c.P.matrixTerms c.KA c.KB c.KC
+
+theorem length_batchTerms (cs : List (V3Circuit F)) : (batchTerms cs).length = 3 * cs.length := by
+  induction cs with
+  | nil => rfl
+  | cons c cs ih =>
+    simp only [batchTerms, List.flatMap_cons, List.length_append] at ih ⊢
+    rw [ih]
+    simp [V3Endpoint.matrixTerms]
+    ring
+
+/-- End-to-end soundness of a V3 batch with snarkVM's matrix sumcheck: one
+`matrix_sumcheck` LC over every matrix of every circuit, each lifted to the
+largest nonzero domain `K` by its selector and weighted by its `δ`, with one
+quotient `h₂`. If that LC accepts at `γ` with no residual root, and the `δ`s
+are not lucky on `K` as a whole, every circuit whose rowcheck and lineval checks
+pass has a zero mask sum and `Az ∘ Bz = Cz` on its `R`. -/
+theorem sound_of_batched_matrix (K : EvalDomain F) (δs : List F) (h2 : F[X]) (γ : F)
+    (cs : List (V3Circuit F))
+    (hdvd : ∀ t ∈ batchTerms cs, t.K.n ∣ K.n) (hvalid : ∀ t ∈ batchTerms cs, t.Valid)
+    (hγ : batchedMatrixEval K δs (batchTerms cs) h2 γ = 0)
+    (hγI : inspectResidual (batchedMatrixResidual K δs (batchTerms cs) h2) γ = none)
+    (hδ : inspectBatchOn K.nodeList δs
+      (batchedClaims K ((batchTerms cs).map MatrixTerm.claim)) = none)
+    (hchecks : ∀ c ∈ cs, c.P.RowLinevalChecks c.KA c.KB c.KC) :
+    ∀ c ∈ cs, c.P.e = 0 ∧ ∀ r, r < c.P.R.n →
+      mzRow c.P.Cd c.P.A c.P.zhat r * mzRow c.P.Cd c.P.B c.P.zhat r =
+        mzRow c.P.Cd c.P.Cm c.P.zhat r := by
+  have hτ := batchedMatrix_extract hdvd hvalid hγ hγI hδ
+  intro c hc
+  have hmem : ∀ t ∈ c.P.matrixTerms c.KA c.KB c.KC, t ∈ batchTerms cs :=
+    fun t ht => List.mem_flatMap.mpr ⟨c, hc, ht⟩
+  have mA := hmem ⟨c.P.R, c.P.Cd, c.KA, c.P.A, c.P.α, c.P.β, c.P.gA, c.P.σmA⟩
+    (by simp [V3Endpoint.matrixTerms])
+  have mB := hmem ⟨c.P.R, c.P.Cd, c.KB, c.P.B, c.P.α, c.P.β, c.P.gB, c.P.σmB⟩
+    (by simp [V3Endpoint.matrixTerms])
+  have mC := hmem ⟨c.P.R, c.P.Cd, c.KC, c.P.Cm, c.P.α, c.P.β, c.P.gC, c.P.σmC⟩
+    (by simp [V3Endpoint.matrixTerms])
+  have h := hchecks c hc
+  exact c.P.sound_of_matrix_claims c.KA c.KB c.KC (hvalid _ mA).bounded (hvalid _ mB).bounded
+    (hvalid _ mC).bounded (hτ _ mA) (hτ _ mB) (hτ _ mC) h.h0 h.rowScalar h.rowI h.lin h.linI
+    h.degL h.eta
+
+/-- The `δ` lucky event of `sound_of_batched_matrix` on snarkVM's `δ`s, for a
+batch of `n ≥ 1` circuits : at most `(3n − 1) · | S | ^{3n-2}` of the
+` | S | ^{3n-1}` draws. -/
+theorem card_filter_batch_deltas_le (K : EvalDomain F) (cs : List (V3Circuit F))
+    (hn : cs ≠ []) (S : Finset F) :
+    ((tapes S (3 * cs.length - 1)).filter fun ws =>
+      inspectBatchOn K.nodeList (schemeWeights (deltaScheme cs.length) ws)
+        (batchedClaims K ((batchTerms cs).map MatrixTerm.claim)) ≠ none).card ≤
+      (3 * cs.length - 1) * S.card ^ (3 * cs.length - 1 - 1) := by
+  have hpos : 0 < cs.length := List.length_pos_iff.mpr hn
+  exact card_filter_batchedMatrix_deltas_le K cs.length _
+    (by rw [List.length_map, length_batchTerms]; omega) S
+
+end V3Circuit
 
 end Varuna

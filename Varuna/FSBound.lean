@@ -385,4 +385,19 @@ theorem outputBreaks_of_rowcheck_lucky {t : V2Transcript F}
       chal = true :=
   outputBreaks_of_lucky hmsg rfl (rowcheckDraw_lucky hcs hlen h) hS
 
+/-- `batchedMatrix_extract` needs no lucky `δ` combination on all of `K`. With the
+fourth-round elements of the output `t` as the `δ`s of `n` circuits, a lucky one
+makes `t` break at the deltas squeeze. -/
+theorem outputBreaks_of_matrix_lucky {t : V2Transcript F}
+    (hmsg : ∀ x, FSMessage.field x ∉ t.messages) {S : Finset F} (resα resβ resγ : F[X])
+    {K : EvalDomain F} {n : ℕ} {cs : List (EvalDomain F × F[X])}
+    (hcs : cs.length ≤ 3 * n - 1 + 1) (dν dη : WeightDraw F)
+    {chal : V2Challenge → List F} (hlen : (chal .deltas).length = 3 * n - 1)
+    (hS : ∀ a ∈ chal .deltas, a ∈ S)
+    (h : inspectBatchOn K.nodeList (schemeWeights (deltaScheme n) (chal .deltas))
+      (batchedClaims K cs) ≠ none) :
+    outputBreaks (prefixBad t (squeezeBad S resα resβ resγ dν dη (deltaDraw K n cs))) t
+      chal = true :=
+  outputBreaks_of_lucky hmsg rfl (deltaDraw_lucky hcs hlen h) hS
+
 end Varuna
