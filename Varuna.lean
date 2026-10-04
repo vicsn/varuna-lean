@@ -37,5 +37,6 @@ import Varuna.Fingerprint
 import Varuna.SpotCheck
 import Varuna.ProofSize
 import Varuna.ZK
+import Varuna.Completeness
 import Varuna.AxiomCheck
 import Varuna.TrustBoundary

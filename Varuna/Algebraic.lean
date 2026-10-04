@@ -239,6 +239,27 @@ theorem coeff_toPoly : ∀ (l : List F) (i : Nat), (toPoly l).coeff i = l.getD i
   | a :: l, 0 => by simp
   | a :: l, i + 1 => by simp [coeff_X_mul, coeff_toPoly l i]
 
+/-- Coefficients of `p` through its degree, constant term first. -/
+def coeffList (p : F[X]) : List F :=
+  (List.range (p.natDegree + 1)).map p.coeff
+
+/-- Every polynomial is the list of its coefficients. -/
+theorem toPoly_coeffList (p : F[X]) : toPoly (coeffList p) = p := by
+  ext i
+  rw [coeff_toPoly, List.getD_eq_getElem?_getD]
+  simp only [coeffList]
+  by_cases hi : i < p.natDegree + 1
+  · have hget : ((List.range (p.natDegree + 1)).map p.coeff)[i]? = some (p.coeff i) := by
+      rw [List.getElem?_map, List.getElem?_range (by simpa using hi)]
+      simp
+    simp [hget]
+  · have hlen : ((List.range (p.natDegree + 1)).map p.coeff).length = p.natDegree + 1 := by
+      simp [List.length_map, List.length_range]
+    have hi' : p.natDegree + 1 ≤ i := by omega
+    rw [List.getElem?_eq_none (by rw [hlen]; exact hi')]
+    simp
+    exact (coeff_eq_zero_of_natDegree_lt (Nat.lt_of_succ_le hi')).symm
+
 /-- Whether some coefficient above degree `d` is nonzero. -/
 def exceedsBound [DecidableEq F] (p : List F) (d : Nat) : Bool :=
   (p.drop (d + 1)).any (· ≠ 0)

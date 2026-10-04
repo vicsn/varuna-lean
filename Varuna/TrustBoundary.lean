@@ -25,6 +25,7 @@ import Varuna.AdaptiveFS
 import Varuna.BatchDegree
 import Varuna.BatchFS
 import Varuna.ZK
+import Varuna.Completeness
 import Varuna.Fingerprint
 import Varuna.ProofSize
 import Varuna.FiatShamir
@@ -425,6 +426,9 @@ assert_axioms Varuna.simulateLineval_witness
 assert_axioms Varuna.simulateLineval_accepts
 assert_axioms Varuna.simulateHidingLineval_accepts
 assert_axioms Varuna.simulation_extractable
+assert_axioms Varuna.maskedAnswers_bijective
+assert_axioms Varuna.card_zkProof
+assert_axioms Varuna.honestBatch_accepts
 assert_axioms Varuna.hidingOpening_extract
 assert_axioms Varuna.eval_selectorBatch
 assert_axioms Varuna.matrixTerm_eq_scalar
