@@ -25,6 +25,7 @@ import Varuna.AdaptiveFS
 import Varuna.MemoOracle
 import Varuna.BatchDegree
 import Varuna.BatchFS
+import Varuna.AlgebraicFS
 import Varuna.ZK
 import Varuna.Completeness
 import Varuna.Fingerprint
@@ -404,6 +405,19 @@ assert_axioms Varuna.fillRounds_splitSqueezes
 assert_axioms Varuna.V3Batch.adaptive_soundness_on
 assert_axioms Varuna.V3Batch.oracle_soundness
 assert_axioms Varuna.V3Batch.oracle_soundness_concrete
+assert_axioms Varuna.memoRun_snd_eq
+assert_axioms Varuna.memoRun_take_prefix
+assert_axioms Varuna.fs_view_rounds_charge
+assert_axioms Varuna.BatchCircuit.list_eq_of_shape
+assert_axioms Varuna.V3Batch.normal_eq_of
+assert_axioms Varuna.V3Batch.badAt_normal
+assert_axioms Varuna.Clash.trapdoorBreak
+assert_axioms Varuna.eq_of_not_clash
+assert_axioms Varuna.V3Batch.map_eval_eq_of_commitments
+assert_axioms Varuna.repBad_history
+assert_axioms Varuna.AlgebraicProver.Clashes.trapdoorBreak
+assert_axioms Varuna.V3Batch.algebraic_soundness
+assert_axioms Varuna.V3Batch.algebraic_soundness_concrete
 assert_axioms Varuna.before_injective
 assert_axioms Varuna.squeezeBad_card
 assert_axioms Varuna.squeeze_safe_residual

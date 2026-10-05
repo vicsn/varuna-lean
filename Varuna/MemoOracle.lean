@@ -174,6 +174,61 @@ theorem memoRun_getElem_fst (next : QueryLog F → Transcript F) :
       | nil => simp [memoRun, hl] at hk; omega
       | cons a tape => exact step a tape (by simp [memoRun, hl])
 
+/-- `memoRun` stops at `next` of the log it returns. -/
+theorem memoRun_snd_eq (next : QueryLog F → Transcript F) :
+    ∀ (n : ℕ) (log : QueryLog F) (tape : List F) {q : Transcript F},
+      (memoRun next n log tape).2 = some q → q = next (memoRun next n log tape).1
+  | 0, log, tape, q, h => by simp [memoRun] at h
+  | n + 1, log, tape, q, h => by
+    cases hl : log.lookup (next log) with
+    | some a =>
+      simp only [memoRun, hl] at h ⊢
+      exact memoRun_snd_eq next n _ tape h
+    | none =>
+      cases tape with
+      | nil =>
+        simp only [memoRun, hl, Option.some.injEq] at h ⊢
+        exact h.symm
+      | cons a tape =>
+        simp only [memoRun, hl] at h ⊢
+        exact memoRun_snd_eq next n _ tape h
+
+/-- A nonempty query of `memoAdversary` is where `memoRun` stops. -/
+theorem memoRun_snd_of_query {next : QueryLog F → Transcript F} {n : ℕ} {v : List F}
+    {q : Transcript F} (h : (memoAdversary next n).query v = q) (hq : q ≠ []) :
+    (memoRun next n [] v).2 = some q := by
+  simp only [memoAdversary] at h
+  cases h' : (memoRun next n [] v).2 with
+  | none =>
+    rw [h'] at h
+    exact absurd h.symm hq
+  | some q' =>
+    rw [h'] at h
+    rw [← h]
+    rfl
+
+/-- On fewer tape entries, `memoRun` logs a prefix of its log. -/
+theorem memoRun_take_prefix (next : QueryLog F → Transcript F) :
+    ∀ (n : ℕ) (log : QueryLog F) (tape : List F) (k : ℕ),
+      List.IsPrefix (memoRun next n log (tape.take k)).1 (memoRun next n log tape).1
+  | 0, log, tape, k => List.prefix_refl log
+  | n + 1, log, tape, k => by
+    cases hl : log.lookup (next log) with
+    | some a =>
+      simp only [memoRun, hl]
+      exact memoRun_take_prefix next n _ tape k
+    | none =>
+      cases tape with
+      | nil => simp [memoRun, hl]
+      | cons a tape =>
+        cases k with
+        | zero =>
+          simp only [List.take_zero, memoRun, hl]
+          exact (List.prefix_append log _).trans (prefix_memoRun next n _ tape)
+        | succ k =>
+          simp only [List.take_succ_cons, memoRun, hl]
+          exact memoRun_take_prefix next n _ tape k
+
 theorem getElem_fst_of_memoRun {next : QueryLog F → Transcript F} {n : ℕ} {log : QueryLog F}
     {tape : List F} {L : QueryLog F} (hL : (memoRun next n log tape).1 = L) {k : ℕ}
     (hk : k < L.length) (hle : log.length ≤ k) : L[k].1 = next (L.take k) := by
