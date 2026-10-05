@@ -475,15 +475,18 @@ theorem spongeQuery_mem (log : QueryLog F) (c : V2Challenge) {j : ℕ} (hj : j <
   rw [List.nil_append, ← A.spongeShape_split cnt log c] at this
   exact this
 
+theorem rounds_spongeChal (H : Transcript F → F) (log : QueryLog F) :
+    (A.out log).rounds (A.spongeChal cnt H log) =
+      readRounds H (A.spongeInit log) [] (A.spongeShape cnt log) := by
+  simp [V2Transcript.rounds, spongeChal, spongeQuery, spongeShape, v2Challenges, readRounds,
+    V2Challenge.prefixAbsorbs]
+
 theorem history_spongeChal (H : Transcript F → F) (log : QueryLog F) (c : V2Challenge) {j : ℕ}
     (hj : j ≤ cnt (A.stmt log) c) :
     (A.out log).history (A.spongeChal cnt H log) c j =
       readRounds H (A.spongeInit log) []
         ((A.spongeShape cnt log).take (c.prefixAbsorbs - 1) ++ [((A.out log).msgBefore c, j)]) := by
-  have hr : (A.out log).rounds (A.spongeChal cnt H log) =
-      readRounds H (A.spongeInit log) [] (A.spongeShape cnt log) := by
-    simp [V2Transcript.rounds, spongeChal, spongeQuery, spongeShape, v2Challenges, readRounds,
-      V2Challenge.prefixAbsorbs]
+  have hr := A.rounds_spongeChal cnt H log
   have hlen : ((A.spongeShape cnt log).take (c.prefixAbsorbs - 1)).length =
       c.prefixAbsorbs - 1 := by
     cases c <;> simp [spongeShape, v2Challenges, V2Challenge.prefixAbsorbs]
@@ -519,9 +522,120 @@ theorem SpongeClashes.trapdoorBreak {D : List (Transcript F)} {τ : F} {T : List
   obtain ⟨_, _, _, hc⟩ := h
   exact Varuna.Clash.trapdoorBreak hc
 
+/-- The bad set of a sponge query after `log` : the history bad set of the batch
+represented with it. -/
+noncomputable def spongeRB (S : Finset F) (b : ℕ) (log : QueryLog F) (q : Transcript F)
+    (H : Transcript F → F) : Finset F :=
+  spongeBad (fun s : V3Stmt F => v3Init s.1 s.2) V3StmtWF
+    (fun _ hist => repBad S b (A.spongeRep Q log) hist) q H
+
 end AlgebraicProver
 
 namespace V3Batch
+
+/-- The hit `sponge_soundness` charges. On a table where a squeezed element of the output
+is in its bad set and no represented batch clashes with the output batch, one of the
+first `Q + V` queries is in `D`, asked for the first time, and answered in its bad set. -/
+theorem sponge_hit (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicProver F)
+    (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
+    (D : List (Transcript F)) (g : G1) (hg : g ≠ 0) (τ : F)
+    (msgs : ℕ → V3Batch F → List (FSMessage F))
+    (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
+      (P.absorbed k).shape = (P'.absorbed k).shape ∧
+        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+    (idx : V3Stmt F → V3Batch F)
+    (hstmt : ∀ log,
+      (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
+    (hout : ∀ log, (A.batch log).absorbed 0 = idx (A.stmt log) ∧
+      ∀ k, (A.out log).messages.take k = msgs k (A.batch log))
+    (hrep : ∀ log s ps (P : V3Batch F), log.length < Q →
+      A.next log = v3Init s.1 s.2 ++ spongeRounds ps → V3StmtWF s →
+      P.absorbed 0 = idx s → ps.map Prod.fst = msgs ps.length P →
+      (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
+    (hdeg : ∀ log chal, ((A.batch log).withChallenges chal).ResidualsBounded chal b) {T : List F}
+    (hD : ∀ q ∈ elemQueries (A.spongeInit (tableRun A.next (tableAns D T) Q))
+      [] (A.spongeShape cnt (tableRun A.next (tableAns D T) Q)), q ∈ D)
+    (hmsg : ∀ x, FSMessage.field x ∉ (A.out (tableRun A.next (tableAns D T) Q)).messages)
+    (hbr : outputBreaks (prefixBad (A.out (tableRun A.next (tableAns D T) Q))
+        ((A.batch (tableRun A.next (tableAns D T) Q)).badAt S
+          (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))))
+        (A.out (tableRun A.next (tableAns D T) Q))
+        (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q)) = true)
+    (hnc : ¬A.SpongeClashes Q D τ T) :
+    ∃ i < Q + V, TableHit D (A.spongeNext cnt Q) (A.spongeRB Q S b) T i := by
+  unfold TableHit
+  set H := tableAns D T
+  set L := tableRun A.next H Q
+  set chal := A.spongeChal cnt H L
+  obtain ⟨c, -, hc⟩ := List.any_eq_true.mp hbr
+  obtain ⟨j, hj, hbad⟩ := (hitsB_iff _ _ _).mp hc
+  rw [List.nil_append, prefixBad_elemBefore hmsg] at hbad
+  have hjc : j < cnt (A.stmt L) c := by simpa [chal, OracleProver.spongeChal] using hj
+  set ps := (A.spongeShape cnt L).take (c.prefixAbsorbs - 1) ++ [((A.out L).msgBefore c, j)]
+  set q := A.spongeQuery cnt L c j
+  have hHq : chal c = (List.range (cnt (A.stmt L) c)).map fun j => H (A.spongeQuery cnt L c j) :=
+    rfl
+  have hqj : (chal c)[j] = H q := by simp [hHq, q]
+  have hhist := A.history_spongeChal cnt H L c hjc.le
+  -- The verifier asks `q`.
+  have hnext : ∀ log : QueryLog F, log.length < Q → A.spongeNext cnt Q log = A.next log :=
+    fun _ h => if_pos h
+  have hrunQ : tableRun (A.spongeNext cnt Q) H Q = L := tableRun_congr_next hnext H Q le_rfl
+  have hmem := A.spongeQuery_mem cnt L c hjc
+  obtain ⟨p, hp, hpq⟩ := List.getElem_of_mem hmem
+  have hpV : p < V := by
+    rw [length_elemQueries] at hp
+    have hsum : ((A.spongeShape cnt L).map Prod.snd).sum = (v2Challenges.map (cnt (A.stmt L))).sum :=
+      by simp [OracleProver.spongeShape, Function.comp_def]
+    exact lt_of_lt_of_le (hsum ▸ hp) (hV _)
+  have hask : ∃ i, i < Q + V ∧ A.spongeNext cnt Q (tableRun (A.spongeNext cnt Q) H i) = q := by
+    refine ⟨Q + p, by omega, ?_⟩
+    have hlen := length_tableRun (A.spongeNext cnt Q) H (Q + p)
+    have htake : (tableRun (A.spongeNext cnt Q) H (Q + p)).take Q = L := by
+      rw [take_tableRun _ _ (by omega), hrunQ]
+    rw [OracleProver.spongeNext, if_neg (by omega), htake, hlen, Nat.add_sub_cancel_left,
+      List.getD_eq_getElem _ _ hp, hpq]
+  obtain ⟨hi0, hq0⟩ := Nat.find_spec hask
+  have hmin : ∀ i < Nat.find hask, A.spongeNext cnt Q (tableRun (A.spongeNext cnt Q) H i) ≠ q :=
+    fun i hi h => Nat.find_min hask hi ⟨by omega, h⟩
+  refine ⟨Nat.find hask, hi0, by rw [hq0]; exact hD q hmem, fun i hi => by
+    rw [hq0]; exact hmin i hi, ?_⟩
+  rw [hq0]
+  -- Its bad set is the output batch's at the element.
+  set log0 := tableRun (A.spongeNext cnt Q) H (Nat.find hask)
+  have hlog0 : log0.length = Nat.find hask := length_tableRun _ _ _
+  have hP : ((A.spongeRep Q log0).absorbed c.prefixAbsorbs).normal =
+      ((A.batch L).absorbed c.prefixAbsorbs).normal := by
+    unfold AlgebraicProver.spongeRep
+    rw [hlog0]
+    split_ifs with hlt
+    · have hrun0 : log0 = tableRun A.next H (Nat.find hask) := tableRun_congr_next hnext H _ hlt.le
+      have hq' : A.next log0 = v3Init (A.stmt L).1 (A.stmt L).2 ++ spongeRounds ps := by
+        rw [← hnext _ (by rw [hlog0]; exact hlt)]
+        exact hq0
+      have hk : ps.length = c.prefixAbsorbs := by
+        rw [← length_readRounds H (A.spongeInit L) [] ps, ← hhist, V2Transcript.length_history]
+      have hm : ps.map Prod.fst = msgs ps.length (A.batch L) := by
+        rw [← map_fst_readRounds H (A.spongeInit L) [] ps, ← hhist, V2Transcript.map_fst_history,
+          (hout L).2, hk]
+      obtain ⟨hidx, hmsg⟩ := hrep _ (A.stmt L) ps (A.batch L) (by rw [hlog0]; exact hlt) hq'
+        (hstmt L).2 (hout L).1 hm
+      rw [hm, hk] at hmsg
+      obtain ⟨hshape, hcom⟩ := hmsgs _ _ _ (hidx.trans (hout L).1.symm) hmsg.symm
+      refine normal_eq_of hshape (eq_of_not_clash (map_eval_eq_of_commitments hg hcom) ?_)
+      intro hcl
+      exact hnc ⟨Nat.find hask, hlt, c.prefixAbsorbs, by rw [← hrun0]; exact hcl⟩
+    · rw [take_tableRun _ _ (by omega), hrunQ]
+  have hsb : spongeBad (fun s : V3Stmt F => v3Init s.1 s.2) V3StmtWF
+      (fun _ hist => repBad S b (A.spongeRep Q log0) hist) q H =
+        repBad S b (A.spongeRep Q log0) ((A.out L).history chal c j) :=
+    (spongeBad_eq (enc := fun s : V3Stmt F => v3Init s.1 s.2) (WF := V3StmtWF)
+      (fun _ _ _ _ hs hs' h => v3Init_append_inj hs hs' h) _ (hstmt L).2 ps H).trans
+      (congrArg (repBad S b (A.spongeRep Q log0)) hhist).symm
+  show H q ∈ spongeBad (fun s : V3Stmt F => v3Init s.1 s.2) V3StmtWF
+    (fun _ hist => repBad S b (A.spongeRep Q log0) hist) q H
+  rw [hsb, repBad_history hP S b (A.out L) chal j (card_badAt_le hb (hdeg _ _) S c _), ← hqj]
+  exact hbad
 
 /-- Fiat–Shamir knowledge soundness of the V3 batch against an algebraic prover and
 the sponge's queries, counting form.
@@ -560,90 +674,14 @@ theorem sponge_soundness (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicP
       (Q + V) * b * S.card ^ (D.length - 1) := by
   classical
   refine (card_le_card fun T hT => ?_).trans (table_charge D S (A.spongeNext cnt Q)
-    (fun log q H => spongeBad (fun s : V3Stmt F => v3Init s.1 s.2) V3StmtWF
-      (fun _ hist => repBad S b (A.spongeRep Q log) hist) q H) b
+    (A.spongeRB Q S b) b
     (fun _ q H => card_spongeBad_le _ _ (fun _ _ => card_repBad_le S b _ _) q H)
     (fun _ q _ _ hH => spongeBad_congr _ _ _ q hH) (Q + V))
   obtain ⟨hTt, ⟨hacc, hnot⟩, hnc⟩ := mem_filter.1 hT
-  refine mem_filter.2 ⟨hTt, ?_⟩
-  unfold TableHit
-  set H := tableAns D T
-  set L := tableRun A.next H Q
-  set chal := A.spongeChal cnt H L
-  -- A squeezed element in its bad set.
-  have hbr : outputBreaks (prefixBad (A.out L) ((A.batch L).badAt S chal)) (A.out L) chal =
-      true := by
-    by_contra hne
-    exact hnot (holds_of_accepts hacc (Bool.eq_false_iff.mpr hne))
-  obtain ⟨c, -, hc⟩ := List.any_eq_true.mp hbr
-  obtain ⟨j, hj, hbad⟩ := (hitsB_iff _ _ _).mp hc
-  rw [List.nil_append, prefixBad_elemBefore hacc.msg] at hbad
-  have hjc : j < cnt (A.stmt L) c := by simpa [chal, OracleProver.spongeChal] using hj
-  set ps := (A.spongeShape cnt L).take (c.prefixAbsorbs - 1) ++ [((A.out L).msgBefore c, j)]
-  set q := A.spongeQuery cnt L c j
-  have hHq : chal c = (List.range (cnt (A.stmt L) c)).map fun j => H (A.spongeQuery cnt L c j) :=
-    rfl
-  have hqj : (chal c)[j] = H q := by simp [hHq, q]
-  have hhist := A.history_spongeChal cnt H L c hjc.le
-  -- The verifier asks `q`.
-  have hnext : ∀ log : QueryLog F, log.length < Q → A.spongeNext cnt Q log = A.next log :=
-    fun _ h => if_pos h
-  have hrunQ : tableRun (A.spongeNext cnt Q) H Q = L := tableRun_congr_next hnext H Q le_rfl
-  have hmem := A.spongeQuery_mem cnt L c hjc
-  obtain ⟨p, hp, hpq⟩ := List.getElem_of_mem hmem
-  have hpV : p < V := by
-    rw [length_elemQueries] at hp
-    have hsum : ((A.spongeShape cnt L).map Prod.snd).sum = (v2Challenges.map (cnt (A.stmt L))).sum :=
-      by simp [OracleProver.spongeShape, Function.comp_def]
-    exact lt_of_lt_of_le (hsum ▸ hp) (hV _)
-  have hask : ∃ i, i < Q + V ∧ A.spongeNext cnt Q (tableRun (A.spongeNext cnt Q) H i) = q := by
-    refine ⟨Q + p, by omega, ?_⟩
-    have hlen := length_tableRun (A.spongeNext cnt Q) H (Q + p)
-    have htake : (tableRun (A.spongeNext cnt Q) H (Q + p)).take Q = L := by
-      rw [take_tableRun _ _ (by omega), hrunQ]
-    rw [OracleProver.spongeNext, if_neg (by omega), htake, hlen, Nat.add_sub_cancel_left,
-      List.getD_eq_getElem _ _ hp, hpq]
-  obtain ⟨hi0, hq0⟩ := Nat.find_spec hask
-  have hmin : ∀ i < Nat.find hask, A.spongeNext cnt Q (tableRun (A.spongeNext cnt Q) H i) ≠ q :=
-    fun i hi h => Nat.find_min hask hi ⟨by omega, h⟩
-  refine ⟨Nat.find hask, hi0, by rw [hq0]; exact hD T hTt q hmem, fun i hi => by
-    rw [hq0]; exact hmin i hi, ?_⟩
-  rw [hq0]
-  -- Its bad set is the output batch's at the element.
-  set log0 := tableRun (A.spongeNext cnt Q) H (Nat.find hask)
-  have hlog0 : log0.length = Nat.find hask := length_tableRun _ _ _
-  have hP : ((A.spongeRep Q log0).absorbed c.prefixAbsorbs).normal =
-      ((A.batch L).absorbed c.prefixAbsorbs).normal := by
-    unfold AlgebraicProver.spongeRep
-    rw [hlog0]
-    split_ifs with hlt
-    · have hrun0 : log0 = tableRun A.next H (Nat.find hask) := tableRun_congr_next hnext H _ hlt.le
-      have hq' : A.next log0 = v3Init (A.stmt L).1 (A.stmt L).2 ++ spongeRounds ps := by
-        rw [← hnext _ (by rw [hlog0]; exact hlt)]
-        exact hq0
-      have hk : ps.length = c.prefixAbsorbs := by
-        rw [← length_readRounds H (A.spongeInit L) [] ps, ← hhist, V2Transcript.length_history]
-      have hm : ps.map Prod.fst = msgs ps.length (A.batch L) := by
-        rw [← map_fst_readRounds H (A.spongeInit L) [] ps, ← hhist, V2Transcript.map_fst_history,
-          (hout L).2, hk]
-      obtain ⟨hidx, hmsg⟩ := hrep _ (A.stmt L) ps (A.batch L) (by rw [hlog0]; exact hlt) hq'
-        (hstmt L).2 (hout L).1 hm
-      rw [hm, hk] at hmsg
-      obtain ⟨hshape, hcom⟩ := hmsgs _ _ _ (hidx.trans (hout L).1.symm) hmsg.symm
-      refine normal_eq_of hshape (eq_of_not_clash (map_eval_eq_of_commitments hg hcom) ?_)
-      intro hcl
-      exact hnc ⟨Nat.find hask, hlt, c.prefixAbsorbs, by rw [← hrun0]; exact hcl⟩
-    · rw [take_tableRun _ _ (by omega), hrunQ]
-  have hsb : spongeBad (fun s : V3Stmt F => v3Init s.1 s.2) V3StmtWF
-      (fun _ hist => repBad S b (A.spongeRep Q log0) hist) q H =
-        repBad S b (A.spongeRep Q log0) ((A.out L).history chal c j) :=
-    (spongeBad_eq (enc := fun s : V3Stmt F => v3Init s.1 s.2) (WF := V3StmtWF)
-      (fun _ _ _ _ hs hs' h => v3Init_append_inj hs hs' h) _ (hstmt L).2 ps H).trans
-      (congrArg (repBad S b (A.spongeRep Q log0)) hhist).symm
-  show H q ∈ spongeBad (fun s : V3Stmt F => v3Init s.1 s.2) V3StmtWF
-    (fun _ hist => repBad S b (A.spongeRep Q log0) hist) q H
-  rw [hsb, repBad_history hP S b (A.out L) chal j (card_badAt_le hb (hdeg _ _) S c _), ← hqj]
-  exact hbad
+  refine mem_filter.2 ⟨hTt, sponge_hit S hb A cnt Q V hV D g hg τ msgs hmsgs idx hstmt hout hrep hdeg
+    (hD T hTt) hacc.msg ?_ hnc⟩
+  by_contra hne
+  exact hnot (holds_of_accepts hacc (Bool.eq_false_iff.mpr hne))
 
 /-- `sponge_soundness` with `b` computed from `DegreeBounds`, as in
 `adaptive_soundness_concrete`. -/

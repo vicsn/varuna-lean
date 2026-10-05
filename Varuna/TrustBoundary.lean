@@ -428,8 +428,10 @@ assert_axioms Varuna.card_resample_le
 assert_axioms Varuna.table_charge
 assert_axioms Varuna.spongeBad_congr
 assert_axioms Varuna.v3Init_append_inj
+assert_axioms Varuna.OracleProver.rounds_spongeChal
 assert_axioms Varuna.OracleProver.history_spongeChal
 assert_axioms Varuna.AlgebraicProver.SpongeClashes.trapdoorBreak
+assert_axioms Varuna.V3Batch.sponge_hit
 assert_axioms Varuna.V3Batch.sponge_soundness
 assert_axioms Varuna.V3Batch.sponge_soundness_concrete
 assert_axioms Varuna.V3Batch.sound_of_transcript_evals
