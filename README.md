@@ -51,6 +51,10 @@ on the same commitments is a trapdoor break.
 `V3Batch.algebraic_soundness_concrete` computes `b` for the batch from
 the SRS size (every committed polynomial below `D` powers) and the
 largest domains.
+`V3Batch.sponge_soundness` is that count with snarkVM's sponge queries,
+which carry the messages but not the earlier challenges: the oracle is
+a table on a finite domain `D`, and at most `(Q + V) · b · |S|^{|D|-1}`
+of the `|S|^{|D|}` tables give an accepted output for a false statement.
 snarkVM's batch weights `ν_i τ_{i,j}` are counted one drawn element at a
 time. `PreprocessingAHP` is the public-coin argument in the algebraic
 projection. `sound_r1cs` ends at the R1CS relation.
@@ -74,10 +78,6 @@ The interactive picture is the
 - The fingerprint stops at the zero-eval LC layer. The capture has field
   elements only, so MSM / pairing assembly is outside Lean. Byte
   encodings stay a floor. Sage proofs are not captured in this project.
-- `V3Batch.algebraic_soundness`'s queries carry the earlier challenges,
-  the standard multi-round Fiat–Shamir encoding. snarkVM's sponge
-  absorbs only the messages; identifying the two is part of the
-  Poseidon = RO floor.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
   and index = circuit stay floors. The AHP simulator programs one
   opening and absorbs the witness into the ZK mask. A constant blinding
@@ -139,6 +139,7 @@ Varuna/
   BatchFS.lean                      -- adaptive Fiat–Shamir soundness of the batch
   AlgebraicFS.lean                  -- bad sets read off the prover's representations
   RoundByRound.lean                 -- round-by-round knowledge soundness; the V3 instance
+  SpongeFS.lean                     -- Fiat–Shamir with the sponge's message-only queries
   Fingerprint.lean                  -- captured snarkVM batch proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
