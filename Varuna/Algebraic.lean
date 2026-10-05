@@ -138,6 +138,11 @@ structure SRSBreak (F : Type*) where
 def SRSBreak.holds (b : SRSBreak F) (τ κ : F) : Prop :=
   (toPoly b.g ≠ 0 ∨ toPoly b.gamma ≠ 0) ∧ (toPoly b.g).eval τ + κ * (toPoly b.gamma).eval τ = 0
 
+/-- The scalar `a(τ) + κ b(τ)` of the element with representation `(a, b)` over the
+powers of `g` and of `gamma_g = κ g`. -/
+noncomputable def repEval (τ κ : F) (r : F[X] × F[X]) : F :=
+  r.1.eval τ + κ * r.2.eval τ
+
 /-- A trapdoor break is an SRS break with no `gamma_g` part. -/
 theorem TrapdoorBreak.srsBreak {b : TrapdoorBreak F} {τ : F} (h : b.holds τ) (κ : F) :
     (⟨b.coeffs, []⟩ : SRSBreak F).holds τ κ :=
@@ -284,6 +289,10 @@ theorem SRSBreak.of_polys {A B : F[X]} {τ κ : F} (hne : A ≠ 0 ∨ B ≠ 0)
     (hev : A.eval τ + κ * B.eval τ = 0) : ∃ br : SRSBreak F, br.holds τ κ :=
   ⟨⟨coeffList A, coeffList B⟩, by simpa only [SRSBreak.holds, toPoly_coeffList] using ⟨hne, hev⟩⟩
 
+/-- A zero trapdoor is a root of `X`. -/
+theorem SRSBreak.of_trapdoor_zero (κ : F) : ∃ br : SRSBreak F, br.holds 0 κ :=
+  SRSBreak.of_polys (A := X) (B := 0) (Or.inl X_ne_zero) (by simp)
+
 /-- A commitment shifted by `X^s` determines the polynomial above the shift and the part
 below it. -/
 theorem shift_add_modByMonic (s : Nat) (p r : F[X]) :
@@ -298,6 +307,13 @@ theorem shift_add_modByMonic_inj {s : Nat} {p p' r r' : F[X]}
   have h2 := shift_add_modByMonic s p' r'
   rw [h] at h1
   exact ⟨h1.1.symm.trans h2.1, h1.2.symm.trans h2.2⟩
+
+/-- A representation over the SRS powers up to `M` of a commitment shifted by `X^{M−d}`
+has degree at most `d` above the shift. -/
+theorem natDegree_divByMonic_shift_le {a : F[X]} {M d : Nat} (ha : a.natDegree ≤ M) :
+    (a /ₘ X ^ (M - d)).natDegree ≤ d := by
+  rw [natDegree_divByMonic _ (monic_X_pow _), natDegree_X_pow]
+  omega
 
 /-- Whether some coefficient above degree `d` is nonzero. -/
 def exceedsBound [DecidableEq F] (p : List F) (d : Nat) : Bool :=

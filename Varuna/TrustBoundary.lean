@@ -443,6 +443,16 @@ assert_axioms Varuna.V3Batch.sound_of_transcript_evals
 assert_axioms Varuna.PointOpening.eval_defect_z
 assert_axioms Varuna.PCBreak.trapdoorBreak
 assert_axioms Varuna.batchCheck_extract
+assert_axioms Varuna.RepPoint.pairing_toGroup
+assert_axioms Varuna.pcProduct_toGroup
+assert_axioms Varuna.weightedSum_scalarsAt_of_pcCheck
+assert_axioms Varuna.RepPoint.eval_cleared
+assert_axioms Varuna.RepPoint.cleared_fst
+assert_axioms Varuna.RepPoint.defect_eq_zero_of_cleared
+assert_axioms Varuna.RepBreak.srsBreak
+assert_axioms Varuna.repCheck_extract
+assert_axioms Varuna.pcCheck_extract
+assert_axioms Varuna.natDegree_divByMonic_shift_le
 assert_axioms Varuna.V3Batch.eval_rowLC
 assert_axioms Varuna.V3Batch.eval_linLC
 assert_axioms Varuna.V3Batch.eval_matLC

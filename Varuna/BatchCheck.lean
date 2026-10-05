@@ -13,15 +13,20 @@ set (`ahp/verifier/messages.rs:100-140`) is the rowcheck LC at `α`, `g₁` and 
 LC at `β`, and every circuit's `g_A, g_B, g_C` and the matrix LC at `γ`, each LC opened
 to `0` (`ahp.rs:179-404`). `batch_check` (`sonic_pc/mod.rs:347-420`) combines the
 openings at each point with one challenge per polynomial (`accumulate_elems`), and the
-points with randomizers `1, r₁, r₂`. One pairing product checks the lot.
+points with randomizers `1, r₁, r₂`. One pairing product checks the lot (`pcCheck`).
 
-Against the algebraic representations, the pairing product reads `Σ_j r_j D_j(τ) = 0`,
-with `D_j = Σ_i ξ_{j,i} p_{j,i} − Σ_i ξ_{j,i} v_{j,i} − (X − z_j) q_j` the KZG defect at
-point `j` (`PointOpening.defect`). The degree-bound shifts and the hiding component of
-the product are group-level assembly, not part of this reading. Unless the randomizers
-are lucky every `D_j(τ)` is zero. A nonzero `D_j` with root `τ` is a trapdoor break
-(`PCBreak.trapdoorBreak`). `D_j = 0` gives `Σ_i ξ_{j,i} (p_{j,i}(z_j) − v_{j,i}) = 0`, so
-unless the `ξ_j` are lucky every claim is correct (`batchCheck_extract`).
+`pcCheck` is that product as `check_elems` assembles it : each commitment against the
+G2 shift of its degree bound, and each proof's `random_v` along `gamma_g`. Against
+representations over the powers of `g` and `gamma_g`, a well-formed key makes it
+`(Σ_j r_j c_j) · e(g, h)` (`pcProduct_toGroup`). Unless the randomizers are lucky every
+`c_j` is zero. Then, unless the trapdoor is `0` or a nonzero pair of polynomials has root
+`(τ, κ)` (`RepBreak.srsBreak`), the KZG defect
+`D_j = Σ_i ξ_{j,i} p_{j,i} − Σ_i ξ_{j,i} v_{j,i} − (X − z_j) q_j` of the polynomials above
+the shifts is zero (`RepPoint.defect_eq_zero_of_cleared`). `D_j = 0` gives
+`Σ_i ξ_{j,i} (p_{j,i}(z_j) − v_{j,i}) = 0`, so unless the `ξ_j` are lucky every claim is
+correct (`pcCheck_extract`). `batchCheck_extract` is the same argument on the reading
+`Σ_j r_j D_j(τ) = 0`, where a nonzero `D_j` with root `τ` is a trapdoor break
+(`PCBreak.trapdoorBreak`).
 
 `V3Batch.holds_of_deployedAccepts` : the V3 checks with the batch check in place of
 correct openings (`DeployedAccepts`), no break of the transcript, no lucky combination,
@@ -63,6 +68,16 @@ noncomputable def discrepancies : List F :=
 theorem eval_defect_z (ξ : List F) : (o.defect ξ).eval o.z = weightedSum ξ o.discrepancies := by
   rw [discrepancies, weightedSum_map_sub (fun pv : F[X] × F => pv.1.eval o.z) Prod.snd, defect]
   simp [eval_weightedSumPoly, List.map_map, Function.comp_def]
+
+/-- A zero defect whose challenges cancel no wrong claim makes every claim correct. -/
+theorem claims_of_defect_eq_zero {ξ : List F} (hd : o.defect ξ = 0)
+    (hξ : inspectBatch ξ o.discrepancies = none) : ∀ pv ∈ o.opened, pv.2 = pv.1.eval o.z := by
+  intro pv hpv
+  have hsum : weightedSum ξ o.discrepancies = 0 := by
+    rw [← eval_defect_z, hd, eval_zero]
+  have h0 := inspectBatch_accepts hsum hξ _
+    (List.mem_map_of_mem (f := fun pv : F[X] × F => pv.1.eval o.z - pv.2) hpv)
+  exact (sub_eq_zero.mp h0).symm
 
 end PointOpening
 
@@ -121,11 +136,399 @@ theorem batchCheck_extract {τ : F} {os : List (PointOpening F)} {ξs : List (Li
   have hξ : inspectBatch ξs[j] os[j].discrepancies = none := by
     by_contra h
     exact hl (Or.inr ⟨j, hj, hj', h⟩)
-  have hsum : weightedSum ξs[j] os[j].discrepancies = 0 := by
-    rw [← PointOpening.eval_defect_z, hzero, eval_zero]
-  have h0 := inspectBatch_accepts hsum hξ _
-    (List.mem_map_of_mem (f := fun pv : F[X] × F => pv.1.eval os[j].z - pv.2) hpv)
-  exact (sub_eq_zero.mp h0).symm
+  exact os[j].claims_of_defect_eq_zero hzero hξ pv hpv
+
+/-! ## The pairing product
+
+`check_elems` pairs the combined commitments of each degree bound against that bound's
+shift in G2, and the adjusted witness and the witness against `h` and `beta_h`. Against
+representations over the powers of `g` and `gamma_g = κ g`, a well-formed key makes the
+product `(Σ_j r_j c_j) · e(g, h)`, with `c_j` the scalar of point `j`
+(`pcProduct_toGroup`). Cleared of the shifts' inverses, `τ^M c_j` is the value at
+`(τ, κ)` of a pair of polynomials (`RepPoint.eval_cleared`). Along `g` that pair is
+`X^M` times the KZG defect of the polynomials above the shifts, plus a part of degree
+below `M` (`RepPoint.cleared_fst`), so it is zero only if the defect is
+(`RepPoint.defect_eq_zero_of_cleared`). -/
+
+section Pairing
+
+variable {G1 G2 GT : Type*} [AddCommGroup G1] [AddCommGroup G2] [AddCommGroup GT]
+  [Module F G1] [Module F G2] [Module F GT]
+
+/-- The verifier key `batch_check` reads : `g` and `gamma_g` in G1, `h` and `beta_h` in
+G2, the SRS's largest power `M`, and for each degree bound `d` its shift in G2
+(`prepared_negative_powers_of_beta_h`, `parameters/src/mainnet/powers.rs:80-86`). -/
+structure BatchKey (G1 G2 : Type*) where
+  g : G1
+  gammaG : G1
+  h : G2
+  betaH : G2
+  negPowH : ℕ → G2
+  maxDegree : ℕ
+
+/-- A key from an SRS with trapdoor `τ` and `gamma_g = κ g` : the shift for degree bound
+`d` is `τ^{−(M−d)} h`. -/
+def BatchKey.wellFormed (key : BatchKey G1 G2) (τ κ : F) : Prop :=
+  key.betaH = τ • key.h ∧ key.gammaG = κ • key.g ∧
+    ∀ d, key.negPowH d = (τ ^ (key.maxDegree - d))⁻¹ • key.h
+
+/-- The shift of a commitment with degree bound `b` under an SRS whose largest power is
+`M` : `M − d` for bound `d`, `0` without one (`sonic_pc/mod.rs:105`). -/
+def boundShift (M : ℕ) : Option ℕ → ℕ
+  | none => 0
+  | some d => M - d
+
+theorem boundShift_le (M : ℕ) : ∀ b, boundShift M b ≤ M
+  | none => Nat.zero_le _
+  | some _ => Nat.sub_le _ _
+
+/-- The G2 element a commitment with degree bound `b` is paired with. -/
+def BatchKey.shiftH (key : BatchKey G1 G2) : Option ℕ → G2
+  | none => key.h
+  | some d => key.negPowH d
+
+theorem BatchKey.shiftH_eq {key : BatchKey G1 G2} {τ κ : F} (hwf : key.wellFormed τ κ) :
+    ∀ b, key.shiftH b = (τ ^ boundShift key.maxDegree b)⁻¹ • key.h
+  | none => by simp [shiftH, boundShift]
+  | some d => hwf.2.2 d
+
+/-- An opened label of a `batch_check` point : its commitment, its degree bound, and its
+claimed value. -/
+structure PCTerm (G1 F : Type*) where
+  comm : G1
+  bound : Option ℕ
+  value : F
+
+/-- A `batch_check` query point : the point, its opened labels in label order, and its
+KZG proof, the witness `w` and `random_v`. -/
+structure PCPoint (G1 F : Type*) where
+  z : F
+  terms : List (PCTerm G1 F)
+  w : G1
+  rv : F
+
+/-- The point's part of the pairing product with challenges `ξ` and randomizer `r`
+(`accumulate_elems`) : each commitment scaled by `r ξ_i` against its shift, less
+`r (v g − z w + random_v gamma_g)` against `h` and `r w` against `beta_h`, with
+`v = Σ ξ_i v_i`. -/
+def PCPoint.pairing (e : Pairing F G1 G2 GT) (key : BatchKey G1 G2) (o : PCPoint G1 F)
+    (ξ : List F) (r : F) : GT :=
+  (List.zipWith (fun t x => e.pair ((r * x) • t.comm) (key.shiftH t.bound)) o.terms ξ).sum -
+    e.pair (r • (weightedSum ξ (o.terms.map PCTerm.value) • key.g - o.z • o.w +
+      o.rv • key.gammaG)) key.h -
+    e.pair (r • o.w) key.betaH
+
+/-- The pairing product of the points with challenges `ξs` and randomizers `rs`. -/
+def pcProduct (e : Pairing F G1 G2 GT) (key : BatchKey G1 G2) :
+    List (PCPoint G1 F) → List (List F) → List F → GT
+  | o :: os, ξ :: ξs, r :: rs => o.pairing e key ξ r + pcProduct e key os ξs rs
+  | _, _, _ => 0
+
+/-- `batch_check`'s pairing check (`check_elems`) : the product is the identity.
+`check_elems` adds the commitments of one degree bound, and the points' adjusted
+witnesses and witnesses, before pairing them, which bilinearity makes this sum. -/
+def pcCheck (e : Pairing F G1 G2 GT) (key : BatchKey G1 G2) (os : List (PCPoint G1 F))
+    (ξs : List (List F)) (rs : List F) : Prop :=
+  pcProduct e key os ξs rs = 0
+
+/-- An opened label against the algebraic representations : the representation of its
+commitment over the powers of `g` and of `gamma_g`, its degree bound, and its claimed
+value. An LC's commitment combines its terms' (`check_combinations`), so its
+representation combines theirs. -/
+structure RepTerm (F : Type*) [Field F] where
+  rep : F[X] × F[X]
+  bound : Option ℕ
+  value : F
+
+/-- A query point against the algebraic representations : the point, its opened labels,
+the representation of the proof's witness, and `random_v`. -/
+structure RepPoint (F : Type*) [Field F] where
+  z : F
+  terms : List (RepTerm F)
+  w : F[X] × F[X]
+  rv : F
+
+namespace RepPoint
+
+variable (M : ℕ) (τ κ : F) (o : RepPoint F)
+
+/-- The point's group elements, with `gamma_g = κ g`. -/
+noncomputable def toGroup (g : G1) : PCPoint G1 F where
+  z := o.z
+  terms := o.terms.map fun t => ⟨repEval τ κ t.rep • g, t.bound, t.value⟩
+  w := repEval τ κ o.w • g
+  rv := o.rv
+
+/-- The point's scalar : its part of the pairing product, over `e(g, h)`, with
+randomizer `1`. -/
+noncomputable def scalar (ξ : List F) : F :=
+  weightedSum ξ (o.terms.map fun t => (τ ^ boundShift M t.bound)⁻¹ * repEval τ κ t.rep) -
+    weightedSum ξ (o.terms.map RepTerm.value) - κ * o.rv - (τ - o.z) * repEval τ κ o.w
+
+/-- What the point opens : each commitment's polynomial above its shift, with its claimed
+value, and the witness's polynomial along `g`. -/
+noncomputable def opening : PointOpening F :=
+  ⟨o.z, o.terms.map fun t => (t.rep.1 /ₘ X ^ boundShift M t.bound, t.value), o.w.1⟩
+
+/-- `τ^M` times the scalar, as a pair of polynomials to evaluate at `(τ, κ)`. -/
+noncomputable def cleared (ξ : List F) : F[X] × F[X] :=
+  (weightedSumPoly ξ (o.terms.map fun t => X ^ (M - boundShift M t.bound) * t.rep.1) -
+      X ^ M * (C (weightedSum ξ (o.terms.map RepTerm.value)) + (X - C o.z) * o.w.1),
+    weightedSumPoly ξ (o.terms.map fun t => X ^ (M - boundShift M t.bound) * t.rep.2) -
+      X ^ M * (C o.rv + (X - C o.z) * o.w.2))
+
+end RepPoint
+
+/-- The points' scalars with their challenges. -/
+noncomputable def scalarsAt (M : ℕ) (τ κ : F) (os : List (RepPoint F)) (ξs : List (List F)) :
+    List F :=
+  List.zipWith (fun o ξ => o.scalar M τ κ ξ) os ξs
+
+theorem RepPoint.pairing_toGroup (e : Pairing F G1 G2 GT) {key : BatchKey G1 G2} {τ κ : F}
+    (hwf : key.wellFormed τ κ) (o : RepPoint F) (ξ : List F) (r : F) :
+    (o.toGroup τ κ key.g).pairing e key ξ r =
+      (r * o.scalar key.maxDegree τ κ ξ) • e.pair key.g key.h := by
+  have hterms : ∀ (ts : List (RepTerm F)) (ξ : List F),
+      (List.zipWith (fun t x => e.pair ((r * x) • t.comm) (key.shiftH t.bound))
+          (ts.map fun t => (⟨repEval τ κ t.rep • key.g, t.bound, t.value⟩ : PCTerm G1 F))
+          ξ).sum =
+        (r * weightedSum ξ (ts.map fun t =>
+            (τ ^ boundShift key.maxDegree t.bound)⁻¹ * repEval τ κ t.rep)) •
+          e.pair key.g key.h := by
+    intro ts
+    induction ts with
+    | nil => intro ξ; simp
+    | cons t ts ih =>
+      intro ξ
+      cases ξ with
+      | nil => simp
+      | cons x ξ =>
+        simp only [List.map_cons, List.zipWith_cons_cons, List.sum_cons, weightedSum_cons, ih]
+        rw [key.shiftH_eq hwf, smul_smul, e.map_smul_left, e.map_smul_right, smul_smul,
+          ← add_smul]
+        congr 1
+        ring
+  have hadj : r • (weightedSum ξ (o.terms.map RepTerm.value) • key.g -
+      o.z • (repEval τ κ o.w • key.g) + o.rv • (κ • key.g)) =
+      (r * (weightedSum ξ (o.terms.map RepTerm.value) - o.z * repEval τ κ o.w + o.rv * κ)) •
+        key.g := by
+    module
+  simp only [PCPoint.pairing, toGroup, hterms, List.map_map, Function.comp_def]
+  rw [hwf.1, hwf.2.1, hadj, e.map_smul_left, smul_smul, e.map_smul_left, e.map_smul_right,
+    smul_smul, ← sub_smul, ← sub_smul]
+  congr 1
+  simp only [scalar]
+  ring
+
+/-- Against the representations, a well-formed key makes the pairing product the
+randomized scalars times `e(g, h)`. -/
+theorem pcProduct_toGroup (e : Pairing F G1 G2 GT) {key : BatchKey G1 G2} {τ κ : F}
+    (hwf : key.wellFormed τ κ) :
+    ∀ (os : List (RepPoint F)) (ξs : List (List F)) (rs : List F),
+      pcProduct e key (os.map fun o => o.toGroup τ κ key.g) ξs rs =
+        weightedSum rs (scalarsAt key.maxDegree τ κ os ξs) • e.pair key.g key.h
+  | [], _, _ => by simp [pcProduct, scalarsAt]
+  | _ :: _, [], _ => by simp [pcProduct, scalarsAt]
+  | _ :: _, _ :: _, [] => by simp [pcProduct]
+  | o :: os, ξ :: ξs, r :: rs => by
+    simp only [List.map_cons, pcProduct, scalarsAt, List.zipWith_cons_cons, weightedSum_cons]
+    rw [RepPoint.pairing_toGroup e hwf, add_smul]
+    exact congrArg _ (pcProduct_toGroup e hwf os ξs rs)
+
+/-- An accepted pairing check on algebraic elements : the randomized scalars sum to
+zero. -/
+theorem weightedSum_scalarsAt_of_pcCheck (e : Pairing F G1 G2 GT) {key : BatchKey G1 G2}
+    {τ κ : F} (hwf : key.wellFormed τ κ) (hgh : e.pair key.g key.h ≠ 0) {os : List (RepPoint F)}
+    {ξs : List (List F)} {rs : List F}
+    (h : pcCheck e key (os.map fun o => o.toGroup τ κ key.g) ξs rs) :
+    weightedSum rs (scalarsAt key.maxDegree τ κ os ξs) = 0 :=
+  eq_zero_of_smul_eq_zero ((pcProduct_toGroup e hwf os ξs rs).symm.trans h) hgh
+
+/-- `Σ ξ_i (f_i + κ g_i) = c Σ ξ_i h_i` once each `f_i + κ g_i = c h_i`. -/
+theorem weightedSum_map_add_mul {α : Type*} (κ c : F) (f g h : α → F)
+    (hfg : ∀ t, f t + κ * g t = c * h t) :
+    ∀ (ξ : List F) (ts : List α),
+      weightedSum ξ (ts.map f) + κ * weightedSum ξ (ts.map g) = c * weightedSum ξ (ts.map h)
+  | [], _ => by simp
+  | _ :: _, [] => by simp
+  | x :: ξ, t :: ts => by
+    simp only [List.map_cons, weightedSum_cons]
+    linear_combination x * hfg t + weightedSum_map_add_mul κ c f g h hfg ξ ts
+
+theorem weightedSumPoly_map_add {α : Type*} (f g : α → F[X]) :
+    ∀ (ξ : List F) (ts : List α),
+      weightedSumPoly ξ (ts.map fun t => f t + g t) =
+        weightedSumPoly ξ (ts.map f) + weightedSumPoly ξ (ts.map g)
+  | [], _ => by simp
+  | _ :: _, [] => by simp [weightedSumPoly]
+  | x :: ξ, t :: ts => by
+    simp only [List.map_cons, weightedSumPoly, weightedSumPoly_map_add f g ξ ts]
+    ring
+
+theorem weightedSumPoly_map_mul_left {α : Type*} (p : F[X]) (f : α → F[X]) :
+    ∀ (ξ : List F) (ts : List α),
+      weightedSumPoly ξ (ts.map fun t => p * f t) = p * weightedSumPoly ξ (ts.map f)
+  | [], _ => by simp
+  | _ :: _, [] => by simp [weightedSumPoly]
+  | x :: ξ, t :: ts => by
+    simp only [List.map_cons, weightedSumPoly, weightedSumPoly_map_mul_left p f ξ ts]
+    ring
+
+theorem degree_weightedSumPoly_lt {M : ℕ} :
+    ∀ (ξ : List F) (ps : List F[X]), (∀ p ∈ ps, p.degree < M) →
+      (weightedSumPoly ξ ps).degree < M
+  | [], _, _ => by simp
+  | _ :: _, [], _ => by simp [weightedSumPoly]
+  | x :: ξ, p :: ps, h => by
+    simp only [weightedSumPoly]
+    refine lt_of_le_of_lt (degree_add_le _ _) (max_lt ?_ ?_)
+    · rw [← smul_eq_C_mul]
+      exact lt_of_le_of_lt (degree_smul_le _ _) (h p (by simp))
+    · exact degree_weightedSumPoly_lt ξ ps fun q hq => h q (by simp [hq])
+
+namespace RepPoint
+
+variable {M : ℕ} {τ κ : F}
+
+theorem eval_cleared (hτ : τ ≠ 0) (o : RepPoint F) (ξ : List F) :
+    repEval τ κ (o.cleared M ξ) = τ ^ M * o.scalar M τ κ ξ := by
+  have hpt : ∀ t : RepTerm F,
+      (X ^ (M - boundShift M t.bound) * t.rep.1).eval τ +
+          κ * (X ^ (M - boundShift M t.bound) * t.rep.2).eval τ =
+        τ ^ M * ((τ ^ boundShift M t.bound)⁻¹ * repEval τ κ t.rep) := by
+    intro t
+    have hs : τ ^ M = τ ^ (M - boundShift M t.bound) * τ ^ boundShift M t.bound := by
+      rw [← pow_add, Nat.sub_add_cancel (boundShift_le M t.bound)]
+    have hne : τ ^ boundShift M t.bound ≠ 0 := pow_ne_zero _ hτ
+    simp only [eval_mul, eval_pow, eval_X, repEval]
+    rw [hs]
+    field_simp
+  have hsum := weightedSum_map_add_mul κ (τ ^ M) _ _ _ hpt ξ o.terms
+  simp only [repEval, cleared, eval_sub, eval_weightedSumPoly, eval_mul, eval_pow, eval_X,
+    eval_add, eval_C, List.map_map, Function.comp_def] at hsum ⊢
+  simp only [scalar, repEval]
+  linear_combination hsum
+
+/-- Along `g`, the cleared pair is `X^M` times the defect of what the point opens, plus
+the parts below the shifts, each lifted by `X^{M−s}`. -/
+theorem cleared_fst (o : RepPoint F) (ξ : List F) :
+    (o.cleared M ξ).1 = X ^ M * (o.opening M).defect ξ +
+      weightedSumPoly ξ (o.terms.map fun t =>
+        X ^ (M - boundShift M t.bound) * (t.rep.1 %ₘ X ^ boundShift M t.bound)) := by
+  have hpt : ∀ t : RepTerm F, X ^ (M - boundShift M t.bound) * t.rep.1 =
+      X ^ M * (t.rep.1 /ₘ X ^ boundShift M t.bound) +
+        X ^ (M - boundShift M t.bound) * (t.rep.1 %ₘ X ^ boundShift M t.bound) := by
+    intro t
+    have hs : (X : F[X]) ^ M = X ^ (M - boundShift M t.bound) * X ^ boundShift M t.bound := by
+      rw [← pow_add, Nat.sub_add_cancel (boundShift_le M t.bound)]
+    conv_lhs => rw [← modByMonic_add_div t.rep.1 (X ^ boundShift M t.bound)]
+    rw [hs]
+    ring
+  simp only [cleared, opening, PointOpening.defect, List.map_map, Function.comp_def]
+  rw [List.map_congr_left fun t _ => hpt t, weightedSumPoly_map_add,
+    weightedSumPoly_map_mul_left]
+  ring
+
+theorem degree_low_lt (o : RepPoint F) (ξ : List F) :
+    (weightedSumPoly ξ (o.terms.map fun t =>
+      X ^ (M - boundShift M t.bound) * (t.rep.1 %ₘ X ^ boundShift M t.bound))).degree < M := by
+  refine degree_weightedSumPoly_lt ξ _ fun p hp => ?_
+  obtain ⟨t, -, rfl⟩ := List.mem_map.1 hp
+  set s := boundShift M t.bound
+  by_cases h0 : t.rep.1 %ₘ X ^ s = 0
+  · rw [h0, mul_zero, degree_zero]
+    exact WithBot.bot_lt_coe _
+  · have hlt : (t.rep.1 %ₘ X ^ s).degree < s := by
+      simpa using degree_modByMonic_lt t.rep.1 (monic_X_pow s)
+    rw [degree_eq_natDegree h0] at hlt
+    rw [degree_mul, degree_X_pow, degree_eq_natDegree h0]
+    have hlt' : (t.rep.1 %ₘ X ^ s).natDegree < s := by exact_mod_cast hlt
+    have hsM : s ≤ M := boundShift_le M t.bound
+    exact_mod_cast (show M - s + (t.rep.1 %ₘ X ^ s).natDegree < M by omega)
+
+/-- A zero cleared pair along `g` makes the defect of what the point opens zero. -/
+theorem defect_eq_zero_of_cleared (o : RepPoint F) (ξ : List F) (h : (o.cleared M ξ).1 = 0) :
+    (o.opening M).defect ξ = 0 := by
+  by_contra hD
+  rw [cleared_fst] at h
+  have heq : X ^ M * (o.opening M).defect ξ = -weightedSumPoly ξ (o.terms.map fun t =>
+      X ^ (M - boundShift M t.bound) * (t.rep.1 %ₘ X ^ boundShift M t.bound)) := by
+    linear_combination h
+  have hge : (M : WithBot ℕ) ≤ (X ^ M * (o.opening M).defect ξ).degree := by
+    rw [degree_mul, degree_X_pow]
+    exact le_add_of_nonneg_right (zero_le_degree_iff.mpr hD)
+  rw [heq, degree_neg] at hge
+  exact absurd (o.degree_low_lt ξ) (not_lt.mpr hge)
+
+end RepPoint
+
+/-- The batch check passes by luck : the randomizers `rs` cancel nonzero scalars, or some
+point's challenges cancel a wrong claim. -/
+def RepLucky (M : ℕ) (τ κ : F) (os : List (RepPoint F)) (ξs : List (List F)) (rs : List F) :
+    Prop :=
+  inspectBatch rs (scalarsAt M τ κ os ξs) ≠ none ∨
+    ∃ j, ∃ hj : j < os.length, ∃ hj' : j < ξs.length,
+      inspectBatch ξs[j] (os[j].opening M).discrepancies ≠ none
+
+/-- The SRS is broken at the points : the trapdoor is `0`, or some point's cleared pair is
+nonzero with root `(τ, κ)`. -/
+def RepBreak (M : ℕ) (τ κ : F) (os : List (RepPoint F)) (ξs : List (List F)) : Prop :=
+  τ = 0 ∨ ∃ j, ∃ hj : j < os.length, ∃ hj' : j < ξs.length,
+    os[j].cleared M ξs[j] ≠ 0 ∧ repEval τ κ (os[j].cleared M ξs[j]) = 0
+
+/-- A break at the points is an SRS break. -/
+theorem RepBreak.srsBreak {M : ℕ} {τ κ : F} {os : List (RepPoint F)} {ξs : List (List F)}
+    (h : RepBreak M τ κ os ξs) : ∃ br : SRSBreak F, br.holds τ κ := by
+  rcases h with rfl | ⟨j, hj, hj', hne, hev⟩
+  · exact SRSBreak.of_trapdoor_zero κ
+  · refine SRSBreak.of_polys ?_ hev
+    by_contra h0
+    push Not at h0
+    exact hne (Prod.ext h0.1 h0.2)
+
+/-- Pairing-check extraction against the representations. If the randomized scalars sum to
+zero, nothing is lucky, and the SRS is not broken at the points, every claimed value is
+the value of its polynomial above the shift. -/
+theorem repCheck_extract {M : ℕ} {τ κ : F} {os : List (RepPoint F)} {ξs : List (List F)}
+    {rs : List F} (hlen : os.length ≤ ξs.length)
+    (hcheck : weightedSum rs (scalarsAt M τ κ os ξs) = 0) (hl : ¬RepLucky M τ κ os ξs rs)
+    (hbr : ¬RepBreak M τ κ os ξs) :
+    ∀ o ∈ os, ∀ pv ∈ (o.opening M).opened, pv.2 = pv.1.eval o.z := by
+  intro o ho pv hpv
+  obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem ho
+  have hj' : j < ξs.length := by omega
+  have hτ : τ ≠ 0 := fun h => hbr (Or.inl h)
+  have hr : inspectBatch rs (scalarsAt M τ κ os ξs) = none := by
+    by_contra h
+    exact hl (Or.inl h)
+  have hsc : os[j].scalar M τ κ ξs[j] = 0 := by
+    refine inspectBatch_accepts hcheck hr _ ?_
+    have hlt : j < (scalarsAt M τ κ os ξs).length := by
+      simp only [scalarsAt, List.length_zipWith]
+      omega
+    have hmem := List.getElem_mem hlt
+    simpa [scalarsAt] using hmem
+  have hcl : os[j].cleared M ξs[j] = 0 := by
+    by_contra hne
+    exact hbr (Or.inr ⟨j, hj, hj', hne, by rw [RepPoint.eval_cleared hτ, hsc, mul_zero]⟩)
+  have hξ : inspectBatch ξs[j] (os[j].opening M).discrepancies = none := by
+    by_contra h
+    exact hl (Or.inr ⟨j, hj, hj', h⟩)
+  exact (os[j].opening M).claims_of_defect_eq_zero
+    (os[j].defect_eq_zero_of_cleared ξs[j] (by rw [hcl]; rfl)) hξ pv hpv
+
+/-- Batch-check extraction at the group level. If the pairing check accepts on algebraic
+elements under a well-formed key, nothing is lucky, and the SRS is not broken at the
+points, every claimed value is the value of its polynomial above the shift. -/
+theorem pcCheck_extract (e : Pairing F G1 G2 GT) {key : BatchKey G1 G2} {τ κ : F}
+    (hwf : key.wellFormed τ κ) (hgh : e.pair key.g key.h ≠ 0) {os : List (RepPoint F)}
+    {ξs : List (List F)} {rs : List F} (hlen : os.length ≤ ξs.length)
+    (hcheck : pcCheck e key (os.map fun o => o.toGroup τ κ key.g) ξs rs)
+    (hl : ¬RepLucky key.maxDegree τ κ os ξs rs) (hbr : ¬RepBreak key.maxDegree τ κ os ξs) :
+    ∀ o ∈ os, ∀ pv ∈ (o.opening key.maxDegree).opened, pv.2 = pv.1.eval o.z :=
+  repCheck_extract hlen (weightedSum_scalarsAt_of_pcCheck e hwf hgh hcheck) hl hbr
+
+end Pairing
 
 /-! ## The V3 query set -/
 

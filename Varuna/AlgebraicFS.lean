@@ -320,11 +320,6 @@ end V3Batch
 
 /-! ## Commitments and clashes -/
 
-/-- The scalar `a(τ) + κ b(τ)` of the element with representation `(a, b)` over the
-powers of `g` and of `gamma_g = κ g`. -/
-noncomputable def repEval (τ κ : F) (r : F[X] × F[X]) : F :=
-  r.1.eval τ + κ * r.2.eval τ
-
 /-- Two different representations at the same position of `ps` and `qs` of the same
 element. -/
 def Clash (τ κ : F) (ps qs : List (F[X] × F[X])) : Prop :=
