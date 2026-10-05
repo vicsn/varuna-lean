@@ -22,6 +22,7 @@ import Varuna.Bridge
 import Varuna.Endpoint
 import Varuna.BatchEndpoint
 import Varuna.AdaptiveFS
+import Varuna.MemoOracle
 import Varuna.BatchDegree
 import Varuna.BatchFS
 import Varuna.ZK
@@ -392,6 +393,17 @@ assert_axioms Varuna.V3Batch.Within.residualsBounded
 assert_axioms Varuna.V3Batch.card_badAt_le
 assert_axioms Varuna.V3Batch.adaptive_soundness_concrete
 assert_computable Varuna.DegreeBounds.b
+assert_axioms Varuna.mem_memoRun
+assert_axioms Varuna.challengeFromQuery_of_mem
+assert_axioms Varuna.memoRun_getElem_fst
+assert_axioms Varuna.mem_runLog
+assert_axioms Varuna.nextQuery_fillRounds
+assert_axioms Varuna.roundsFromQueries_runLog
+assert_computable Varuna.memoRun
+assert_axioms Varuna.fillRounds_splitSqueezes
+assert_axioms Varuna.V3Batch.adaptive_soundness_on
+assert_axioms Varuna.V3Batch.oracle_soundness
+assert_axioms Varuna.V3Batch.oracle_soundness_concrete
 assert_axioms Varuna.before_injective
 assert_axioms Varuna.squeezeBad_card
 assert_axioms Varuna.squeeze_safe_residual

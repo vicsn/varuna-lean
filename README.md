@@ -38,7 +38,10 @@ absorbs. `V3Batch.adaptive_soundness` charges that hypothesis against an
 adaptive prover: queries carry the earlier challenges, each squeeze's
 bad set is read off its query, and at most `Q · b · |S|^{Q-1}` of the
 `|S|^Q` oracle tapes yield an accepted transcript for a false statement.
-`V3Batch.adaptive_soundness_concrete` computes `b` for the batch from
+`V3Batch.oracle_soundness` is that count against a random oracle with
+memory, the verifier recomputing each challenge with `V` queries of its
+own: at most `(Q + V) · b · |S|^{Q+V-1}` of the `|S|^{Q+V}` tapes.
+`V3Batch.oracle_soundness_concrete` computes `b` for the batch from
 the SRS size (every committed polynomial below `D` powers) and the
 largest domains.
 snarkVM's batch weights `ν_i τ_{i,j}` are counted one drawn element at a
@@ -65,7 +68,7 @@ The interactive picture is the
   encodings stay a floor. Sage proofs are not captured in this project.
 - `knowledgeSoundness_bls` states the capstone at `ZMod bls12_377_r`.
   Primality of that modulus is a `Fact`, not a kernel proof.
-- `V3Batch.adaptive_soundness`'s queries carry the earlier challenges,
+- `V3Batch.oracle_soundness`'s queries carry the earlier challenges,
   the standard multi-round Fiat–Shamir encoding. snarkVM's sponge
   absorbs only the messages; identifying the two is part of the
   Poseidon = RO floor.
@@ -117,6 +120,7 @@ Varuna/
   Degree.lean                       -- concrete residual degrees in ahp_error
   FSBound.lean                      -- Fiat–Shamir query charging
   AdaptiveFS.lean                   -- queries carry the history; adaptive charging
+  MemoOracle.lean                   -- random oracle with memory; the verifier's queries
   Statement.lean                    -- init_sponge binds the public inputs
   Match.lean                        -- typed accept, floors, toy fixtures
   Soundness.lean                    -- knowledge-soundness capstone

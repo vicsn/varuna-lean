@@ -3,8 +3,8 @@ Copyright (c) 2026 Provable Inc.
 Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
-import Varuna.AdaptiveFS
 import Varuna.BatchDegree
+import Varuna.MemoOracle
 
 /-!
 # Adaptive Fiat–Shamir for the V3 batch
@@ -37,6 +37,13 @@ yield a transcript the verifier accepts while the relation fails, where `b ≥ 1
 bounds the degrees of the three batched residuals of the prover's batch.
 `V3Batch.adaptive_soundness_concrete` takes `b` from `DegreeBounds` : `D` SRS
 powers and the largest domains (`Varuna.BatchDegree`).
+
+`V3Batch.oracle_soundness` drops the hypothesis on the squeezed elements. The oracle
+remembers its answers (`Varuna.MemoOracle`), the prover is a query strategy with an
+output read off its log (`OracleProver`), and the verifier squeezes each challenge
+with a query of its own and reads it off the answer (`OracleProver.chal`). With `V`
+verifier queries, the bound is `(Q + V) · b · | S | ^{Q+V-1}` of the ` | S | ^{Q+V}`
+tapes.
 -/
 
 set_option linter.unusedSectionVars false
@@ -497,7 +504,33 @@ messages before each squeeze what they fix of `B` (`ExtractsBefore`); `b ≥ 1` 
 the degrees of `B`'s three batched residuals. If every squeezed element was
 answered on one of the adversary's `Q` queries, at most `Q · b · | S | ^{Q-1}` of the
 ` | S | ^Q` tapes yield an output the verifier accepts while the relation fails :
-knowledge error `Q · b / | S | `. -/
+knowledge error `Q · b / | S | `. The hypotheses are needed only on the tapes of an
+event `E` on which the output fools the verifier. -/
+theorem adaptive_soundness_on (ext : V3Stmt F → List (FSMessage F) → V3Batch F)
+    (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : FSAdversary F) (Q : ℕ)
+    (stmt : List F → V3Stmt F) (B : List F → V3Batch F) (out : List F → V2Transcript F)
+    (chal : List F → V2Challenge → List F) (E : List F → Prop) [DecidablePred E]
+    (hfool : ∀ tape ∈ tapes S Q, E tape →
+      Fools S (stmt tape) (B tape) (out tape) (chal tape))
+    (hstmt : ∀ tape ∈ tapes S Q, E tape →
+      (out tape).init = v3Init (stmt tape).1 (stmt tape).2 ∧ V3StmtWF (stmt tape))
+    (hB : ∀ tape ∈ tapes S Q, E tape → ExtractsBefore ext (stmt tape) (out tape) (B tape))
+    (hcons : ∀ tape ∈ tapes S Q, E tape →
+      RoundsFromQueries A tape (out tape).init ((out tape).rounds (chal tape)))
+    (hdeg : ∀ tape ∈ tapes S Q, E tape →
+      ((B tape).withChallenges (chal tape)).ResidualsBounded (chal tape) b) :
+    ((tapes S Q).filter E).card ≤ Q * b * S.card ^ (Q - 1) := by
+  refine fs_rounds_charge (fun s => v3Init s.1 s.2) V3StmtWF
+    (fun _ _ _ _ hs hs' hr hr' h => v3Init_rounds_inj hs hs' hr hr' h) S A (batchBad ext S b) b
+    (card_batchBad_le ext S b) Q stmt (fun tape => (out tape).rounds (chal tape)) E
+    (fun tape h he => (hstmt tape h he).1 ▸ hcons tape h he) fun tape h he => ?_
+  obtain ⟨hacc, hnot⟩ := hfool tape h he
+  refine ⟨(hstmt tape h he).2, V2Transcript.noLoneField_rounds hacc.msg _,
+    roundsBreak_of_outputBreaks (hB tape h he) hacc.msg S hb (hdeg tape h he) ?_⟩
+  by_contra hne
+  exact hnot (holds_of_accepts hacc (Bool.eq_false_iff.mpr hne))
+
+/-- `adaptive_soundness_on` with the event that the output fools the verifier. -/
 theorem adaptive_soundness (ext : V3Stmt F → List (FSMessage F) → V3Batch F) (S : Finset F)
     {b : ℕ} (hb : 1 ≤ b) (A : FSAdversary F) (Q : ℕ) (stmt : List F → V3Stmt F)
     (B : List F → V3Batch F) (out : List F → V2Transcript F)
@@ -511,16 +544,10 @@ theorem adaptive_soundness (ext : V3Stmt F → List (FSMessage F) → V3Batch F)
       ((B tape).withChallenges (chal tape)).ResidualsBounded (chal tape) b)
     [DecidablePred fun tape => Fools S (stmt tape) (B tape) (out tape) (chal tape)] :
     ((tapes S Q).filter fun tape => Fools S (stmt tape) (B tape) (out tape) (chal tape)).card ≤
-      Q * b * S.card ^ (Q - 1) := by
-  refine fs_rounds_charge (fun s => v3Init s.1 s.2) V3StmtWF
-    (fun _ _ _ _ hs hs' hr hr' h => v3Init_rounds_inj hs hs' hr hr' h) S A (batchBad ext S b) b
-    (card_batchBad_le ext S b) Q stmt (fun tape => (out tape).rounds (chal tape))
-    (fun tape h => (hstmt tape h).1 ▸ hcons tape h) _ fun tape h hf => ?_
-  obtain ⟨hacc, hnot⟩ := hf
-  refine ⟨(hstmt tape h).2, V2Transcript.noLoneField_rounds hacc.msg _,
-    roundsBreak_of_outputBreaks (hB tape h) hacc.msg S hb (hdeg tape h) ?_⟩
-  by_contra hne
-  exact hnot (holds_of_accepts hacc (Bool.eq_false_iff.mpr hne))
+      Q * b * S.card ^ (Q - 1) :=
+  adaptive_soundness_on ext S hb A Q stmt B out chal _ (fun _ _ hf => hf)
+    (fun tape h _ => hstmt tape h) (fun tape h _ => hB tape h) (fun tape h _ => hcons tape h)
+    (fun tape h _ => hdeg tape h)
 
 /-- `adaptive_soundness` with `b` computed. Every polynomial the prover commits to
 has degree below `d.D`, the SRS's number of powers, and every domain is at most
@@ -541,6 +568,127 @@ theorem adaptive_soundness_concrete (ext : V3Stmt F → List (FSMessage F) → V
       Q * d.b * S.card ^ (Q - 1) :=
   adaptive_soundness ext S d.one_le_b A Q stmt B out chal hstmt hB hcons fun tape h =>
     ((hW tape h).withChallenges (chal tape)).residualsBounded hX (chal tape)
+
+end V3Batch
+
+/-! ## A random oracle with memory -/
+
+/-- `cnt c` of the elements `ans` for each squeeze `c` of `cs`, in order. -/
+def splitSqueezes (cnt : V2Challenge → ℕ) : List V2Challenge → List F → V2Challenge → List F
+  | [], _, _ => []
+  | c :: cs, ans, c' =>
+    if c' = c then ans.take (cnt c) else splitSqueezes cnt cs (ans.drop (cnt c)) c'
+
+theorem fillRounds_splitSqueezes (msg : V2Challenge → FSMessage F) (cnt : V2Challenge → ℕ) :
+    ∀ (cs : List V2Challenge), cs.Nodup → ∀ ans : List F,
+      fillRounds (cs.map fun c => (msg c, cnt c)) ans =
+        cs.map fun c => (msg c, splitSqueezes cnt cs ans c)
+  | [], _, _ => rfl
+  | c :: cs, hnd, ans => by
+    rw [List.nodup_cons] at hnd
+    simp only [List.map_cons, fillRounds, splitSqueezes, if_true,
+      fillRounds_splitSqueezes msg cnt cs hnd.2]
+    congr 1
+    exact List.map_congr_left fun c' hc' => by
+      rw [if_neg fun (h : c' = c) => hnd.1 (h ▸ hc')]
+
+theorem V2Transcript.rounds_splitSqueezes (t : V2Transcript F) (cnt : V2Challenge → ℕ)
+    (ans : List F) :
+    t.rounds (splitSqueezes cnt v2Challenges ans) =
+      fillRounds (v2Challenges.map fun c => (t.msgBefore c, cnt c)) ans :=
+  (fillRounds_splitSqueezes t.msgBefore cnt v2Challenges (by decide) ans).symm
+
+/-- An adaptive V3 prover against a random oracle with memory : each query a function
+of its log so far, and after its queries a statement, a transcript and a batch read
+off its log. -/
+structure OracleProver (F : Type*) [Field F] where
+  next : QueryLog F → Transcript F
+  stmt : QueryLog F → V3Stmt F
+  out : QueryLog F → V2Transcript F
+  batch : QueryLog F → V3Batch F
+
+namespace OracleProver
+
+variable (A : OracleProver F) (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ)
+
+/-- The V3 verifier after `A`'s log : `cnt s c` elements for each squeeze `c` of the
+statement `s`, each at the statement followed by its history. -/
+def verifier (log : QueryLog F) : List F → Transcript F :=
+  nextQuery (v3Init (A.stmt log).1 (A.stmt log).2) []
+    (v2Challenges.map fun c => ((A.out log).msgBefore c, cnt (A.stmt log) c))
+
+/-- The run on `tape` : `A`'s `Q` queries, then the verifier's `V`. -/
+def run (tape : List F) : QueryLog F :=
+  runLog A.next Q (A.verifier cnt) V tape
+
+/-- `A`'s log on `tape`. -/
+def view (tape : List F) : QueryLog F :=
+  (A.run cnt Q V tape).take Q
+
+/-- The challenges the verifier reads off its answers on `tape`. -/
+def chal (tape : List F) : V2Challenge → List F :=
+  splitSqueezes (cnt (A.stmt (A.view cnt Q V tape))) v2Challenges
+    (((A.run cnt Q V tape).drop Q).map Prod.snd)
+
+/-- On `tape`, `A`'s output fools the verifier. -/
+def Fools (S : Finset F) (tape : List F) : Prop :=
+  V3Batch.Fools S (A.stmt (A.view cnt Q V tape)) (A.batch (A.view cnt Q V tape))
+    (A.out (A.view cnt Q V tape)) (A.chal cnt Q V tape)
+
+end OracleProver
+
+namespace V3Batch
+
+/-- Fiat–Shamir soundness of the V3 batch against an adaptive prover and a random
+oracle with memory, counting form.
+
+The prover `A` makes `Q` queries, a repeated query getting its logged answer, and
+reads a statement, a transcript and a batch off its log. The verifier then squeezes
+`cnt s c` elements for each squeeze `c` of the statement `s`, at most `V` in all, each
+with a query of its own at the statement followed by the element's history. With
+`ext` reading each log's batch off its messages (`ExtractsBefore`) and `b ≥ 1`
+bounding the degrees of its residuals, at most `(Q + V) · b · | S | ^{Q+V-1}` of the
+` | S | ^{Q+V}` tapes give a run on which the verifier accepts while the relation
+fails : knowledge error `(Q + V) · b / | S | `. -/
+theorem oracle_soundness (ext : V3Stmt F → List (FSMessage F) → V3Batch F) (S : Finset F)
+    {b : ℕ} (hb : 1 ≤ b) (A : OracleProver F) (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ)
+    (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
+    (hstmt : ∀ log,
+      (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
+    (hB : ∀ log, ExtractsBefore ext (A.stmt log) (A.out log) (A.batch log))
+    (hdeg : ∀ log chal, ((A.batch log).withChallenges chal).ResidualsBounded chal b)
+    [DecidablePred (A.Fools cnt Q V S)] :
+    ((tapes S (Q + V)).filter (A.Fools cnt Q V S)).card ≤
+      (Q + V) * b * S.card ^ (Q + V - 1) := by
+  refine adaptive_soundness_on ext S hb
+    (memoAdversary (withVerifier A.next Q (A.verifier cnt)) (Q + V)) (Q + V)
+    (fun tape => A.stmt (A.view cnt Q V tape)) (fun tape => A.batch (A.view cnt Q V tape))
+    (fun tape => A.out (A.view cnt Q V tape)) (A.chal cnt Q V) (A.Fools cnt Q V S)
+    (fun _ _ h => h) (fun _ _ _ => hstmt _) (fun _ _ _ => hB _) (fun tape htape _ => ?_)
+    (fun _ _ _ => hdeg _ _)
+  have hlen : (A.run cnt Q V tape).length = Q + V :=
+    length_runLog A.next Q (A.verifier cnt) V (mem_tapes htape).1
+  rw [(hstmt _).1, OracleProver.chal, V2Transcript.rounds_splitSqueezes]
+  refine roundsFromQueries_runLog A.next Q (A.verifier cnt) V
+    (fun log => v3Init (A.stmt log).1 (A.stmt log).2)
+    (fun log => v2Challenges.map fun c => ((A.out log).msgBefore c, cnt (A.stmt log) c))
+    (fun _ => rfl) tape rfl ?_
+  simp only [List.map_map, Function.comp_def, List.length_map, List.length_drop, hlen]
+  exact (hV _).trans (by omega)
+
+/-- `oracle_soundness` with `b` computed from `DegreeBounds`, as in
+`adaptive_soundness_concrete`. -/
+theorem oracle_soundness_concrete (ext : V3Stmt F → List (FSMessage F) → V3Batch F)
+    (S : Finset F) (d : DegreeBounds) (hX : 1 ≤ d.X) (A : OracleProver F)
+    (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
+    (hstmt : ∀ log,
+      (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
+    (hB : ∀ log, ExtractsBefore ext (A.stmt log) (A.out log) (A.batch log))
+    (hW : ∀ log, (A.batch log).Within d) [DecidablePred (A.Fools cnt Q V S)] :
+    ((tapes S (Q + V)).filter (A.Fools cnt Q V S)).card ≤
+      (Q + V) * d.b * S.card ^ (Q + V - 1) :=
+  oracle_soundness ext S d.one_le_b A cnt Q V hV hstmt hB fun log chal =>
+    ((hW log).withChallenges chal).residualsBounded hX chal
 
 end V3Batch
 

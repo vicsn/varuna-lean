@@ -207,17 +207,17 @@ theorem card_filter_queryBad_le {Stmt : Type*} {enc : Stmt → Transcript F} {WF
 
 /-- Adaptive query charging. Let the bad set of a squeezed element be any function
 of the statement and its history, with at most `b` bad answers in `S`, and let the
-statement encoding followed by rounds decode uniquely. If every squeezed element of
-the adversary's output was answered on one of its `Q` queries, at most
-`Q · b · | S | ^{Q-1}` tapes yield an event `E` that forces a break. -/
+statement encoding followed by rounds decode uniquely. If on the tapes of an event
+`E` that forces a break every squeezed element of the adversary's output was
+answered on one of its `Q` queries, at most `Q · b · | S | ^{Q-1}` tapes yield `E`. -/
 theorem fs_rounds_charge {Stmt : Type*} (enc : Stmt → Transcript F) (WF : Stmt → Prop)
     (hinj : ∀ s s' rs rs', WF s → WF s' → NoLoneField rs → NoLoneField rs' →
       enc s ++ encodeRounds rs = enc s' ++ encodeRounds rs' → s = s' ∧ rs = rs')
     (S : Finset F) (A : FSAdversary F) (RB : Stmt → List (Round F) → Finset F) (b : ℕ)
     (hb : ∀ s rs, (S.filter (· ∈ RB s rs)).card ≤ b) (Q : ℕ) (stmt : List F → Stmt)
-    (rounds : List F → List (Round F))
-    (hcons : ∀ tape ∈ tapes S Q, RoundsFromQueries A tape (enc (stmt tape)) (rounds tape))
-    (E : List F → Prop) [DecidablePred E]
+    (rounds : List F → List (Round F)) (E : List F → Prop) [DecidablePred E]
+    (hcons : ∀ tape ∈ tapes S Q, E tape →
+      RoundsFromQueries A tape (enc (stmt tape)) (rounds tape))
     (hE : ∀ tape ∈ tapes S Q, E tape → WF (stmt tape) ∧ NoLoneField (rounds tape) ∧
       RoundsBreak (RB (stmt tape)) (rounds tape)) :
     ((tapes S Q).filter E).card ≤ Q * b * S.card ^ (Q - 1) := by
@@ -231,7 +231,7 @@ theorem fs_rounds_charge {Stmt : Type*} (enc : Stmt → Transcript F) (WF : Stmt
     · exact hnl p (by rw [hrs]; exact List.mem_append_left _ hp) x
     · rw [List.mem_singleton.mp hp]
       exact hnl (m, a) (by rw [hrs]; simp) x
-  refine mem_filter.mpr ⟨hmem, fsHits_of_bad A _ (hcons tape hmem pre m a post hrs j hj) ?_⟩
+  refine mem_filter.mpr ⟨hmem, fsHits_of_bad A _ (hcons tape hmem he pre m a post hrs j hj) ?_⟩
   rw [queryBad_eq hinj RB hs hnl']
   exact hbad
 

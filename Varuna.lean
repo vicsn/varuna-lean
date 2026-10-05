@@ -31,6 +31,7 @@ import Varuna.Bridge
 import Varuna.Endpoint
 import Varuna.BatchEndpoint
 import Varuna.AdaptiveFS
+import Varuna.MemoOracle
 import Varuna.BatchDegree
 import Varuna.BatchFS
 import Varuna.Fingerprint
