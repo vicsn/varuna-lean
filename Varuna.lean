@@ -36,6 +36,7 @@ import Varuna.MemoOracle
 import Varuna.BatchDegree
 import Varuna.BatchFS
 import Varuna.AlgebraicFS
+import Varuna.RoundByRound
 import Varuna.Fingerprint
 import Varuna.SpotCheck
 import Varuna.ProofSize

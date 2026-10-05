@@ -38,6 +38,9 @@ absorbs. `V3Batch.adaptive_soundness` charges that hypothesis against an
 adaptive prover: queries carry the earlier challenges, each squeeze's
 bad set is read off its query, and at most `Q · b · |S|^{Q-1}` of the
 `|S|^Q` oracle tapes yield an accepted transcript for a false statement.
+`RBRKnowledge` is round-by-round knowledge soundness as a state
+function with an extractor, `RBRKnowledge.fs_charge` its Fiat–Shamir
+count, and `V3Batch.rbrKnowledge` the V3 batch as an instance.
 `V3Batch.oracle_soundness` is that count against a random oracle with
 memory, the verifier recomputing each challenge with `V` queries of its
 own: at most `(Q + V) · b · |S|^{Q+V-1}` of the `|S|^{Q+V}` tapes.
@@ -135,6 +138,7 @@ Varuna/
   BatchDegree.lean                  -- batched residual degrees from D and the domains
   BatchFS.lean                      -- adaptive Fiat–Shamir soundness of the batch
   AlgebraicFS.lean                  -- bad sets read off the prover's representations
+  RoundByRound.lean                 -- round-by-round knowledge soundness; the V3 instance
   Fingerprint.lean                  -- captured snarkVM batch proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM

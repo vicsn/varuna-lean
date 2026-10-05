@@ -26,6 +26,7 @@ import Varuna.MemoOracle
 import Varuna.BatchDegree
 import Varuna.BatchFS
 import Varuna.AlgebraicFS
+import Varuna.RoundByRound
 import Varuna.ZK
 import Varuna.Completeness
 import Varuna.Fingerprint
@@ -418,6 +419,9 @@ assert_axioms Varuna.repBad_history
 assert_axioms Varuna.AlgebraicProver.Clashes.trapdoorBreak
 assert_axioms Varuna.V3Batch.algebraic_soundness
 assert_axioms Varuna.V3Batch.algebraic_soundness_concrete
+assert_axioms Varuna.RBRKnowledge.fs_charge
+assert_axioms Varuna.V3Batch.holds_absorbed
+assert_axioms Varuna.V3Batch.rbr_soundness
 assert_axioms Varuna.before_injective
 assert_axioms Varuna.squeezeBad_card
 assert_axioms Varuna.squeeze_safe_residual
