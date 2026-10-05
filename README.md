@@ -60,6 +60,11 @@ snarkVM's `batch_check`: one pairing product over the three query
 points, with the three LCs opened to zero. Unless its combination
 challenges or randomizers are lucky, or a KZG defect is a trapdoor
 break, it gives the same relation.
+`V3Batch.deployed_soundness` counts those challenges too, squeezed from
+the same sponge as short elements: at most
+`((Q + V) · b + (Q + V') · m) · |S|^{|D|-1}` tables, with `V'` the
+verifier's batch-check queries and `m` the elements of `S` per short
+value.
 snarkVM's batch weights `ν_i τ_{i,j}` are counted one drawn element at a
 time. `PreprocessingAHP` is the public-coin argument in the algebraic
 projection. `sound_r1cs` ends at the R1CS relation.
@@ -80,11 +85,12 @@ The interactive picture is the
 
 ### What remains
 
-- The counts take correct openings. `batch_check`'s combination
-  challenges and randomizers are not rounds of the counted transcript.
 - The fingerprint stops at the zero-eval LC layer. The capture has field
   elements only, so MSM / pairing assembly is outside Lean. Byte
   encodings stay a floor. Sage proofs are not captured in this project.
+  The count reads the pairing product on the field side, without its
+  degree-bound shifts and hiding term, so the degree bound of `g₁` is a
+  check of `DeployedAccepts`.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
   and index = circuit stay floors. The AHP simulator programs one
   opening and absorbs the witness into the ZK mask. A constant blinding
@@ -148,6 +154,7 @@ Varuna/
   RoundByRound.lean                 -- round-by-round knowledge soundness; the V3 instance
   SpongeFS.lean                     -- Fiat–Shamir with the sponge's message-only queries
   BatchCheck.lean                   -- snarkVM's batched pairing check over the query points
+  DeployedFS.lean                   -- Fiat–Shamir for the batch check's challenges, deployed count
   Fingerprint.lean                  -- captured snarkVM batch proof vs Lean LC formulas
   Fingerprint/Capture.lean          -- the capture, generated from fixtures/
   SpotCheck.lean                    -- source-pinned samples vs snarkVM
