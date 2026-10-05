@@ -20,6 +20,6 @@ are on the map as well.
 
 Statuses and edge verbs are in
 [security-analysis.md](security-analysis.md#proof-map-statuses). What is still
-open is [there too](security-analysis.md#what-remains), together with how each
-item of the security-analysis plan is covered.
+open is [there too](security-analysis.md#what-remains), together with what each
+security property rests on.
 This wrapper is intentionally thin: we are not cloning the Ironwood book.
