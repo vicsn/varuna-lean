@@ -57,7 +57,8 @@ Fiat–Shamir prefix binds the public inputs. `ahp_error_concrete` states
 the AHP error with concrete residual degrees. `Fingerprint.lean`
 kernel-checks a captured snarkVM V3 batch proof over two circuits with two
 instances each: every coefficient of the three zero-eval LCs is Lean's
-formula, and each LC vanishes over the BLS12-377 scalar field. Poseidon = RO, pairing hardness, and the algebraic-adversary
+formula, and each LC vanishes over the BLS12-377 scalar field.
+`prime_bls12_377_r` proves that modulus prime with a Pratt certificate. Poseidon = RO, pairing hardness, and the algebraic-adversary
 restriction stay floors.
 
 The scope, the soundness spine, and how each security-analysis item is covered
@@ -70,8 +71,6 @@ The interactive picture is the
 - The fingerprint stops at the zero-eval LC layer. The capture has field
   elements only, so MSM / pairing assembly is outside Lean. Byte
   encodings stay a floor. Sage proofs are not captured in this project.
-- `knowledgeSoundness_bls` states the capstone at `ZMod bls12_377_r`.
-  Primality of that modulus is a `Fact`, not a kernel proof.
 - `V3Batch.algebraic_soundness`'s queries carry the earlier challenges,
   the standard multi-round Fiat–Shamir encoding. snarkVM's sponge
   absorbs only the messages; identifying the two is part of the
@@ -106,6 +105,7 @@ Varuna/
   PrimeField.lean                   -- [0, p) integer carrier for the R1CS relation
   R1CS.lean                         -- SNARK relation, sparse ↔ Hadamard
   Field.lean                        -- Mathlib `ZMod p`
+  Primality.lean                    -- Pratt certificate for the BLS12-377 scalar modulus
   Domain.lean                       -- EvalDomain, v_H, Lagrange, SZ
   Indexer.lean                      -- holographic row/col/val oracles
   AHP.lean                          -- rowcheck, lineval, matrix sumcheck

@@ -443,6 +443,7 @@ assert_computable Varuna.V2Transcript.decodeElem
 assert_computable Varuna.prefixBad
 assert_axioms Varuna.PreprocessingAHP.sound
 assert_axioms Varuna.knowledgeSoundness_bls
+assert_axioms Varuna.prime_bls12_377_r
 assert_axioms Varuna.Fingerprint.q_eq_bls12_377_r
 assert_axioms Varuna.masked_eval_at_query
 assert_axioms Varuna.simulateRowcheck_accepts

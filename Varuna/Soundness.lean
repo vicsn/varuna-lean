@@ -5,6 +5,7 @@ Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 
 import Varuna.Match
 import Varuna.FiatShamir
+import Varuna.Primality
 
 /-!
 # Knowledge-soundness capstone (VarunaVersion.V2)
@@ -15,8 +16,8 @@ data, or the identities that imply `Az ∘ Bz = Cz` on the constraint
 domain.
 
 The theorem is stated at a generic `Field`. `knowledgeSoundness_bls`
-restates it at `ZMod bls12_377_r`; primality of that modulus is a `Fact`
-hypothesis. The six modelling floors in `modellingFloors` remain
+restates it at `ZMod bls12_377_r`, prime by the certificate in
+`Primality.lean`. The six modelling floors in `modellingFloors` remain
 explicit. Poseidon = RO, pairing / trapdoor
 hardness, the algebraic-adversary restriction, SRS well-formedness,
 encodings, and index = circuit are **not** Lean axioms.
@@ -242,7 +243,7 @@ theorem PreprocessingAHP.sound [DecidableEq F] (π : PreprocessingAHP F)
   exact knowledgeSoundness hacc hsum hI hdeg hκ hμ
 
 /-- The capstone at the BLS12-377 scalar field. -/
-theorem knowledgeSoundness_bls [Fact (Nat.Prime bls12_377_r)] [DecidableEq (ZMod bls12_377_r)]
+theorem knowledgeSoundness_bls [DecidableEq (ZMod bls12_377_r)]
     {π : ProofView (ZMod bls12_377_r)}
     (hacc : π.checks.accepts)
     (hsum : weightedSum π.batchWeights π.batchClaims = 0)
