@@ -38,6 +38,7 @@ import Varuna.BatchFS
 import Varuna.AlgebraicFS
 import Varuna.RoundByRound
 import Varuna.SpongeFS
+import Varuna.BatchCheck
 import Varuna.Fingerprint
 import Varuna.SpotCheck
 import Varuna.ProofSize

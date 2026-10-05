@@ -28,6 +28,7 @@ import Varuna.BatchFS
 import Varuna.AlgebraicFS
 import Varuna.RoundByRound
 import Varuna.SpongeFS
+import Varuna.BatchCheck
 import Varuna.ZK
 import Varuna.Completeness
 import Varuna.Fingerprint
@@ -431,6 +432,14 @@ assert_axioms Varuna.OracleProver.history_spongeChal
 assert_axioms Varuna.AlgebraicProver.SpongeClashes.trapdoorBreak
 assert_axioms Varuna.V3Batch.sponge_soundness
 assert_axioms Varuna.V3Batch.sponge_soundness_concrete
+assert_axioms Varuna.V3Batch.sound_of_transcript_evals
+assert_axioms Varuna.PointOpening.eval_defect_z
+assert_axioms Varuna.PCBreak.trapdoorBreak
+assert_axioms Varuna.batchCheck_extract
+assert_axioms Varuna.V3Batch.eval_rowLC
+assert_axioms Varuna.V3Batch.eval_linLC
+assert_axioms Varuna.V3Batch.eval_matLC
+assert_axioms Varuna.V3Batch.holds_of_deployedAccepts
 assert_axioms Varuna.before_injective
 assert_axioms Varuna.squeezeBad_card
 assert_axioms Varuna.squeeze_safe_residual

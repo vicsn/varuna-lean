@@ -581,13 +581,9 @@ noncomputable def squeezeBad (S : Finset F) (chal : V2Challenge → List F) :
     (rowcheckDraw P.R P.sizes P.rowClaims) (linevalDraw P.sizes P.linClaims)
     (deltaDraw P.K P.circuits.length (P.matrixTerms.map MatrixTerm.claim))
 
-/-- End-to-end soundness of a V3 batch on its transcript. The challenges and weights
-are the transcript's squeezes, read with snarkVM's schemes; the init absorbs the
-batch's statement. If the three LCs accept on the opened values, every opening has
-no break, and no squeezed element lands in its bad set, then the transcript binds exactly this
-statement, the mask sum is zero, and every instance has `ẑ` equal to its public
-input on the input domain and satisfies `Az ∘ Bz = Cz` on its constraint domain. -/
-theorem sound_of_transcript (S : Finset F) (t : V2Transcript F) (chal : V2Challenge → List F)
+/-- `sound_of_transcript` with the lineval and matrix LCs on the polynomials' values,
+as `batch_check` gives them, rather than on opened values. -/
+theorem sound_of_transcript_evals (S : Finset F) (t : V2Transcript F) (chal : V2Challenge → List F)
     (comms : List (List F)) (hinit : t.init = v3Init P.statement comms)
     (hmsg : ∀ x, FSMessage.field x ∉ t.messages) (hS : ∀ c, ∀ a ∈ chal c, a ∈ S)
     (hα : chal .alpha = [P.α]) (hβ : chal .beta = [P.β]) (hγ : chal .gamma = [P.γ])
@@ -601,10 +597,10 @@ theorem sound_of_transcript (S : Finset F) (t : V2Transcript F) (chal : V2Challe
     (hdvdR : ∀ c ∈ P.circuits, c.R.n ∣ P.R.n) (hdvdC : ∀ c ∈ P.circuits, c.Cd.n ∣ P.Cd.n)
     (hdvdK : ∀ t ∈ P.matrixTerms, t.K.n ∣ P.K.n) (hvalid : ∀ t ∈ P.matrixTerms, t.Valid)
     (hgen : ∀ c ∈ P.circuits, c.Xd.ω = c.Cd.ω ^ (c.Cd.n / c.Xd.n))
-    (hH0 : inspectOpening P.h0rep [] P.α P.vH0 = none) (ho : P.Openings)
-    (hrow : P.rowEval (P.rowWeights chal) = 0) (hlin : P.linOpenedEval (P.linWeights chal) = 0)
+    (hH0 : inspectOpening P.h0rep [] P.α P.vH0 = none)
+    (hrow : P.rowEval (P.rowWeights chal) = 0) (hlin : P.linEval (P.linWeights chal) = 0)
     (hdegL : (X * P.g1 + C (P.linSum (P.linWeights chal) * P.Cd.sizeInv)).natDegree < P.Cd.n)
-    (hmat : P.matOpenedEval (P.deltaWeights chal) = 0) :
+    (hmat : batchedMatrixEval P.K (P.deltaWeights chal) P.matrixTerms P.h2 P.γ = 0) :
     (∀ inputs comms', t.init = v3Init inputs comms' → inputs = P.statement) ∧ P.e = 0 ∧
       ∀ p ∈ P.instances,
         (∀ k < p.1.Xd.n, (p.1.zhat p.2).eval
@@ -635,11 +631,46 @@ theorem sound_of_transcript (S : Finset F) (t : V2Transcript F) (chal : V2Challe
     by_contra h
     exact not_lucky_of_no_break hmsg (c := .deltas) rfl (hS _) hnb
       (deltaDraw_lucky (by rw [List.length_map, length_matrixTerms]; omega) hδ h)
-  obtain ⟨he, hrows⟩ := P.sound_of_openings _ _ _ ho hdvdR hdvdC hdvdK hvalid hH0 hrow hrowI
-    hrowB hlin hlinI hdegL hlinB hmat hmatI hmatB
+  obtain ⟨he, hrows⟩ := P.sound _ _ _ hdvdR hdvdC hdvdK hvalid hH0 hrow hrowI hrowB hlin hlinI
+    hdegL hlinB hmat hmatI hmatB
   refine ⟨fun inputs comms' h => (v3Init_injective (h.symm.trans hinit)).1, he,
     fun p hp => ⟨fun k hk => ?_, hrows p hp⟩⟩
   exact assignment_at_input_position p.1.Xd p.1.Cd (hgen _ (P.fst_mem_circuits hp)) _ _ hk
+
+/-- End-to-end soundness of a V3 batch on its transcript. The challenges and weights
+are the transcript's squeezes, read with snarkVM's schemes; the init absorbs the
+batch's statement. If the three LCs accept on the opened values, every opening has
+no break, and no squeezed element lands in its bad set, then the transcript binds exactly this
+statement, the mask sum is zero, and every instance has `ẑ` equal to its public
+input on the input domain and satisfies `Az ∘ Bz = Cz` on its constraint domain. -/
+theorem sound_of_transcript (S : Finset F) (t : V2Transcript F) (chal : V2Challenge → List F)
+    (comms : List (List F)) (hinit : t.init = v3Init P.statement comms)
+    (hmsg : ∀ x, FSMessage.field x ∉ t.messages) (hS : ∀ c, ∀ a ∈ chal c, a ∈ S)
+    (hα : chal .alpha = [P.α]) (hβ : chal .beta = [P.β]) (hγ : chal .gamma = [P.γ])
+    (hν : (chal .firstCombiners).length = combinerDraws P.sizes)
+    (hη : (chal .prepareThird).length = combinerDraws P.sizes + 3)
+    (hηA : P.ηA = (chal .prepareThird).getD (combinerDraws P.sizes) 0)
+    (hηB : P.ηB = (chal .prepareThird).getD (combinerDraws P.sizes + 1) 0)
+    (hηC : P.ηC = (chal .prepareThird).getD (combinerDraws P.sizes + 2) 0)
+    (hδ : (chal .deltas).length = 3 * P.circuits.length - 1)
+    (hnb : outputBreaks (prefixBad t (P.squeezeBad S chal)) t chal = false)
+    (hdvdR : ∀ c ∈ P.circuits, c.R.n ∣ P.R.n) (hdvdC : ∀ c ∈ P.circuits, c.Cd.n ∣ P.Cd.n)
+    (hdvdK : ∀ t ∈ P.matrixTerms, t.K.n ∣ P.K.n) (hvalid : ∀ t ∈ P.matrixTerms, t.Valid)
+    (hgen : ∀ c ∈ P.circuits, c.Xd.ω = c.Cd.ω ^ (c.Cd.n / c.Xd.n))
+    (hH0 : inspectOpening P.h0rep [] P.α P.vH0 = none) (ho : P.Openings)
+    (hrow : P.rowEval (P.rowWeights chal) = 0) (hlin : P.linOpenedEval (P.linWeights chal) = 0)
+    (hdegL : (X * P.g1 + C (P.linSum (P.linWeights chal) * P.Cd.sizeInv)).natDegree < P.Cd.n)
+    (hmat : P.matOpenedEval (P.deltaWeights chal) = 0) :
+    (∀ inputs comms', t.init = v3Init inputs comms' → inputs = P.statement) ∧ P.e = 0 ∧
+      ∀ p ∈ P.instances,
+        (∀ k < p.1.Xd.n, (p.1.zhat p.2).eval
+          (p.1.Cd.node (reindexBySubdomain p.1.Cd.n p.1.Xd.n k)) = p.2.x.getD k 0) ∧
+        ∀ r, r < p.1.R.n →
+          mzRow p.1.Cd p.1.A (p.1.zhat p.2) r * mzRow p.1.Cd p.1.B (p.1.zhat p.2) r =
+            mzRow p.1.Cd p.1.Cm (p.1.zhat p.2) r :=
+  P.sound_of_transcript_evals S t chal comms hinit hmsg hS hα hβ hγ hν hη hηA hηB hηC hδ hnb hdvdR
+    hdvdC hdvdK hvalid hgen hH0 hrow ((linOpenedEval_eq ho _).symm.trans hlin) hdegL
+    ((matOpenedEval_eq ho _).symm.trans hmat)
 
 end V3Batch
 
