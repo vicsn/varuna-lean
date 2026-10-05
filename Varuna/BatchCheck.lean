@@ -3,7 +3,7 @@ Copyright (c) 2026 Provable Inc.
 Licensed under the Apache License, Version 2.0; see LICENSE.md for details.
 -/
 
-import Varuna.BatchFS
+import Varuna.AlgebraicFS
 
 /-!
 # The batched pairing check
@@ -24,13 +24,15 @@ representations over the powers of `g` and `gamma_g`, a well-formed key makes it
 `D_j = Σ_i ξ_{j,i} p_{j,i} − Σ_i ξ_{j,i} v_{j,i} − (X − z_j) q_j` of the polynomials above
 the shifts is zero (`RepPoint.defect_eq_zero_of_cleared`). `D_j = 0` gives
 `Σ_i ξ_{j,i} (p_{j,i}(z_j) − v_{j,i}) = 0`, so unless the `ξ_j` are lucky every claim is
-correct (`pcCheck_extract`). `batchCheck_extract` is the same argument on the reading
-`Σ_j r_j D_j(τ) = 0`, where a nonzero `D_j` with root `τ` is a trapdoor break
-(`PCBreak.trapdoorBreak`).
+correct (`pcCheck_extract`).
 
-`V3Batch.holds_of_deployedAccepts` : the V3 checks with the batch check in place of
-correct openings (`DeployedAccepts`), no break of the transcript, no lucky combination,
-and no trapdoor break give the relation.
+`V3Batch.repPoints` are the V3 query points against the representations, `g₁` and the
+`g_M` shifted for their degree bounds and each LC's representation combining its terms'.
+`V3Batch.holds_of_deployedAccepts` : the V3 checks with the pairing check in place of
+correct openings and degree bounds (`DeployedAccepts`), representations over the SRS
+(`V3Batch.OverSRS`), no break of the transcript, no lucky combination, and no break of
+the SRS give the relation. The degree bounds follow from the shifts : above a shift of
+`M − d`, a representation of degree at most `M` leaves degree at most `d`.
 -/
 
 set_option linter.unusedSectionVars false
@@ -80,63 +82,6 @@ theorem claims_of_defect_eq_zero {ξ : List F} (hd : o.defect ξ = 0)
   exact (sub_eq_zero.mp h0).symm
 
 end PointOpening
-
-/-- The defects at `τ`, point by point. -/
-noncomputable def defectsAt (τ : F) (os : List (PointOpening F)) (ξs : List (List F)) : List F :=
-  List.zipWith (fun o ξ => (o.defect ξ).eval τ) os ξs
-
-/-- The batch check passes by luck : the randomizers `rs` cancel nonzero defects at `τ`, or
-some point's challenges cancel a wrong claim. -/
-def PCLucky (τ : F) (os : List (PointOpening F)) (ξs : List (List F)) (rs : List F) : Prop :=
-  inspectBatch rs (defectsAt τ os ξs) ≠ none ∨
-    ∃ j, ∃ hj : j < os.length, ∃ hj' : j < ξs.length,
-      inspectBatch ξs[j] os[j].discrepancies ≠ none
-
-/-- Some point's defect is a nonzero polynomial with root `τ`. -/
-def PCBreak (τ : F) (os : List (PointOpening F)) (ξs : List (List F)) : Prop :=
-  ∃ j, ∃ hj : j < os.length, ∃ hj' : j < ξs.length,
-    os[j].defect ξs[j] ≠ 0 ∧ (os[j].defect ξs[j]).eval τ = 0
-
-/-- A defect with root `τ` is a trapdoor break. -/
-theorem PCBreak.trapdoorBreak {τ : F} {os : List (PointOpening F)} {ξs : List (List F)}
-    (h : PCBreak τ os ξs) : ∃ br : TrapdoorBreak F, br.holds τ := by
-  obtain ⟨j, hj, hj', hne, hev⟩ := h
-  refine ⟨⟨coeffList (os[j].defect ξs[j])⟩, ?_, ?_⟩
-  · rw [toPoly_coeffList]
-    exact hne
-  · rw [toPoly_coeffList]
-    exact hev
-
-/-- Batch-check extraction. If the randomized defects at `τ` sum to zero, nothing is lucky,
-and no defect is a nonzero polynomial with root `τ`, every claimed value is its
-polynomial's value at the point. -/
-theorem batchCheck_extract {τ : F} {os : List (PointOpening F)} {ξs : List (List F)}
-    {rs : List F} (hlen : os.length ≤ ξs.length) (hcheck : weightedSum rs (defectsAt τ os ξs) = 0)
-    (hl : ¬PCLucky τ os ξs rs) (hbr : ¬PCBreak τ os ξs) :
-    ∀ o ∈ os, ∀ pv ∈ o.opened, pv.2 = pv.1.eval o.z := by
-  intro o ho pv hpv
-  obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem ho
-  have hj' : j < ξs.length := by omega
-  have hr : inspectBatch rs (defectsAt τ os ξs) = none := by
-    by_contra h
-    exact hl (Or.inl h)
-  have hτ : (os[j].defect ξs[j]).eval τ = 0 := by
-    refine inspectBatch_accepts hcheck hr _ ?_
-    have hlt : j < (defectsAt τ os ξs).length := by
-      simp only [defectsAt, List.length_zipWith]
-      omega
-    have hmem := List.getElem_mem hlt
-    have heq : (defectsAt τ os ξs)[j] = (os[j].defect ξs[j]).eval τ := by
-      simp [defectsAt]
-    rw [heq] at hmem
-    exact hmem
-  have hzero : os[j].defect ξs[j] = 0 := by
-    by_contra hne
-    exact hbr ⟨j, hj, hj', hne, hτ⟩
-  have hξ : inspectBatch ξs[j] os[j].discrepancies = none := by
-    by_contra h
-    exact hl (Or.inr ⟨j, hj, hj', h⟩)
-  exact os[j].claims_of_defect_eq_zero hzero hξ pv hpv
 
 /-! ## The pairing product
 
@@ -622,13 +567,132 @@ theorem eval_matLC {δs : List F}
   simp only [eval_mul, eval_C]
   ring
 
+end V3Batch
+
+/-! ## The query set against the representations -/
+
+/-- A KZG proof against the algebraic representations : the representation of its witness
+`w` over the powers of `g` and `gamma_g`, and `random_v`. -/
+structure KZGProofRep (F : Type*) [Field F] where
+  w : F[X] × F[X] := (0, 0)
+  rv : F := 0
+
+/-- The circuit's `g_A, g_B, g_C` as opened at `γ`, each committed with degree bound the
+size of its `K_M` less 2 (`fourth.rs:65-67`) under an SRS whose largest power is `M`. -/
+noncomputable def BatchCircuit.gTerms (M : ℕ) (c : BatchCircuit F) (x : CircuitExtra F) :
+    List (RepTerm F) :=
+  [⟨(shiftedRep M c.KA.n c.gA x.gALow, x.gABlind), some (c.KA.n - 2), c.vgA⟩,
+    ⟨(shiftedRep M c.KB.n c.gB x.gBLow, x.gBBlind), some (c.KB.n - 2), c.vgB⟩,
+    ⟨(shiftedRep M c.KC.n c.gC x.gCLow, x.gCBlind), some (c.KC.n - 2), c.vgC⟩]
+
+namespace V3Batch
+
+variable (P : V3Batch F)
+
+/-- Each instance's `ŵ` blinding, in instance order. -/
+noncomputable def instBlinds : List F[X] :=
+  P.circuitsExt.flatMap fun p => p.2.wBlinds p.1
+
+/-- The rowcheck LC's blinding : `h₀`'s, with its coefficient in `rowLC`. -/
+noncomputable def rowBlind : F[X] :=
+  -(C (P.R.vanishing.eval P.α) * P.ext.h0Blind)
+
+/-- The lineval LC's blinding : the mask's and each `ŵ`'s, with their coefficients in
+`linLC`, less `h₁`'s. -/
+noncomputable def linBlind (ws : List F) : F[X] :=
+  maskPoly P.mode P.ext.maskBlind +
+      weightedSumPoly ws (List.zipWith (fun p b =>
+        C ((selectorPoly P.Cd p.1.Cd).eval P.β *
+            (P.ηA * ((p.1.KA.n : F) * p.1.σmA) + P.ηB * ((p.1.KB.n : F) * p.1.σmB) +
+              P.ηC * ((p.1.KC.n : F) * p.1.σmC))) *
+          (C (p.1.Xd.vanishing.eval P.β) * b)) P.instances P.instBlinds) -
+    C (P.Cd.vanishing.eval P.β) * P.ext.h1Blind
+
+/-- The matrix LC's blinding : `h₂`'s, with its coefficient in `matLC`. The index
+polynomials are not blinded. -/
+noncomputable def matBlind : F[X] :=
+  -(C (P.K.vanishing.eval P.γ) * P.ext.h2Blind)
+
+/-- `batch_check`'s query points against the representations, in the order of
+`pcPoints`, with the proofs `pfs`. `g₁` has degree bound the size of `C` less 2
+(`third.rs:60`). Each LC's representation combines its terms', and its constant is along
+`g` with claimed value `0`, where `check_combinations` subtracts it from the claimed
+value; the pairing product is the same. -/
+noncomputable def repPoints (chal : V2Challenge → List F) (pfs : List (KZGProofRep F)) :
+    List (RepPoint F) :=
+  [⟨P.α, [⟨(P.rowLC (P.rowWeights chal), P.rowBlind), none, 0⟩], (pfs.getD 0 {}).w,
+      (pfs.getD 0 {}).rv⟩,
+    ⟨P.β, [⟨(shiftedRep P.srsMax P.Cd.n P.g1 P.ext.g1Low, P.ext.g1Blind), some (P.Cd.n - 2),
+        P.vG1⟩, ⟨(P.linLC (P.linWeights chal), P.linBlind (P.linWeights chal)), none, 0⟩],
+      (pfs.getD 1 {}).w, (pfs.getD 1 {}).rv⟩,
+    ⟨P.γ, (P.circuitsExt.flatMap fun p => p.1.gTerms P.srsMax p.2) ++
+        [⟨(P.matLC (P.deltaWeights chal), P.matBlind), none, 0⟩],
+      (pfs.getD 2 {}).w, (pfs.getD 2 {}).rv⟩]
+
+theorem getD_map_w (pfs : List (KZGProofRep F)) (j : ℕ) :
+    (pfs.map fun p => p.w.1).getD j 0 = (pfs.getD j {}).w.1 := by
+  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
+  cases pfs[j]? <;> rfl
+
+/-- What the points open is `pcPoints`, with the proofs' polynomials along `g`. -/
+theorem map_opening_repPoints (chal : V2Challenge → List F) (pfs : List (KZGProofRep F)) :
+    (P.repPoints chal pfs).map (RepPoint.opening P.srsMax) =
+      P.pcPoints chal (pfs.map fun p => p.w.1) := by
+  have hshift : ∀ (n : ℕ) (p l : F[X]), shiftedRep P.srsMax n p l /ₘ X ^ (P.srsMax - (n - 2)) = p :=
+    fun n p l => (shift_add_modByMonic _ p l).1
+  have hg : ((P.circuitsExt.flatMap fun p => p.1.gTerms P.srsMax p.2).map fun t =>
+      (t.rep.1 /ₘ X ^ boundShift P.srsMax t.bound, t.value)) = P.gOpenings := by
+    rw [List.map_flatMap, gOpenings, ← map_fst_circuitsExt P, List.flatMap_map]
+    simp only [BatchCircuit.gTerms, List.map_cons, List.map_nil, boundShift, hshift]
+  simp only [repPoints, pcPoints, RepPoint.opening, List.map_cons, List.map_nil, List.map_append]
+  rw [hg]
+  simp only [boundShift, hshift, getD_map_w, pow_zero, divByMonic_one]
+
+/-- The representations of `P`'s commitments along `g` are over the SRS powers up to `M`,
+and `P`'s shifts are under that SRS : the algebraic floor. -/
+def OverSRS (M : ℕ) : Prop :=
+  P.srsMax = M ∧ ∀ r ∈ P.committed, r.1.natDegree ≤ M
+
+variable {P}
+
+theorem OverSRS.g1_le {M : ℕ} (h : P.OverSRS M) : P.g1.natDegree ≤ P.Cd.n - 2 := by
+  have hmem : (shiftedRep P.srsMax P.Cd.n P.g1 P.ext.g1Low, P.ext.g1Blind) ∈ P.committed := by
+    simp [committed]
+  have hd := h.2 _ hmem
+  rw [← h.1] at hd
+  rw [← (shift_add_modByMonic (P.srsMax - (P.Cd.n - 2)) P.g1 P.ext.g1Low).1]
+  exact natDegree_divByMonic_shift_le hd
+
+theorem OverSRS.term_le {M : ℕ} (h : P.OverSRS M) {t : MatrixTerm F} (ht : t ∈ P.matrixTerms) :
+    t.g.natDegree ≤ t.K.n - 2 := by
+  obtain ⟨c, hc, ht⟩ := List.mem_flatMap.mp ht
+  rw [← map_fst_circuitsExt P] at hc
+  obtain ⟨p, hp, rfl⟩ := List.mem_map.mp hc
+  have hle : ∀ r ∈ p.1.reps P.srsMax p.2, r.1.natDegree ≤ P.srsMax := fun r hr =>
+    h.1 ▸ h.2 r (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+      (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_flatMap.mpr ⟨p, hp, hr⟩))))))
+  have hg : ∀ (n : ℕ) (g l b : F[X]), (shiftedRep P.srsMax n g l, b) ∈ p.1.reps P.srsMax p.2 →
+      g.natDegree ≤ n - 2 := fun n g l b hm => by
+    rw [← (shift_add_modByMonic (P.srsMax - (n - 2)) g l).1]
+    exact natDegree_divByMonic_shift_le (hle _ hm)
+  simp only [BatchCircuit.matrixTerms, List.mem_cons, List.not_mem_nil, or_false] at ht
+  rcases ht with rfl | rfl | rfl
+  · exact hg _ _ p.2.gALow p.2.gABlind (by simp [BatchCircuit.reps])
+  · exact hg _ _ p.2.gBLow p.2.gBBlind (by simp [BatchCircuit.reps])
+  · exact hg _ _ p.2.gCLow p.2.gCBlind (by simp [BatchCircuit.reps])
+
+variable {G1 G2 GT : Type*} [AddCommGroup G1] [AddCommGroup G2] [AddCommGroup GT]
+  [Module F G1] [Module F G2] [Module F GT]
+
 /-- The V3 verifier's checks of `P` as snarkVM runs them : those of `Accepts` but the
-openings and the three LC equations, which the batch check over `pcPoints` replaces. The
-check reads the randomizers `rs`, each point's combination challenges `ξs`, and the
-polynomials `qs` behind the KZG proofs, against the trapdoor `τ`. -/
+openings, the three LC equations, and the degree bounds, which `batch_check`'s pairing
+check replaces. The check is on the group elements of `P`'s representations, with
+`gamma_g = κ g` and trapdoor `τ`; it reads the proofs `pfs`, each point's combination
+challenges `ξs`, and the randomizers `rs`. -/
 structure DeployedAccepts (P : V3Batch F) (S : Finset F) (t : V2Transcript F)
-    (chal : V2Challenge → List F) (comms : List (List F)) (τ : F) (qs : List F[X])
-    (ξs : List (List F)) (rs : List F) : Prop where
+    (chal : V2Challenge → List F) (comms : List (List F)) (e : Pairing F G1 G2 GT)
+    (key : BatchKey G1 G2) (τ κ : F) (pfs : List (KZGProofRep F)) (ξs : List (List F))
+    (rs : List F) : Prop where
   init : t.init = v3Init P.statement comms
   msg : ∀ x, FSMessage.field x ∉ t.messages
   inS : ∀ c, ∀ a ∈ chal c, a ∈ S
@@ -644,23 +708,31 @@ structure DeployedAccepts (P : V3Batch F) (S : Finset F) (t : V2Transcript F)
   dvdR : ∀ c ∈ P.circuits, c.R.n ∣ P.R.n
   dvdC : ∀ c ∈ P.circuits, c.Cd.n ∣ P.Cd.n
   dvdK : ∀ t ∈ P.matrixTerms, t.K.n ∣ P.K.n
-  valid : ∀ t ∈ P.matrixTerms, t.Valid
+  index : ∀ t ∈ P.matrixTerms, t.M.Bounded t.R t.Cd ∧ t.M.nK = t.K.n ∧ t.α ∉ t.R.elements ∧
+    t.β ∉ t.Cd.elements
   gen : ∀ c ∈ P.circuits, c.Xd.ω = c.Cd.ω ^ (c.Cd.n / c.Xd.n)
-  degL : (X * P.g1 + C (P.linSum (P.linWeights chal) * P.Cd.sizeInv)).natDegree < P.Cd.n
+  domC : 2 ≤ P.Cd.n
+  domK : ∀ t ∈ P.matrixTerms, 2 ≤ t.K.n
   points : ξs.length = 3
-  check : weightedSum rs (defectsAt τ (P.pcPoints chal qs) ξs) = 0
+  check : pcCheck e key ((P.repPoints chal pfs).map fun o => o.toGroup τ κ key.g) ξs rs
 
-/-- The relation from the deployed checks : with no squeezed element in its bad set, no
-lucky combination in the batch check, and no trapdoor break, the transcript's batch
-satisfies `Holds`. -/
+/-- The relation from the deployed checks : under a well-formed key and representations
+over its SRS, with no squeezed element in its bad set, no lucky combination in the batch
+check, and no break of the SRS, the transcript's batch satisfies `Holds`. -/
 theorem holds_of_deployedAccepts {P : V3Batch F} {S : Finset F} {t : V2Transcript F}
-    {chal : V2Challenge → List F} {comms : List (List F)} {τ : F} {qs : List F[X]}
-    {ξs : List (List F)} {rs : List F} (h : P.DeployedAccepts S t chal comms τ qs ξs rs)
+    {chal : V2Challenge → List F} {comms : List (List F)} {e : Pairing F G1 G2 GT}
+    {key : BatchKey G1 G2} {τ κ : F} {pfs : List (KZGProofRep F)} {ξs : List (List F)}
+    {rs : List F} (h : P.DeployedAccepts S t chal comms e key τ κ pfs ξs rs)
+    (hwf : key.wellFormed τ κ) (hgh : e.pair key.g key.h ≠ 0) (hsrs : P.OverSRS key.maxDegree)
     (hnb : outputBreaks (prefixBad t (P.squeezeBad S chal)) t chal = false)
-    (hl : ¬PCLucky τ (P.pcPoints chal qs) ξs rs) (hbr : ¬PCBreak τ (P.pcPoints chal qs) ξs) :
-    P.Holds t := by
-  have hpt : ∀ o ∈ P.pcPoints chal qs, ∀ pv ∈ o.opened, pv.2 = pv.1.eval o.z :=
-    batchCheck_extract (by simp [pcPoints, h.points]) h.check hl hbr
+    (hl : ¬RepLucky key.maxDegree τ κ (P.repPoints chal pfs) ξs rs)
+    (hbr : ¬RepBreak key.maxDegree τ κ (P.repPoints chal pfs) ξs) : P.Holds t := by
+  set qs := pfs.map fun p => p.w.1
+  have hpt : ∀ o ∈ P.pcPoints chal qs, ∀ pv ∈ o.opened, pv.2 = pv.1.eval o.z := by
+    intro o ho
+    rw [← map_opening_repPoints, hsrs.1] at ho
+    obtain ⟨o', ho', rfl⟩ := List.mem_map.mp ho
+    exact pcCheck_extract e hwf hgh (by simp [repPoints, h.points]) h.check hl hbr o' ho'
   have hα := hpt ⟨P.α, [(P.rowLC (P.rowWeights chal), 0)], qs.getD 0 0⟩ (by simp [pcPoints])
   have hβ := hpt ⟨P.β, [(P.g1, P.vG1), (P.linLC (P.linWeights chal), 0)], qs.getD 1 0⟩
     (by simp [pcPoints])
@@ -681,11 +753,14 @@ theorem holds_of_deployedAccepts {P : V3Batch F} {S : Finset F} {t : V2Transcrip
       fun pv hpv => List.mem_append_left _ (List.mem_flatMap.mpr ⟨c, hc, hpv⟩)
     exact ⟨hγ (c.gA, c.vgA) (hmem _ (by simp)), hγ (c.gB, c.vgB) (hmem _ (by simp)),
       hγ (c.gC, c.vgC) (hmem _ (by simp))⟩
+  have hvalid : ∀ t ∈ P.matrixTerms, t.Valid := fun t ht =>
+    ⟨(h.index t ht).1, (h.index t ht).2.1, (h.index t ht).2.2.1, (h.index t ht).2.2.2,
+      natDegree_X_mul_add_C_lt (h.domK t ht) (hsrs.term_le ht) _⟩
   exact V3Batch.sound_of_transcript_evals { P with vH0 := evalCoeffs P.h0rep P.α } S t chal comms
     h.init h.msg h.inS h.alpha h.beta h.gamma h.nu h.eta h.etaA h.etaB h.etaC h.delta hnb h.dvdR
-    h.dvdC h.dvdK h.valid h.gen (inspectOpening_honest P.h0rep [] P.α)
-    ((P.eval_rowLC _).symm.trans hrow.symm) ((P.eval_linLC hg1).symm.trans hlin.symm) h.degL
-    ((P.eval_matLC hgM).symm.trans hmat.symm)
+    h.dvdC h.dvdK hvalid h.gen (inspectOpening_honest P.h0rep [] P.α)
+    ((P.eval_rowLC _).symm.trans hrow.symm) ((P.eval_linLC hg1).symm.trans hlin.symm)
+    (natDegree_X_mul_add_C_lt h.domC hsrs.g1_le _) ((P.eval_matLC hgM).symm.trans hmat.symm)
 
 end V3Batch
 

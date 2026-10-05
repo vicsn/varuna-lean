@@ -55,11 +55,12 @@ largest domains.
 which carry the messages but not the earlier challenges: the oracle is
 a table on a finite domain `D`, and at most `(Q + V) · b · |S|^{|D|-1}`
 of the `|S|^{|D|}` tables give an accepted output for a false statement.
-`V3Batch.holds_of_deployedAccepts` replaces correct openings by
-snarkVM's `batch_check`: one pairing product over the three query
-points, with the three LCs opened to zero. Unless its combination
-challenges or randomizers are lucky, or a KZG defect is a trapdoor
-break, it gives the same relation.
+`V3Batch.holds_of_deployedAccepts` replaces correct openings and the
+degree bounds by snarkVM's `batch_check`: one pairing product over the
+three query points, with the three LCs opened to zero and the
+degree-bounded commitments shifted. Unless its combination challenges
+or randomizers are lucky, or the SRS is broken, it gives the same
+relation.
 `V3Batch.deployed_soundness` counts those challenges too, squeezed from
 the same sponge as short elements: at most
 `((Q + V) · b + (Q + V') · m) · |S|^{|D|-1}` tables, with `V'` the
@@ -86,11 +87,10 @@ The interactive picture is the
 ### What remains
 
 - The fingerprint stops at the zero-eval LC layer. The capture has field
-  elements only, so MSM / pairing assembly is outside Lean. Byte
-  encodings stay a floor. Sage proofs are not captured in this project.
-  The count reads the pairing product on the field side, without its
-  degree-bound shifts and hiding term, so the degree bound of `g₁` is a
-  check of `DeployedAccepts`.
+  elements only, so the MSM / pairing assembly is not checked against
+  snarkVM's output. Byte encodings stay a floor. Sage proofs are not
+  captured in this project. The count models the pairing product over
+  abstract groups with a well-formed key, not over BLS12-377.
 - Poseidon = RO, pairing hardness, the algebraic adversary, the SRS,
   and index = circuit stay floors. The AHP simulator programs one
   opening and absorbs the witness into the ZK mask. A constant blinding

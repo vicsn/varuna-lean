@@ -441,8 +441,6 @@ assert_axioms Varuna.V3Batch.sponge_soundness
 assert_axioms Varuna.V3Batch.sponge_soundness_concrete
 assert_axioms Varuna.V3Batch.sound_of_transcript_evals
 assert_axioms Varuna.PointOpening.eval_defect_z
-assert_axioms Varuna.PCBreak.trapdoorBreak
-assert_axioms Varuna.batchCheck_extract
 assert_axioms Varuna.RepPoint.pairing_toGroup
 assert_axioms Varuna.pcProduct_toGroup
 assert_axioms Varuna.weightedSum_scalarsAt_of_pcCheck
@@ -456,9 +454,16 @@ assert_axioms Varuna.natDegree_divByMonic_shift_le
 assert_axioms Varuna.V3Batch.eval_rowLC
 assert_axioms Varuna.V3Batch.eval_linLC
 assert_axioms Varuna.V3Batch.eval_matLC
+assert_axioms Varuna.V3Batch.map_opening_repPoints
+assert_axioms Varuna.V3Batch.OverSRS.g1_le
+assert_axioms Varuna.V3Batch.OverSRS.term_le
 assert_axioms Varuna.V3Batch.holds_of_deployedAccepts
 assert_axioms Varuna.V3Batch.pcPoints_pcView
-assert_axioms Varuna.V3Batch.defectsAt_pcPoints_congr
+assert_axioms Varuna.V3Batch.circuitsExt_pcView
+assert_axioms Varuna.V3Batch.repPoints_congr
+assert_axioms Varuna.V3Batch.repPoints_pcView
+assert_axioms Varuna.V3Batch.scalarsAt_repPoints_congr
+assert_axioms Varuna.getD_decodeProofs
 assert_axioms Varuna.pcLocate_offset
 assert_axioms Varuna.xiDraw_lucky
 assert_axioms Varuna.rDraw_lucky
@@ -468,7 +473,7 @@ assert_axioms Varuna.card_pcBad_le
 assert_axioms Varuna.pcBadOf_congr
 assert_axioms Varuna.pcBad_congr
 assert_axioms Varuna.pcBadOf_absorbed
-assert_axioms Varuna.DeployedProver.PCBreaks.trapdoorBreak
+assert_axioms Varuna.DeployedProver.PCBreaks.srsBreak
 assert_axioms Varuna.DeployedProver.exists_pcBadOf
 assert_axioms Varuna.V3Batch.pc_hit
 assert_axioms Varuna.V3Batch.deployed_soundness

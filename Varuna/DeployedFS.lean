@@ -19,14 +19,15 @@ those squeezes and fed the KZG proofs (`sonic_pc/mod.rs:347-420`). Each short ch
 
 Each of these queries gets a bad set (`pcBad`) : the short values that end liveness of its
 point's draw after the point's challenges before it, or of the randomizers' draw on the
-defects at `τ`. The bad set reads the batch represented with the query only through what the
-six messages fix (`pcBadOf_absorbed`), and the oracle only off other queries
-(`pcBadOf_congr`). A lucky batch check puts one answer in its bad set
-(`DeployedProver.exists_pcBadOf`), and `table_charge` counts these hits as it counts the six
-squeezes' (`V3Batch.pc_hit`).
+points' scalars in the pairing product. The bad set reads the batch represented with the
+query only through what the six messages fix (`pcBadOf_absorbed`, `V3Batch.repPoints_pcView`),
+the proofs only through the proofs' message (`V3Batch.scalarsAt_repPoints_congr`), and the
+oracle only off other queries (`pcBadOf_congr`). A lucky batch check puts one answer in its
+bad set (`DeployedProver.exists_pcBadOf`), and `table_charge` counts these hits as it counts
+the six squeezes' (`V3Batch.pc_hit`).
 
 `V3Batch.deployed_soundness` : the deployed verifier accepts an output whose relation fails,
-with no trapdoor break, on at most the two table charges together.
+with no break of the SRS, on at most the two table charges together.
 -/
 
 set_option linter.unusedSectionVars false
@@ -42,6 +43,26 @@ variable {F : Type*} [Field F] [DecidableEq F]
 /-- The circuit with its instances' opened `ŵ(β)` cleared. -/
 def BatchCircuit.clearVw (c : BatchCircuit F) : BatchCircuit F :=
   { c with insts := c.insts.map fun x => { x with vw := 0 } }
+
+theorem shiftedRep_modByMonic (M n : ℕ) (p l : F[X]) :
+    shiftedRep M n p (l %ₘ X ^ (M - (n - 2))) = shiftedRep M n p l := by
+  rw [shiftedRep, shiftedRep,
+    (modByMonic_eq_self_iff (monic_X_pow _)).2 (degree_modByMonic_lt _ (monic_X_pow _))]
+
+theorem CircuitExtra.upTo_six : CircuitExtra.upTo (F := F) 6 = id := by
+  funext x
+  simp [CircuitExtra.upTo]
+
+theorem CircuitExtra.wBlinds_normal (M : ℕ) {c c' c'' : BatchCircuit F} (x : CircuitExtra F)
+    (h' : c'.insts.length = c.insts.length) (h'' : c''.insts.length = c.insts.length) :
+    (x.normal M c'').wBlinds c' = x.wBlinds c := by
+  refine List.ext_getElem (by simp [wBlinds, h']) fun i h₁ _ => ?_
+  have hi : i < c.insts.length := by simpa [wBlinds, h'] using h₁
+  simp [wBlinds, normal, h', h'', List.getD_eq_getElem?_getD, hi]
+
+theorem BatchCircuit.gTerms_view (M : ℕ) (c : BatchCircuit F) (x : CircuitExtra F) :
+    c.clearVw.gTerms M (x.normal M (c.upTo 6)) = c.gTerms M x := by
+  simp [gTerms, clearVw, CircuitExtra.normal, upTo, shiftedRep_modByMonic]
 
 namespace V3Batch
 
@@ -138,15 +159,118 @@ theorem pcPoints_pcView (P : V3Batch F) (chal : V2Challenge → List F) (qs : Li
   all_goals simp [pcView, evalMsg, withEvals, withChallenges, absorbed, normal, upTo,
     toPoly_coeffList, evalValues]
 
-theorem map_opened_pcPoints (P : V3Batch F) (chal : V2Challenge → List F) (qs qs' : List F[X]) :
-    (P.pcPoints chal qs).map (fun o => o.opened) = (P.pcPoints chal qs').map fun o => o.opened :=
+theorem instances_pcView (P : V3Batch F) (chal : V2Challenge → List F) :
+    (P.pcView chal P.evalMsg).instances =
+      P.instances.map fun p => (p.1.clearVw, { p.2 with vw := 0 }) := by
+  simp [instances, circuits_pcView, BatchCircuit.clearVw, List.flatMap_map, List.map_flatMap,
+    Function.comp_def]
+
+theorem circuitsExt_pcView (P : V3Batch F) (chal : V2Challenge → List F) :
+    (P.pcView chal P.evalMsg).circuitsExt =
+      P.circuitsExt.map fun p => (p.1.clearVw, p.2.normal P.srsMax (p.1.upTo 6)) := by
+  have hc := circuits_pcView P chal
+  refine List.ext_getElem (by simp [circuitsExt, hc]) fun i h₁ h₂ => ?_
+  have hi : i < P.circuits.length := by simpa [circuitsExt] using h₂
+  simp only [circuitsExt, List.getElem_mapIdx, List.getElem_map, hc]
+  simp [pcView, evalMsg, withEvals, withChallenges, normal, absorbed, upTo, BatchExtra.upTo,
+    CircuitExtra.upTo_six, circuitsExt, List.getD_eq_getElem?_getD, hi]
+
+theorem instBlinds_pcView (P : V3Batch F) (chal : V2Challenge → List F) :
+    (P.pcView chal P.evalMsg).instBlinds = P.instBlinds := by
+  rw [instBlinds, circuitsExt_pcView, List.flatMap_map, instBlinds]
+  exact List.flatMap_congr fun p _ => CircuitExtra.wBlinds_normal _ _
+    (by simp [BatchCircuit.clearVw]) (by simp [BatchCircuit.upTo])
+
+theorem gTerms_pcView (P : V3Batch F) (chal : V2Challenge → List F) :
+    (P.pcView chal P.evalMsg).circuitsExt.flatMap
+        (fun p => p.1.gTerms (P.pcView chal P.evalMsg).srsMax p.2) =
+      P.circuitsExt.flatMap fun p => p.1.gTerms P.srsMax p.2 := by
+  rw [circuitsExt_pcView, List.flatMap_map]
+  exact List.flatMap_congr fun p _ => BatchCircuit.gTerms_view _ _ _
+
+/-- The points against the representations read the batch through its points, the
+blindings of its LCs, `g₁`'s representation, and the `g_M` terms. -/
+theorem repPoints_congr {P₁ P₂ : V3Batch F} {chal : V2Challenge → List F}
+    (hpc : P₁.pcPoints chal [] = P₂.pcPoints chal []) (hrow : P₁.rowBlind = P₂.rowBlind)
+    (hlin : P₁.linBlind (P₁.linWeights chal) = P₂.linBlind (P₂.linWeights chal))
+    (hmat : P₁.matBlind = P₂.matBlind)
+    (hg1 : shiftedRep P₁.srsMax P₁.Cd.n P₁.g1 P₁.ext.g1Low =
+      shiftedRep P₂.srsMax P₂.Cd.n P₂.g1 P₂.ext.g1Low) (hg1b : P₁.ext.g1Blind = P₂.ext.g1Blind)
+    (hCd : P₁.Cd = P₂.Cd)
+    (hg : P₁.circuitsExt.flatMap (fun p => p.1.gTerms P₁.srsMax p.2) =
+      P₂.circuitsExt.flatMap fun p => p.1.gTerms P₂.srsMax p.2) (pfs : List (KZGProofRep F)) :
+    P₁.repPoints chal pfs = P₂.repPoints chal pfs := by
+  simp only [pcPoints, List.cons.injEq, PointOpening.mk.injEq, Prod.mk.injEq, and_true] at hpc
+  obtain ⟨⟨hα, hrowLC⟩, ⟨hβ, ⟨-, hv⟩, hlinLC⟩, hγ, hm⟩ := hpc
+  obtain ⟨-, hm⟩ := List.append_inj' hm (by rw [List.length_singleton, List.length_singleton])
+  simp only [List.cons.injEq, Prod.mk.injEq, and_true] at hm
+  rw [repPoints, repPoints, hg1]
+  simp only [hα, hrowLC, hrow, hβ, hg1b, hCd, hv, hlinLC, hlin, hγ, hg, hm, hmat]
+
+/-- `pcView` of a batch's own evaluations message gives `batch_check` the batch's points
+against the representations. -/
+theorem repPoints_pcView (P : V3Batch F) (chal : V2Challenge → List F)
+    (pfs : List (KZGProofRep F)) :
+    (P.pcView chal P.evalMsg).repPoints chal pfs = (P.withChallenges chal).repPoints chal pfs := by
+  have hs : ((P.absorbed 6).normal).sizes = P.sizes := by
+    show ((P.withChallenges fun _ => []).upTo 6).sizes = P.sizes
+    rw [sizes_upTo]
+    rfl
+  refine repPoints_congr (pcPoints_pcView P chal []) ?_ ?_ ?_ ?_ ?_ ?_ (gTerms_pcView P chal) pfs
+  · simp [rowBlind, pcView, evalMsg, withEvals, withChallenges, absorbed, normal, upTo,
+      BatchExtra.upTo]
+  · have hsz : (P.pcView chal P.evalMsg).sizes = (P.withChallenges chal).sizes := by
+      simp [sizes, circuits_pcView, BatchCircuit.clearVw, Function.comp_def, withChallenges]
+    have hηA : (P.pcView chal P.evalMsg).ηA = (P.withChallenges chal).ηA :=
+      congrArg (fun l => (chal .prepareThird).getD (combinerDraws l) 0) hs
+    have hηB : (P.pcView chal P.evalMsg).ηB = (P.withChallenges chal).ηB :=
+      congrArg (fun l => (chal .prepareThird).getD (combinerDraws l + 1) 0) hs
+    have hηC : (P.pcView chal P.evalMsg).ηC = (P.withChallenges chal).ηC :=
+      congrArg (fun l => (chal .prepareThird).getD (combinerDraws l + 2) 0) hs
+    have hw : (P.pcView chal P.evalMsg).linWeights chal =
+        (P.withChallenges chal).linWeights chal := by
+      simp only [linWeights, hsz]
+    rw [hw]
+    simp only [linBlind, instances_pcView, instBlinds_pcView, List.zipWith_map_left, hηA, hηB, hηC]
+    simp [pcView, evalMsg, withEvals, withChallenges, absorbed, normal, upTo, BatchExtra.upTo,
+      BatchCircuit.clearVw]
+    rfl
+  · simp [matBlind, pcView, evalMsg, withEvals, withChallenges, absorbed, normal, upTo,
+      BatchExtra.upTo]
+  · simp [pcView, evalMsg, withEvals, withChallenges, absorbed, normal, upTo, BatchExtra.upTo,
+      shiftedRep_modByMonic]
+  · simp [pcView, evalMsg, withEvals, withChallenges, absorbed, normal, upTo, BatchExtra.upTo]
+  · simp [pcView, evalMsg, withEvals, withChallenges, absorbed, normal, upTo]
+
+theorem map_terms_length_repPoints (P : V3Batch F) (chal : V2Challenge → List F)
+    (pfs pfs' : List (KZGProofRep F)) :
+    (P.repPoints chal pfs).map (fun o => o.terms.length) =
+      (P.repPoints chal pfs').map fun o => o.terms.length :=
   rfl
 
-theorem map_opened_length_pcPoints (P : V3Batch F) (chal : V2Challenge → List F)
-    (qs qs' : List F[X]) :
-    (P.pcPoints chal qs).map (fun o => o.opened.length) =
-      (P.pcPoints chal qs').map fun o => o.opened.length :=
+theorem map_discrepancies_repPoints (P : V3Batch F) (chal : V2Challenge → List F) (M : ℕ)
+    (pfs pfs' : List (KZGProofRep F)) :
+    (P.repPoints chal pfs).map (fun o => (o.opening M).discrepancies) =
+      (P.repPoints chal pfs').map fun o => (o.opening M).discrepancies :=
   rfl
+
+/-- The scalars read the proofs only through their witnesses' group elements and their
+`random_v`. -/
+theorem scalarsAt_repPoints_congr (P : V3Batch F) (chal : V2Challenge → List F) (M : ℕ)
+    {τ κ : F} {pfs pfs' : List (KZGProofRep F)}
+    (h : ∀ j, repEval τ κ (pfs.getD j {}).w = repEval τ κ (pfs'.getD j {}).w ∧
+      (pfs.getD j {}).rv = (pfs'.getD j {}).rv) (ξs : List (List F)) :
+    scalarsAt M τ κ (P.repPoints chal pfs) ξs =
+      scalarsAt M τ κ (P.repPoints chal pfs') ξs := by
+  rcases ξs with _ | ⟨a, _ | ⟨b, _ | ⟨c, rest⟩⟩⟩ <;>
+    simp only [scalarsAt, repPoints, List.zipWith_cons_cons, List.zipWith_nil_right,
+      RepPoint.scalar, (h 0).1, (h 0).2, (h 1).1, (h 1).2, (h 2).1, (h 2).2]
+
+theorem length_flatMap_gTerms (P : V3Batch F) :
+    (P.circuitsExt.flatMap fun p => p.1.gTerms P.srsMax p.2).length = 3 * P.circuits.length := by
+  simp only [List.length_flatMap, BatchCircuit.gTerms, List.length_cons, List.length_nil]
+  rw [List.map_const', List.sum_replicate, smul_eq_mul, mul_comm]
+  simp [circuitsExt]
 
 end V3Batch
 
@@ -195,6 +319,27 @@ taken before any challenge is squeezed, then the proofs' message `m'`
 def rState (I : Transcript F) (ps : List (FSMessage F × ℕ)) (m m' : FSMessage F) (j : ℕ) :
     Transcript F :=
   I ++ spongeRounds (ps ++ [(m, 0), (m', j)])
+
+/-- The proofs read off their message's elements : each witness's group element along
+`g`, then its `random_v`. -/
+noncomputable def decodeProofs : List F → List (KZGProofRep F)
+  | w :: rv :: ws => ⟨(C w, 0), rv⟩ :: decodeProofs ws
+  | _ => []
+
+theorem decodeProofs_flatMap (τ κ : F) : ∀ pfs : List (KZGProofRep F),
+    decodeProofs (pfs.flatMap fun p => [repEval τ κ p.w, p.rv]) =
+      pfs.map fun p => ⟨(C (repEval τ κ p.w), 0), p.rv⟩
+  | [] => rfl
+  | p :: pfs => by simp [decodeProofs, decodeProofs_flatMap τ κ pfs]
+
+theorem getD_decodeProofs (τ κ : F) (pfs : List (KZGProofRep F)) (j : ℕ) :
+    repEval τ κ ((decodeProofs (pfs.flatMap fun p => [repEval τ κ p.w, p.rv])).getD j {}).w =
+        repEval τ κ (pfs.getD j {}).w ∧
+      ((decodeProofs (pfs.flatMap fun p => [repEval τ κ p.w, p.rv])).getD j {}).rv =
+        (pfs.getD j {}).rv := by
+  rw [decodeProofs_flatMap, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
+    List.getElem?_map]
+  cases pfs[j]? <;> simp [repEval]
 
 section Squeezes
 
@@ -285,31 +430,33 @@ theorem card_filter_short_le {S : Finset F} {m : ℕ}
 
 /-! ## The bad sets of `batch_check`'s squeezes -/
 
-variable (S : Finset F) (τ : F) (dl : FSMessage F → List F)
+variable (S : Finset F) (τ κ : F) (M : ℕ) (dl : FSMessage F → List F)
 
 /-- The bad set of a `batch_check` squeeze at the state the statement `s` and the rounds
 `x` give, for the batch `R` represented with the query; the six rounds before give the
 challenges. A further round `(m, e)` is element `e` after the evaluations message `m` :
 the bad set is that of its point's draw on the point's discrepancies, after the point's
 challenges before it. Rounds `(m, 0), (m', j)` are randomizer `j` after `m` and the proofs'
-message `m'` : the bad set is that of the randomizers' draw on the defects at `τ`, with
-the proofs' values at `τ` read off `m'` by `dl`. Short elements are read off `H`, and an
-answer is bad when its short element is. -/
+message `m'` : the bad set is that of the randomizers' draw on the points' scalars at
+`(τ, κ)` under an SRS whose largest power is `M`, with the proofs read off `m'` by `dl`.
+Short elements are read off `H`, and an answer is bad when its short element is. -/
 noncomputable def pcBadOf (R : V3Batch F) (s : V3Stmt F) (x : List (FSMessage F × ℕ))
     (H : Transcript F → F) : Finset F :=
   let I := v3Init s.1 s.2
   let chal := histChal (readRounds H I [] (x.take 6))
   match x.drop 6 with
   | [(m, e)] =>
-    let os := (R.pcView chal m).pcPoints chal []
+    let os := (R.pcView chal m).repPoints chal []
     S.filter fun a => short a ∈
-      (xiDraw ((os.getD (pcLocate e).1 ⟨0, [], 0⟩).discrepancies)).bad (S.image short)
-        (((pcXis short H I (x.take 6) m (os.map fun o => o.opened.length)).getD
+      (xiDraw (((os.getD (pcLocate e).1 ⟨0, [], (0, 0), 0⟩).opening M).discrepancies)).bad
+        (S.image short)
+        (((pcXis short H I (x.take 6) m (os.map fun o => o.terms.length)).getD
           (pcLocate e).1 []).take (pcLocate e).2)
   | [(m, 0), (m', j)] =>
-    let os := (R.pcView chal m).pcPoints chal ((dl m').map C)
+    let os := (R.pcView chal m).repPoints chal (decodeProofs (dl m'))
     S.filter fun a => short a ∈
-      (rDraw (defectsAt τ os (pcXis short H I (x.take 6) m (os.map fun o => o.opened.length)))).bad
+      (rDraw (scalarsAt M τ κ os
+          (pcXis short H I (x.take 6) m (os.map fun o => o.terms.length)))).bad
         (S.image short) ((pcRands short H I (x.take 6) m m').take j)
   | _ => ∅
 
@@ -319,12 +466,13 @@ sponge rounds. -/
 noncomputable def pcBad (R : V3Batch F) (q : Transcript F) (H : Transcript F → F) : Finset F :=
   if h : ∃ x : V3Stmt F × List (FSMessage F × ℕ),
       V3StmtWF x.1 ∧ q = v3Init x.1.1 x.1.2 ++ spongeRounds x.2 then
-    pcBadOf short S τ dl R h.choose.1 h.choose.2 H
+    pcBadOf short S τ κ M dl R h.choose.1 h.choose.2 H
   else ∅
 
 theorem pcBad_eq (R : V3Batch F) {s : V3Stmt F} (hs : V3StmtWF s) (x : List (FSMessage F × ℕ))
     (H : Transcript F → F) :
-    pcBad short S τ dl R (v3Init s.1 s.2 ++ spongeRounds x) H = pcBadOf short S τ dl R s x H := by
+    pcBad short S τ κ M dl R (v3Init s.1 s.2 ++ spongeRounds x) H =
+      pcBadOf short S τ κ M dl R s x H := by
   have h : ∃ y : V3Stmt F × List (FSMessage F × ℕ),
       V3StmtWF y.1 ∧ v3Init s.1 s.2 ++ spongeRounds x = v3Init y.1.1 y.1.2 ++ spongeRounds y.2 :=
     ⟨(s, x), hs, rfl⟩
@@ -335,7 +483,7 @@ theorem pcBad_eq (R : V3Batch F) {s : V3Stmt F} (hs : V3StmtWF s) (x : List (FSM
 
 theorem card_pcBad_le {m : ℕ} (hm : ∀ x, (S.filter fun a => short a = x).card ≤ m)
     (R : V3Batch F) (q : Transcript F) (H : Transcript F → F) :
-    (S.filter (· ∈ pcBad short S τ dl R q H)).card ≤ m := by
+    (S.filter (· ∈ pcBad short S τ κ M dl R q H)).card ≤ m := by
   refine (card_filter_mem_le _ _).trans ?_
   unfold pcBad
   split
@@ -351,7 +499,7 @@ theorem card_pcBad_le {m : ℕ} (hm : ∀ x, (S.filter fun a => short a = x).car
 /-- The bad set reads the oracle only off the query's own state. -/
 theorem pcBadOf_congr (R : V3Batch F) (s : V3Stmt F) (x : List (FSMessage F × ℕ))
     {H H' : Transcript F → F} (hH : ∀ q', q' ≠ v3Init s.1 s.2 ++ spongeRounds x → H q' = H' q') :
-    pcBadOf short S τ dl R s x H = pcBadOf short S τ dl R s x H' := by
+    pcBadOf short S τ κ M dl R s x H = pcBadOf short S τ κ M dl R s x H' := by
   have hsplit : ∀ y, x.drop 6 = y → x = x.take 6 ++ y := fun y h => by
     rw [← h, List.take_append_drop]
   have hchal : 7 ≤ x.length →
@@ -408,18 +556,18 @@ theorem pcBadOf_congr (R : V3Batch F) (s : V3Stmt F) (x : List (FSMessage F × �
 
 theorem pcBad_congr (R : V3Batch F) (q : Transcript F) {H H' : Transcript F → F}
     (hH : ∀ q', q' ≠ q → H q' = H' q') :
-    pcBad short S τ dl R q H = pcBad short S τ dl R q H' := by
+    pcBad short S τ κ M dl R q H = pcBad short S τ κ M dl R q H' := by
   unfold pcBad
   split
   · next h =>
     obtain ⟨-, hq⟩ := h.choose_spec
-    exact pcBadOf_congr short S τ dl R _ _ fun q' hq' => hH q' (by rw [hq]; exact hq')
+    exact pcBadOf_congr short S τ κ M dl R _ _ fun q' hq' => hH q' (by rw [hq]; exact hq')
   · rfl
 
 /-- `pcBadOf` reads the represented batch only through what the six messages fix. -/
 theorem pcBadOf_absorbed {R R' : V3Batch F} (h : (R.absorbed 6).normal = (R'.absorbed 6).normal)
     (s : V3Stmt F) (x : List (FSMessage F × ℕ)) (H : Transcript F → F) :
-    pcBadOf short S τ dl R s x H = pcBadOf short S τ dl R' s x H := by
+    pcBadOf short S τ κ M dl R s x H = pcBadOf short S τ κ M dl R' s x H := by
   unfold pcBadOf V3Batch.pcView
   rw [h]
 
@@ -427,11 +575,11 @@ theorem mem_pcBadOf_xi {R : V3Batch F} {s : V3Stmt F} {ps : List (FSMessage F ×
     {m : FSMessage F} {H : Transcript F → F} {chal : V2Challenge → List F} (hps : ps.length = 6)
     (hchal : histChal (readRounds H (v3Init s.1 s.2) [] ps) = chal) {p i : ℕ} (hp : p < 3)
     (h0 : p = 0 → i = 0) (h1 : p = 1 → i < 2) {a : F} (ha : a ∈ S)
-    (hbad : short a ∈ (xiDraw (((R.pcView chal m).pcPoints chal []).getD p
-        ⟨0, [], 0⟩).discrepancies).bad (S.image short)
+    (hbad : short a ∈ (xiDraw (((((R.pcView chal m).repPoints chal []).getD p
+        ⟨0, [], (0, 0), 0⟩).opening M).discrepancies)).bad (S.image short)
       (((pcXis short H (v3Init s.1 s.2) ps m
-        (((R.pcView chal m).pcPoints chal []).map fun o => o.opened.length)).getD p []).take i)) :
-    a ∈ pcBadOf short S τ dl R s (ps ++ [(m, pcOffset p + i)]) H := by
+        (((R.pcView chal m).repPoints chal []).map fun o => o.terms.length)).getD p []).take i)) :
+    a ∈ pcBadOf short S τ κ M dl R s (ps ++ [(m, pcOffset p + i)]) H := by
   have ht : (ps ++ [(m, pcOffset p + i)]).take 6 = ps := List.take_left' hps
   have hd : (ps ++ [(m, pcOffset p + i)]).drop 6 = [(m, pcOffset p + i)] := List.drop_left' hps
   unfold pcBadOf
@@ -443,11 +591,13 @@ theorem mem_pcBadOf_xi {R : V3Batch F} {s : V3Stmt F} {ps : List (FSMessage F ×
 theorem mem_pcBadOf_r {R : V3Batch F} {s : V3Stmt F} {ps : List (FSMessage F × ℕ)}
     {m m' : FSMessage F} {H : Transcript F → F} {chal : V2Challenge → List F} (hps : ps.length = 6)
     (hchal : histChal (readRounds H (v3Init s.1 s.2) [] ps) = chal) {j : ℕ} {a : F} (ha : a ∈ S)
-    (hbad : short a ∈ (rDraw (defectsAt τ ((R.pcView chal m).pcPoints chal ((dl m').map C))
+    (hbad : short a ∈ (rDraw (scalarsAt M τ κ
+        ((R.pcView chal m).repPoints chal (decodeProofs (dl m')))
         (pcXis short H (v3Init s.1 s.2) ps m
-          (((R.pcView chal m).pcPoints chal ((dl m').map C)).map fun o => o.opened.length)))).bad
+          (((R.pcView chal m).repPoints chal (decodeProofs (dl m'))).map fun o =>
+            o.terms.length)))).bad
       (S.image short) ((pcRands short H (v3Init s.1 s.2) ps m m').take j)) :
-    a ∈ pcBadOf short S τ dl R s (ps ++ [(m, 0), (m', j)]) H := by
+    a ∈ pcBadOf short S τ κ M dl R s (ps ++ [(m, 0), (m', j)]) H := by
   have ht : (ps ++ [(m, 0), (m', j)]).take 6 = ps := List.take_left' hps
   have hd : (ps ++ [(m, 0), (m', j)]).drop 6 = [(m, 0), (m', j)] := List.drop_left' hps
   unfold pcBadOf
@@ -457,26 +607,6 @@ theorem mem_pcBadOf_r {R : V3Batch F} {s : V3Stmt F} {ps : List (FSMessage F × 
   exact mem_filter.2 ⟨ha, hbad⟩
 
 end Squeezes
-
-theorem eval_getD_map_C (τ : F) (qs : List F[X]) (j : ℕ) :
-    (((qs.map (eval τ)).map C).getD j 0).eval τ = (qs.getD j 0).eval τ := by
-  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD]
-  simp only [List.getElem?_map]
-  cases qs[j]? <;> simp
-
-/-- The defects at `τ` read the proofs only through their values at `τ`. -/
-theorem V3Batch.defectsAt_pcPoints_congr (P : V3Batch F) (chal : V2Challenge → List F) {τ : F}
-    {qs qs' : List F[X]} (h : ∀ j, (qs.getD j 0).eval τ = (qs'.getD j 0).eval τ)
-    (ξs : List (List F)) :
-    defectsAt τ (P.pcPoints chal qs) ξs = defectsAt τ (P.pcPoints chal qs') ξs := by
-  have h' : ∀ j, eval τ (qs[j]?.getD 0) = eval τ (qs'[j]?.getD 0) := fun j => by
-    simpa [List.getD_eq_getElem?_getD] using h j
-  rcases ξs with _ | ⟨a, _ | ⟨b, _ | ⟨c, rest⟩⟩⟩ <;>
-    simp [defectsAt, V3Batch.pcPoints, PointOpening.defect, h']
-
-theorem V3Batch.length_gOpenings (P : V3Batch F) : P.gOpenings.length = 3 * P.circuits.length := by
-  simp only [gOpenings, List.length_flatMap, List.length_cons, List.length_nil]
-  rw [List.map_const', List.sum_replicate, smul_eq_mul, mul_comm]
 
 theorem tableAns_mem {S : Finset F} {D : List (Transcript F)} {T : List F}
     (hT : T ∈ tapes S D.length) {q : Transcript F} (hq : q ∈ D) : tableAns D T q ∈ S := by
@@ -488,76 +618,86 @@ theorem tableAns_mem {S : Finset F} {D : List (Transcript F)} {T : List F}
 
 /-! ## The deployed prover and verifier -/
 
-/-- An algebraic V3 prover that also gives the polynomials behind its three KZG proofs. -/
+/-- An algebraic V3 prover that also gives its three KZG proofs against the
+representations. -/
 structure DeployedProver (F : Type*) [Field F] extends AlgebraicProver F where
-  proofs : QueryLog F → List F[X]
+  proofs : QueryLog F → List (KZGProofRep F)
 
 namespace DeployedProver
 
 variable (A : DeployedProver F) (cnt : V3Stmt F → V2Challenge → ℕ) (Q : ℕ) (short : F → F)
-  (τ : F) (pfMsg : List F → FSMessage F)
+  (τ κ : F) (pfMsg : List F → FSMessage F)
 
-/-- The proofs' message after `A`'s log : the proofs' values at `τ`, as their group
-elements give them, encoded by `pfMsg`. -/
-def proofsMsg (log : QueryLog F) : FSMessage F :=
-  pfMsg ((A.proofs log).map (eval τ))
+/-- The proofs' message after `A`'s log : each proof's witness, as its group element gives
+it, and its `random_v` (`absorb_into_sponge`), encoded by `pfMsg`. -/
+noncomputable def proofsMsg (log : QueryLog F) : FSMessage F :=
+  pfMsg ((A.proofs log).flatMap fun p => [repEval τ κ p.w, p.rv])
 
 /-- `batch_check`'s query points after `A`'s log, the challenges read off `H`. -/
-noncomputable def points (H : Transcript F → F) (log : QueryLog F) : List (PointOpening F) :=
-  ((A.batch log).withChallenges (A.spongeChal cnt H log)).pcPoints (A.spongeChal cnt H log)
+noncomputable def points (H : Transcript F → F) (log : QueryLog F) : List (RepPoint F) :=
+  ((A.batch log).withChallenges (A.spongeChal cnt H log)).repPoints (A.spongeChal cnt H log)
     (A.proofs log)
 
 /-- The points' combination challenges after `A`'s log, read off `H`. -/
 noncomputable def xis (H : Transcript F → F) (log : QueryLog F) : List (List F) :=
   pcXis short H (A.spongeInit log) (A.spongeShape cnt log) (A.batch log).evalMsg
-    ((A.points cnt H log).map fun o => o.opened.length)
+    ((A.points cnt H log).map fun o => o.terms.length)
 
 /-- The randomizers after `A`'s log, read off `H`. -/
-def rands (H : Transcript F → F) (log : QueryLog F) : List F :=
+noncomputable def rands (H : Transcript F → F) (log : QueryLog F) : List F :=
   1 :: pcRands short H (A.spongeInit log) (A.spongeShape cnt log) (A.batch log).evalMsg
-    (A.proofsMsg τ pfMsg log)
+    (A.proofsMsg τ κ pfMsg log)
 
 /-- The verifier's `batch_check` queries after `A`'s log : every element of the squeeze
 after the evaluations message, then the private sponge's three. -/
-def pcQueries (log : QueryLog F) : List (Transcript F) :=
+noncomputable def pcQueries (log : QueryLog F) : List (Transcript F) :=
   (List.range (3 * (A.batch log).circuits.length + 7)).map
       (xiState (A.spongeInit log) (A.spongeShape cnt log) (A.batch log).evalMsg) ++
     (List.range 3).map (rState (A.spongeInit log) (A.spongeShape cnt log) (A.batch log).evalMsg
-      (A.proofsMsg τ pfMsg log))
+      (A.proofsMsg τ κ pfMsg log))
 
 /-- `A`'s `Q` queries, then the verifier's `batch_check` queries. -/
-def pcNext (log : QueryLog F) : Transcript F :=
+noncomputable def pcNext (log : QueryLog F) : Transcript F :=
   if log.length < Q then A.next log
-  else (A.pcQueries cnt τ pfMsg (log.take Q)).getD (log.length - Q) []
+  else (A.pcQueries cnt τ κ pfMsg (log.take Q)).getD (log.length - Q) []
 
 /-- The bad set of a `batch_check` query after `log`, for the batch represented with it. -/
-noncomputable def pcRB (S : Finset F) (dl : FSMessage F → List F) (log : QueryLog F)
+noncomputable def pcRB (S : Finset F) (M : ℕ) (dl : FSMessage F → List F) (log : QueryLog F)
     (q : Transcript F) (H : Transcript F → F) : Finset F :=
-  pcBad short S τ dl (A.spongeRep Q log) q H
+  pcBad short S τ κ M dl (A.spongeRep Q log) q H
 
-/-- On the table `T`, `A`'s output after its `Q` queries passes the deployed verifier and
-the relation fails. -/
-def DeployedFools (D : List (Transcript F)) (S : Finset F) (T : List F) : Prop :=
+section Fools
+
+variable {G1 G2 GT : Type*} [AddCommGroup G1] [AddCommGroup G2] [AddCommGroup GT]
+  [Module F G1] [Module F G2] [Module F GT]
+
+/-- On the table `T`, `A`'s output after its `Q` queries passes the deployed verifier with
+the pairing `e` and the key `key`, and the relation fails. -/
+def DeployedFools (e : Pairing F G1 G2 GT) (key : BatchKey G1 G2) (D : List (Transcript F))
+    (S : Finset F) (T : List F) : Prop :=
   ((A.batch (tableRun A.next (tableAns D T) Q)).withChallenges
       (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))).DeployedAccepts S
       (A.out (tableRun A.next (tableAns D T) Q))
       (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
-      (A.stmt (tableRun A.next (tableAns D T) Q)).2 τ (A.proofs (tableRun A.next (tableAns D T) Q))
+      (A.stmt (tableRun A.next (tableAns D T) Q)).2 e key τ κ
+      (A.proofs (tableRun A.next (tableAns D T) Q))
       (A.xis cnt short (tableAns D T) (tableRun A.next (tableAns D T) Q))
-      (A.rands cnt short τ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q)) ∧
+      (A.rands cnt short τ κ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q)) ∧
     ¬((A.batch (tableRun A.next (tableAns D T) Q)).withChallenges
       (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))).Holds
       (A.out (tableRun A.next (tableAns D T) Q))
 
-/-- On the table `T`, a point's defect is a nonzero polynomial with root `τ`. -/
-def PCBreaks (D : List (Transcript F)) (T : List F) : Prop :=
-  PCBreak τ (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
+end Fools
+
+/-- On the table `T`, the SRS whose largest power is `M` is broken at the points. -/
+def PCBreaks (M : ℕ) (D : List (Transcript F)) (T : List F) : Prop :=
+  RepBreak M τ κ (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
     (A.xis cnt short (tableAns D T) (tableRun A.next (tableAns D T) Q))
 
-/-- A defect with root `τ` is a trapdoor break. -/
-theorem PCBreaks.trapdoorBreak {D : List (Transcript F)} {T : List F}
-    (h : A.PCBreaks cnt Q short τ D T) : ∃ br : TrapdoorBreak F, br.holds τ :=
-  Varuna.PCBreak.trapdoorBreak h
+/-- A break at the points is an SRS break. -/
+theorem PCBreaks.srsBreak {M : ℕ} {D : List (Transcript F)} {T : List F}
+    (h : A.PCBreaks cnt Q short τ κ M D T) : ∃ br : SRSBreak F, br.holds τ κ :=
+  RepBreak.srsBreak h
 
 theorem length_spongeShape (log : QueryLog F) : (A.spongeShape cnt log).length = 6 := by
   simp [OracleProver.spongeShape, v2Challenges]
@@ -577,25 +717,27 @@ theorem map_fst_spongeShape (log : QueryLog F) :
 
 /-- A lucky batch check puts the answer at one of the verifier's `batch_check` queries in
 the bad set of that query for the output batch. -/
-theorem exists_pcBadOf (S : Finset F) (dl : FSMessage F → List F)
+theorem exists_pcBadOf (S : Finset F) (M : ℕ) (dl : FSMessage F → List F)
     (hdl : ∀ ws, dl (pfMsg ws) = ws) (H : Transcript F → F) (log : QueryLog F)
-    (hS : ∀ q ∈ A.pcQueries cnt τ pfMsg log, H q ∈ S)
-    (hl : PCLucky τ (A.points cnt H log) (A.xis cnt short H log) (A.rands cnt short τ pfMsg H log)) :
+    (hS : ∀ q ∈ A.pcQueries cnt τ κ pfMsg log, H q ∈ S)
+    (hl : RepLucky M τ κ (A.points cnt H log) (A.xis cnt short H log)
+      (A.rands cnt short τ κ pfMsg H log)) :
     ∃ tail, A.spongeInit log ++ spongeRounds (A.spongeShape cnt log ++ tail) ∈
-        A.pcQueries cnt τ pfMsg log ∧
+        A.pcQueries cnt τ κ pfMsg log ∧
       H (A.spongeInit log ++ spongeRounds (A.spongeShape cnt log ++ tail)) ∈
-        pcBadOf short S τ dl (A.batch log) (A.stmt log) (A.spongeShape cnt log ++ tail) H := by
+        pcBadOf short S τ κ M dl (A.batch log) (A.stmt log)
+          (A.spongeShape cnt log ++ tail) H := by
   have hps := A.length_spongeShape cnt log
   have hchal := A.histChal_spongeShape cnt H log
   have hlen3 : (A.points cnt H log).length = 3 := rfl
   rcases hl with hr | ⟨p, hp, hp', hξ⟩
-  · set cs := defectsAt τ (A.points cnt H log) (A.xis cnt short H log)
+  · set cs := scalarsAt M τ κ (A.points cnt H log) (A.xis cnt short H log)
     have hcs : cs.length ≤ 3 := by
-      simp only [cs, defectsAt, List.length_zipWith, hlen3]
+      simp only [cs, scalarsAt, List.length_zipWith, hlen3]
       omega
     have hluck := rDraw_lucky hcs (by simp [pcRands]) hr
     have hS' : ∀ a ∈ pcRands short H (A.spongeInit log) (A.spongeShape cnt log)
-        (A.batch log).evalMsg (A.proofsMsg τ pfMsg log), a ∈ S.image short := by
+        (A.batch log).evalMsg (A.proofsMsg τ κ pfMsg log), a ∈ S.image short := by
       intro a ha
       obtain ⟨j, hj, rfl⟩ := List.mem_map.1 ha
       exact mem_image_of_mem short (hS _ (List.mem_append_right _
@@ -603,41 +745,43 @@ theorem exists_pcBadOf (S : Finset F) (dl : FSMessage F → List F)
     obtain ⟨j, hj, hbad⟩ := WeightDraw.exists_bad_of_lucky _ hluck hS'
     have hj2 : j < 2 := by simpa [pcRands] using hj
     have hmem : A.spongeInit log ++ spongeRounds (A.spongeShape cnt log ++
-        [((A.batch log).evalMsg, 0), (A.proofsMsg τ pfMsg log, j)]) ∈ A.pcQueries cnt τ pfMsg log :=
+        [((A.batch log).evalMsg, 0), (A.proofsMsg τ κ pfMsg log, j)]) ∈
+          A.pcQueries cnt τ κ pfMsg log :=
       List.mem_append_right _ (List.mem_map.2 ⟨j, by simp; omega, rfl⟩)
-    refine ⟨_, hmem, mem_pcBadOf_r short S τ dl hps hchal (hS _ hmem) ?_⟩
+    refine ⟨_, hmem, mem_pcBadOf_r short S τ κ M dl hps hchal (hS _ hmem) ?_⟩
     have hrj : (pcRands short H (A.spongeInit log) (A.spongeShape cnt log) (A.batch log).evalMsg
-        (A.proofsMsg τ pfMsg log))[j] = short (H (A.spongeInit log ++ spongeRounds
+        (A.proofsMsg τ κ pfMsg log))[j] = short (H (A.spongeInit log ++ spongeRounds
           (A.spongeShape cnt log ++
-            [((A.batch log).evalMsg, 0), (A.proofsMsg τ pfMsg log, j)]))) := by
+            [((A.batch log).evalMsg, 0), (A.proofsMsg τ κ pfMsg log, j)]))) := by
       simp [pcRands, rState]
-    rw [V3Batch.pcPoints_pcView,
-      show dl (A.proofsMsg τ pfMsg log) = (A.proofs log).map (eval τ) from hdl _,
-      V3Batch.defectsAt_pcPoints_congr _ _ (eval_getD_map_C τ (A.proofs log)),
-      V3Batch.map_opened_length_pcPoints _ _ _ (A.proofs log), ← hrj]
+    rw [V3Batch.repPoints_pcView,
+      show dl (A.proofsMsg τ κ pfMsg log) =
+        (A.proofs log).flatMap (fun p => [repEval τ κ p.w, p.rv]) from hdl _,
+      V3Batch.scalarsAt_repPoints_congr _ _ _ (getD_decodeProofs τ κ (A.proofs log)),
+      V3Batch.map_terms_length_repPoints _ _ _ (A.proofs log), ← hrj]
     exact hbad
   · set os := A.points cnt H log
     set ξs := A.xis cnt short H log
-    have hξp : ξs[p] = (List.range ((os.map fun o => o.opened.length).getD p 0)).map fun i =>
+    have hξp : ξs[p] = (List.range ((os.map fun o => o.terms.length).getD p 0)).map fun i =>
         short (H (xiState (A.spongeInit log) (A.spongeShape cnt log) (A.batch log).evalMsg
           (pcOffset p + i))) :=
       getElem_pcXis short _ _ _ _ _ hp'
-    have hlen : ξs[p].length = os[p].discrepancies.length := by
+    have hlen : ξs[p].length = (os[p].opening M).discrepancies.length := by
       rw [hξp]
-      simp [PointOpening.discrepancies, List.getElem?_eq_getElem hp]
+      simp [PointOpening.discrepancies, RepPoint.opening, List.getElem?_eq_getElem hp]
       rfl
-    have hrange : ∀ i < (os.map fun o => o.opened.length).getD p 0,
+    have hrange : ∀ i < (os.map fun o => o.terms.length).getD p 0,
         pcOffset p + i < 3 * (A.batch log).circuits.length + 7 := by
       intro i hi
       have hp3 : p < 3 := hp
       obtain rfl | rfl | rfl : p = 0 ∨ p = 1 ∨ p = 2 := by omega
-      · simp [os, points, V3Batch.pcPoints, pcOffset] at hi ⊢
+      · simp [os, points, V3Batch.repPoints, pcOffset] at hi ⊢
         omega
-      · simp [os, points, V3Batch.pcPoints, pcOffset] at hi ⊢
+      · simp [os, points, V3Batch.repPoints, pcOffset] at hi ⊢
         omega
-      · simp only [os, points, V3Batch.pcPoints, List.map_cons, List.map_nil, List.getD_cons_succ,
-          List.getD_cons_zero, List.length_append, V3Batch.length_gOpenings, List.length_cons,
-          List.length_nil] at hi
+      · simp only [os, points, V3Batch.repPoints, List.map_cons, List.map_nil,
+          List.getD_cons_succ, List.getD_cons_zero, List.length_append,
+          V3Batch.length_flatMap_gTerms, List.length_cons, List.length_nil] at hi
         simp only [pcOffset]
         have : ((A.batch log).withChallenges (A.spongeChal cnt H log)).circuits.length =
           (A.batch log).circuits.length := rfl
@@ -649,28 +793,28 @@ theorem exists_pcBadOf (S : Finset F) (dl : FSMessage F → List F)
       exact mem_image_of_mem short (hS _ (List.mem_append_left _
         (List.mem_map.2 ⟨pcOffset p + i, List.mem_range.2 (hrange i (by simpa using hi)), rfl⟩)))
     obtain ⟨i, hi, hbad⟩ := WeightDraw.exists_bad_of_lucky _ (xiDraw_lucky hlen hξ) hS'
-    have hi' : i < (os.map fun o => o.opened.length).getD p 0 := by
+    have hi' : i < (os.map fun o => o.terms.length).getD p 0 := by
       rw [hξp] at hi
       simpa using hi
     have hmem : A.spongeInit log ++ spongeRounds (A.spongeShape cnt log ++
-        [((A.batch log).evalMsg, pcOffset p + i)]) ∈ A.pcQueries cnt τ pfMsg log :=
+        [((A.batch log).evalMsg, pcOffset p + i)]) ∈ A.pcQueries cnt τ κ pfMsg log :=
       List.mem_append_left _ (List.mem_map.2 ⟨pcOffset p + i, List.mem_range.2 (hrange i hi'), rfl⟩)
     have hp3 : p < 3 := hp
     have h0 : p = 0 → i = 0 := by
       rintro rfl
-      simp [os, points, V3Batch.pcPoints] at hi'
+      simp [os, points, V3Batch.repPoints] at hi'
       omega
     have h1 : p = 1 → i < 2 := by
       rintro rfl
-      simpa [os, points, V3Batch.pcPoints] using hi'
-    refine ⟨_, hmem, mem_pcBadOf_xi short S τ dl hps hchal hp3 h0 h1 (hS _ hmem) ?_⟩
-    rw [V3Batch.pcPoints_pcView]
-    have hdisc : ((((A.batch log).withChallenges (A.spongeChal cnt H log)).pcPoints
-        (A.spongeChal cnt H log) []).getD p ⟨0, [], 0⟩).discrepancies =
-          os[p].discrepancies := by
+      simpa [os, points, V3Batch.repPoints] using hi'
+    refine ⟨_, hmem, mem_pcBadOf_xi short S τ κ M dl hps hchal hp3 h0 h1 (hS _ hmem) ?_⟩
+    rw [V3Batch.repPoints_pcView]
+    have hdisc : (((((A.batch log).withChallenges (A.spongeChal cnt H log)).repPoints
+        (A.spongeChal cnt H log) []).getD p ⟨0, [], (0, 0), 0⟩).opening M).discrepancies =
+          (os[p].opening M).discrepancies := by
       obtain rfl | rfl | rfl : p = 0 ∨ p = 1 ∨ p = 2 := by omega
       all_goals rfl
-    rw [hdisc, V3Batch.map_opened_length_pcPoints _ _ [] (A.proofs log),
+    rw [hdisc, V3Batch.map_terms_length_repPoints _ _ [] (A.proofs log),
       List.getD_eq_getElem _ _ (by rw [length_pcXis, List.length_map]; exact hp)]
     have hξi : ξs[p][i] = short (H (A.spongeInit log ++ spongeRounds (A.spongeShape cnt log ++
         [((A.batch log).evalMsg, pcOffset p + i)]))) :=
@@ -682,7 +826,8 @@ end DeployedProver
 
 namespace V3Batch
 
-variable {G1 : Type*} [AddCommGroup G1] [Module F G1]
+variable {G1 G2 GT : Type*} [AddCommGroup G1] [AddCommGroup G2] [AddCommGroup GT]
+  [Module F G1] [Module F G2] [Module F GT]
 
 /-- The hit `deployed_soundness` charges for the batch check. On a table where the batch
 check passes by luck and no represented batch clashes with the output batch, one of the
@@ -691,8 +836,8 @@ for the first time, and answered in its bad set. -/
 theorem pc_hit (S : Finset F) (short : F → F) (A : DeployedProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V' : ℕ)
     (hV' : ∀ log, 3 * (A.batch log).circuits.length + 10 ≤ V')
-    (D : List (Transcript F)) (g : G1) (hg : g ≠ 0) (κ τ : F) (pfMsg : List F → FSMessage F)
-    (dl : FSMessage F → List F) (hdl : ∀ ws, dl (pfMsg ws) = ws)
+    (D : List (Transcript F)) (g : G1) (hg : g ≠ 0) (κ τ : F) (M : ℕ)
+    (pfMsg : List F → FSMessage F) (dl : FSMessage F → List F) (hdl : ∀ ws, dl (pfMsg ws) = ws)
     (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
@@ -707,46 +852,46 @@ theorem pc_hit (S : Finset F) (short : F → F) (A : DeployedProver F)
       P.absorbed 0 = idx s → ps.map Prod.fst = msgs ps.length P →
       (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
     {T : List F} (hTt : T ∈ tapes S D.length)
-    (hD : ∀ q ∈ A.pcQueries cnt τ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
-    (hl : PCLucky τ (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
+    (hD : ∀ q ∈ A.pcQueries cnt τ κ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
+    (hl : RepLucky M τ κ (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
       (A.xis cnt short (tableAns D T) (tableRun A.next (tableAns D T) Q))
-      (A.rands cnt short τ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q)))
+      (A.rands cnt short τ κ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q)))
     (hnc : ¬A.SpongeClashes Q D τ κ T) :
-    ∃ i < Q + V', TableHit D (A.pcNext cnt Q τ pfMsg) (A.pcRB Q short τ S dl) T i := by
+    ∃ i < Q + V', TableHit D (A.pcNext cnt Q τ κ pfMsg) (A.pcRB Q short τ κ S M dl) T i := by
   unfold TableHit
   set H := tableAns D T
   set L := tableRun A.next H Q
-  obtain ⟨tail, hmem, hbad⟩ := A.exists_pcBadOf cnt short τ pfMsg S dl hdl H L
+  obtain ⟨tail, hmem, hbad⟩ := A.exists_pcBadOf cnt short τ κ pfMsg S M dl hdl H L
     (fun q hq => tableAns_mem hTt (hD q hq)) hl
   set ps := A.spongeShape cnt L
   set q := A.spongeInit L ++ spongeRounds (ps ++ tail)
   -- The verifier asks `q`.
-  have hnext : ∀ log : QueryLog F, log.length < Q → A.pcNext cnt Q τ pfMsg log = A.next log :=
+  have hnext : ∀ log : QueryLog F, log.length < Q → A.pcNext cnt Q τ κ pfMsg log = A.next log :=
     fun _ h => if_pos h
-  have hrunQ : tableRun (A.pcNext cnt Q τ pfMsg) H Q = L := tableRun_congr_next hnext H Q le_rfl
+  have hrunQ : tableRun (A.pcNext cnt Q τ κ pfMsg) H Q = L := tableRun_congr_next hnext H Q le_rfl
   obtain ⟨p, hp, hpq⟩ := List.getElem_of_mem hmem
   have hpV : p < V' := by
-    have hlen : (A.pcQueries cnt τ pfMsg L).length = 3 * (A.batch L).circuits.length + 10 := by
+    have hlen : (A.pcQueries cnt τ κ pfMsg L).length = 3 * (A.batch L).circuits.length + 10 := by
       simp only [DeployedProver.pcQueries, List.length_append, List.length_map, List.length_range]
     have := hV' L
     omega
   have hask : ∃ i, i < Q + V' ∧
-      A.pcNext cnt Q τ pfMsg (tableRun (A.pcNext cnt Q τ pfMsg) H i) = q := by
+      A.pcNext cnt Q τ κ pfMsg (tableRun (A.pcNext cnt Q τ κ pfMsg) H i) = q := by
     refine ⟨Q + p, by omega, ?_⟩
-    have hlen := length_tableRun (A.pcNext cnt Q τ pfMsg) H (Q + p)
-    have htake : (tableRun (A.pcNext cnt Q τ pfMsg) H (Q + p)).take Q = L := by
+    have hlen := length_tableRun (A.pcNext cnt Q τ κ pfMsg) H (Q + p)
+    have htake : (tableRun (A.pcNext cnt Q τ κ pfMsg) H (Q + p)).take Q = L := by
       rw [take_tableRun _ _ (by omega), hrunQ]
     rw [DeployedProver.pcNext, if_neg (by omega), htake, hlen, Nat.add_sub_cancel_left,
       List.getD_eq_getElem _ _ hp, hpq]
   obtain ⟨hi0, hq0⟩ := Nat.find_spec hask
   have hmin : ∀ i < Nat.find hask,
-      A.pcNext cnt Q τ pfMsg (tableRun (A.pcNext cnt Q τ pfMsg) H i) ≠ q :=
+      A.pcNext cnt Q τ κ pfMsg (tableRun (A.pcNext cnt Q τ κ pfMsg) H i) ≠ q :=
     fun i hi h => Nat.find_min hask hi ⟨by omega, h⟩
   refine ⟨Nat.find hask, hi0, by rw [hq0]; exact hD q hmem, fun i hi => by
     rw [hq0]; exact hmin i hi, ?_⟩
   rw [hq0]
   -- Its bad set is the output batch's.
-  set log0 := tableRun (A.pcNext cnt Q τ pfMsg) H (Nat.find hask)
+  set log0 := tableRun (A.pcNext cnt Q τ κ pfMsg) H (Nat.find hask)
   have hlog0 : log0.length = Nat.find hask := length_tableRun _ _ _
   have hP : ((A.spongeRep Q log0).absorbed 6).normal = ((A.batch L).absorbed 6).normal := by
     unfold AlgebraicProver.spongeRep
@@ -769,9 +914,9 @@ theorem pc_hit (S : Finset F) (short : F → F) (A : DeployedProver F)
       intro hcl
       exact hnc ⟨Nat.find hask, hlt, 6, by rw [← hrun0]; exact hcl⟩
     · rw [take_tableRun _ _ (by omega), hrunQ]
-  show H q ∈ pcBad short S τ dl (A.spongeRep Q log0)
+  show H q ∈ pcBad short S τ κ M dl (A.spongeRep Q log0)
     (v3Init (A.stmt L).1 (A.stmt L).2 ++ spongeRounds (ps ++ tail)) H
-  rw [pcBad_eq short S τ dl _ (hstmt L).2, pcBadOf_absorbed short S τ dl hP]
+  rw [pcBad_eq short S τ κ M dl _ (hstmt L).2, pcBadOf_absorbed short S τ κ M dl hP]
   exact hbad
 
 /-- Fiat–Shamir knowledge soundness of the V3 batch as snarkVM verifies it, counting form.
@@ -781,26 +926,29 @@ rounds the verifier absorbs the evaluations message. For each point it squeezes 
 short challenge per opened polynomial, then one more that it drops. A copy of the
 sponge, taken before those squeezes and fed the proofs' message, gives the randomizers
 (`sonic_pc/mod.rs:347-420`). `short` maps an answer to its short element, with at most
-`m` elements of `S` per short value. `A` also gives the polynomials behind its three KZG
-proofs, and `pfMsg` encodes their values at `τ` injectively. `D` holds all the
-verifier's queries, at most `V` for the six squeezes and `V'` for `batch_check`. Then at
-most `((Q + V) · b + (Q + V') · m) · | S | ^(n-1)` of the ` | S | ^n` tables, `n` the
-length of `D`, give an output the deployed verifier accepts while the relation fails,
-with no clash and no defect with root `τ`. A clash is an SRS break, with `κ` the discrete
-log of `gamma_g` (`AlgebraicProver.SpongeClashes.trapdoorBreak`), and a defect with root
-`τ` a trapdoor break (`DeployedProver.PCBreaks.trapdoorBreak`). -/
+`m` elements of `S` per short value. `A` also gives its three KZG proofs against the
+representations, and `pfMsg` encodes their witnesses and `random_v` injectively. The
+pairing check runs on `key`, well formed for the trapdoor `τ` and the discrete log `κ` of
+`gamma_g`, and `A`'s representations are over its SRS. `D` holds all the verifier's
+queries, at most `V` for the six squeezes and `V'` for `batch_check`. Then at most
+`((Q + V) · b + (Q + V') · m) · | S | ^(n-1)` of the ` | S | ^n` tables, `n` the length of
+`D`, give an output the deployed verifier accepts while the relation fails, with no clash
+and no break of the SRS at the points. Both are SRS breaks
+(`AlgebraicProver.SpongeClashes.trapdoorBreak`, `DeployedProver.PCBreaks.srsBreak`). -/
 theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F → F)
     (hm : ∀ x, (S.filter fun a => short a = x).card ≤ m) (A : DeployedProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V V' : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
-    (hV' : ∀ log, 3 * (A.batch log).circuits.length + 10 ≤ V') (D : List (Transcript F)) (τ : F)
-    (pfMsg : List F → FSMessage F) (hpf : Function.Injective pfMsg)
+    (hV' : ∀ log, 3 * (A.batch log).circuits.length + 10 ≤ V') (D : List (Transcript F))
+    (τ κ : F) (pfMsg : List F → FSMessage F) (hpf : Function.Injective pfMsg)
     (hD : ∀ T ∈ tapes S D.length, ∀ q ∈ elemQueries (A.spongeInit (tableRun A.next (tableAns D T) Q))
       [] (A.spongeShape cnt (tableRun A.next (tableAns D T) Q)) ++
-        A.pcQueries cnt τ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
-    (g : G1) (hg : g ≠ 0) (κ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
+        A.pcQueries cnt τ κ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
+    (e : Pairing F G1 G2 GT) (key : BatchKey G1 G2) (hwf : key.wellFormed τ κ)
+    (hgh : e.pair key.g key.h ≠ 0) (hsrs : ∀ log, (A.batch log).OverSRS key.maxDegree)
+    (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
+        (P.absorbed k).commitments key.g κ τ = (P'.absorbed k).commitments key.g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -811,10 +959,10 @@ theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F 
       P.absorbed 0 = idx s → ps.map Prod.fst = msgs ps.length P →
       (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
     (hdeg : ∀ log chal, ((A.batch log).withChallenges chal).ResidualsBounded chal b)
-    [DecidablePred fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-      ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T] :
-    ((tapes S D.length).filter fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-        ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T).card ≤
+    [DecidablePred fun T => A.DeployedFools cnt Q short τ κ pfMsg e key D S T ∧
+      ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ κ key.maxDegree D T] :
+    ((tapes S D.length).filter fun T => A.DeployedFools cnt Q short τ κ pfMsg e key D S T ∧
+        ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ κ key.maxDegree D T).card ≤
       ((Q + V) * b + (Q + V') * m) * S.card ^ (D.length - 1) := by
   classical
   set dl : FSMessage F → List F := Function.invFun pfMsg
@@ -828,9 +976,11 @@ theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F 
   have h1 := table_charge D S (A.spongeNext cnt Q) (A.spongeRB Q S b) b
     (fun _ q H => card_spongeBad_le _ _ (fun _ _ => card_repBad_le S b _ _) q H)
     (fun _ q _ _ hH => spongeBad_congr _ _ _ q hH) (Q + V)
-  have h2 := table_charge D S (A.pcNext cnt Q τ pfMsg) (A.pcRB Q short τ S dl) m
-    (fun _ q H => card_pcBad_le short S τ dl hm _ q H)
-    (fun _ q _ _ hH => pcBad_congr short S τ dl _ q hH) (Q + V')
+  have hg : key.g ≠ 0 := fun h0 => hgh (by rw [h0, e.pair_zero_left])
+  have h2 := table_charge D S (A.pcNext cnt Q τ κ pfMsg)
+    (A.pcRB Q short τ κ S key.maxDegree dl) m
+    (fun _ q H => card_pcBad_le short S τ κ key.maxDegree dl hm _ q H)
+    (fun _ q _ _ hH => pcBad_congr short S τ κ key.maxDegree dl _ q hH) (Q + V')
   refine (card_le_card fun T hT => ?_).trans
     ((card_union_le _ _).trans ((add_le_add h1 h2).trans_eq (by ring)))
   obtain ⟨hTt, ⟨hacc, hnot⟩, hnc, hpb⟩ := mem_filter.1 hT
@@ -840,16 +990,18 @@ theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F 
         (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))))
       (A.out (tableRun A.next (tableAns D T) Q))
       (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q)) = true
-  · exact mem_union_left _ (mem_filter.2 ⟨hTt, sponge_hit S hb A.toAlgebraicProver cnt Q V hV D g
-      hg κ τ msgs hmsgs idx hstmt hout hrep' hdeg (fun q hq => hDT q (List.mem_append_left _ hq))
-      hacc.msg hbr hnc⟩)
-  by_cases hl : PCLucky τ (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
+  · exact mem_union_left _ (mem_filter.2 ⟨hTt, sponge_hit S hb A.toAlgebraicProver cnt Q V hV D
+      key.g hg κ τ msgs hmsgs idx hstmt hout hrep' hdeg
+      (fun q hq => hDT q (List.mem_append_left _ hq)) hacc.msg hbr hnc⟩)
+  by_cases hl : RepLucky key.maxDegree τ κ
+      (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
       (A.xis cnt short (tableAns D T) (tableRun A.next (tableAns D T) Q))
-      (A.rands cnt short τ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q))
-  · exact mem_union_right _ (mem_filter.2 ⟨hTt, pc_hit S short A cnt Q V' hV' D g hg κ τ pfMsg dl
-      hdl msgs hmsgs idx hstmt hout hrep hTt (fun q hq => hDT q (List.mem_append_right _ hq)) hl
-      hnc⟩)
-  · exact absurd (holds_of_deployedAccepts hacc (Bool.eq_false_iff.mpr hbr) hl hpb) hnot
+      (A.rands cnt short τ κ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q))
+  · exact mem_union_right _ (mem_filter.2 ⟨hTt, pc_hit S short A cnt Q V' hV' D key.g hg κ τ
+      key.maxDegree pfMsg dl hdl msgs hmsgs idx hstmt hout hrep hTt
+      (fun q hq => hDT q (List.mem_append_right _ hq)) hl hnc⟩)
+  · exact absurd (holds_of_deployedAccepts hacc hwf hgh (hsrs _) (Bool.eq_false_iff.mpr hbr) hl
+      hpb) hnot
 
 /-- `deployed_soundness` with `b` computed from `DegreeBounds`, as in
 `sponge_soundness_concrete`. -/
@@ -857,15 +1009,17 @@ theorem deployed_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 �
     (short : F → F) (hm : ∀ x, (S.filter fun a => short a = x).card ≤ m)
     (A : DeployedProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V V' : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
-    (hV' : ∀ log, 3 * (A.batch log).circuits.length + 10 ≤ V') (D : List (Transcript F)) (τ : F)
-    (pfMsg : List F → FSMessage F) (hpf : Function.Injective pfMsg)
+    (hV' : ∀ log, 3 * (A.batch log).circuits.length + 10 ≤ V') (D : List (Transcript F))
+    (τ κ : F) (pfMsg : List F → FSMessage F) (hpf : Function.Injective pfMsg)
     (hD : ∀ T ∈ tapes S D.length, ∀ q ∈ elemQueries (A.spongeInit (tableRun A.next (tableAns D T) Q))
       [] (A.spongeShape cnt (tableRun A.next (tableAns D T) Q)) ++
-        A.pcQueries cnt τ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
-    (g : G1) (hg : g ≠ 0) (κ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
+        A.pcQueries cnt τ κ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
+    (e : Pairing F G1 G2 GT) (key : BatchKey G1 G2) (hwf : key.wellFormed τ κ)
+    (hgh : e.pair key.g key.h ≠ 0) (hsrs : ∀ log, (A.batch log).OverSRS key.maxDegree)
+    (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
+        (P.absorbed k).commitments key.g κ τ = (P'.absorbed k).commitments key.g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -876,13 +1030,14 @@ theorem deployed_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 �
       P.absorbed 0 = idx s → ps.map Prod.fst = msgs ps.length P →
       (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
     (hW : ∀ log, (A.batch log).Within d)
-    [DecidablePred fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-      ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T] :
-    ((tapes S D.length).filter fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-        ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T).card ≤
+    [DecidablePred fun T => A.DeployedFools cnt Q short τ κ pfMsg e key D S T ∧
+      ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ κ key.maxDegree D T] :
+    ((tapes S D.length).filter fun T => A.DeployedFools cnt Q short τ κ pfMsg e key D S T ∧
+        ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ κ key.maxDegree D T).card ≤
       ((Q + V) * d.b + (Q + V') * m) * S.card ^ (D.length - 1) :=
-  deployed_soundness S d.one_le_b short hm A cnt Q V V' hV hV' D τ pfMsg hpf hD g hg κ msgs hmsgs
-    idx hstmt hout hrep fun log chal => ((hW log).withChallenges chal).residualsBounded hX chal
+  deployed_soundness S d.one_le_b short hm A cnt Q V V' hV hV' D τ κ pfMsg hpf hD e key hwf hgh
+    hsrs msgs hmsgs idx hstmt hout hrep fun log chal =>
+      ((hW log).withChallenges chal).residualsBounded hX chal
 
 end V3Batch
 
