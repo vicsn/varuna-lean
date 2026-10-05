@@ -412,7 +412,11 @@ assert_axioms Varuna.V3Batch.oracle_soundness_concrete
 assert_axioms Varuna.memoRun_snd_eq
 assert_axioms Varuna.memoRun_take_prefix
 assert_axioms Varuna.fs_view_rounds_charge
-assert_axioms Varuna.BatchCircuit.list_eq_of_shape
+assert_axioms Varuna.shift_add_modByMonic_inj
+assert_axioms Varuna.SRSBreak.of_polys
+assert_axioms Varuna.TrapdoorBreak.srsBreak
+assert_axioms Varuna.BatchCircuit.eq_of_reps
+assert_axioms Varuna.circuitReps_eq
 assert_axioms Varuna.V3Batch.normal_eq_of
 assert_axioms Varuna.V3Batch.badAt_normal
 assert_axioms Varuna.Clash.trapdoorBreak

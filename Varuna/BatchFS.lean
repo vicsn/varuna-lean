@@ -160,6 +160,28 @@ noncomputable def BatchCircuit.upTo (k : ℕ) (c : BatchCircuit F) : BatchCircui
     vgC := 0
     insts := c.insts.map (BatchInstance.upTo k) }
 
+/-- A circuit's commitment data as the first `k` messages fix it : the `ŵ` blindings
+from the first-round message, the matrix `g`s' from the fourth-round message. -/
+noncomputable def CircuitExtra.upTo (k : ℕ) (x : CircuitExtra F) : CircuitExtra F :=
+  { wBlind := if 1 ≤ k then x.wBlind else []
+    gALow := if 5 ≤ k then x.gALow else 0
+    gBLow := if 5 ≤ k then x.gBLow else 0
+    gCLow := if 5 ≤ k then x.gCLow else 0
+    gABlind := if 5 ≤ k then x.gABlind else 0
+    gBBlind := if 5 ≤ k then x.gBBlind else 0
+    gCBlind := if 5 ≤ k then x.gCBlind else 0 }
+
+/-- The batch's commitment data as the first `k` messages fix it, each with its
+polynomial. -/
+noncomputable def BatchExtra.upTo (k : ℕ) (x : BatchExtra F) : BatchExtra F :=
+  { maskBlind := if 1 ≤ k then x.maskBlind else 0
+    h0Blind := if 2 ≤ k then x.h0Blind else 0
+    h1Blind := if 4 ≤ k then x.h1Blind else 0
+    g1Low := if 4 ≤ k then x.g1Low else 0
+    g1Blind := if 4 ≤ k then x.g1Blind else 0
+    h2Blind := if 6 ≤ k then x.h2Blind else 0
+    circuits := x.circuits.map (CircuitExtra.upTo k) }
+
 namespace BatchCircuit
 
 variable {k : ℕ} (c : BatchCircuit F) (x : BatchInstance F)
@@ -192,8 +214,9 @@ namespace V3Batch
 /-- The batch as the first `k` messages fix it, in snarkVM's absorb order : `ŵ` and
 the mask from the first-round message, `h₀` from the second, the prepare-third sums
 from the prepare-third message, `g₁, h₁` from the third, the matrix `g`s and sums
-from the fourth, `h₂` from the fifth. The index, the public inputs, and the
-challenges are kept; the opened values, which no message carries, are cleared. -/
+from the fourth, `h₂` from the fifth, each commitment's blinding and low part with its
+polynomial. The index, the public inputs, and the challenges are kept; the opened
+values, which no message carries, are cleared. -/
 noncomputable def upTo (k : ℕ) (P : V3Batch F) : V3Batch F :=
   { P with
     circuits := P.circuits.map (BatchCircuit.upTo k)
@@ -206,7 +229,8 @@ noncomputable def upTo (k : ℕ) (P : V3Batch F) : V3Batch F :=
     vMask := 0
     vH1 := 0
     vG1 := 0
-    vH2 := 0 }
+    vH2 := 0
+    ext := P.ext.upTo k }
 
 /-- The batch with its challenges read off the squeezes, as the verifier reads them. -/
 def withChallenges (P : V3Batch F) (chal : V2Challenge → List F) : V3Batch F :=

@@ -691,12 +691,12 @@ for the first time, and answered in its bad set. -/
 theorem pc_hit (S : Finset F) (short : F → F) (A : DeployedProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V' : ℕ)
     (hV' : ∀ log, 3 * (A.batch log).circuits.length + 10 ≤ V')
-    (D : List (Transcript F)) (g : G1) (hg : g ≠ 0) (τ : F) (pfMsg : List F → FSMessage F)
+    (D : List (Transcript F)) (g : G1) (hg : g ≠ 0) (κ τ : F) (pfMsg : List F → FSMessage F)
     (dl : FSMessage F → List F) (hdl : ∀ ws, dl (pfMsg ws) = ws)
     (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -711,7 +711,7 @@ theorem pc_hit (S : Finset F) (short : F → F) (A : DeployedProver F)
     (hl : PCLucky τ (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
       (A.xis cnt short (tableAns D T) (tableRun A.next (tableAns D T) Q))
       (A.rands cnt short τ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q)))
-    (hnc : ¬A.SpongeClashes Q D τ T) :
+    (hnc : ¬A.SpongeClashes Q D τ κ T) :
     ∃ i < Q + V', TableHit D (A.pcNext cnt Q τ pfMsg) (A.pcRB Q short τ S dl) T i := by
   unfold TableHit
   set H := tableAns D T
@@ -786,8 +786,9 @@ proofs, and `pfMsg` encodes their values at `τ` injectively. `D` holds all the
 verifier's queries, at most `V` for the six squeezes and `V'` for `batch_check`. Then at
 most `((Q + V) · b + (Q + V') · m) · | S | ^(n-1)` of the ` | S | ^n` tables, `n` the
 length of `D`, give an output the deployed verifier accepts while the relation fails,
-with no clash and no defect with root `τ`. Both are trapdoor breaks
-(`AlgebraicProver.SpongeClashes.trapdoorBreak`, `DeployedProver.PCBreaks.trapdoorBreak`). -/
+with no clash and no defect with root `τ`. A clash is an SRS break, with `κ` the discrete
+log of `gamma_g` (`AlgebraicProver.SpongeClashes.trapdoorBreak`), and a defect with root
+`τ` a trapdoor break (`DeployedProver.PCBreaks.trapdoorBreak`). -/
 theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F → F)
     (hm : ∀ x, (S.filter fun a => short a = x).card ≤ m) (A : DeployedProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V V' : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
@@ -796,10 +797,10 @@ theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F 
     (hD : ∀ T ∈ tapes S D.length, ∀ q ∈ elemQueries (A.spongeInit (tableRun A.next (tableAns D T) Q))
       [] (A.spongeShape cnt (tableRun A.next (tableAns D T) Q)) ++
         A.pcQueries cnt τ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
-    (g : G1) (hg : g ≠ 0) (msgs : ℕ → V3Batch F → List (FSMessage F))
+    (g : G1) (hg : g ≠ 0) (κ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -811,9 +812,9 @@ theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F 
       (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
     (hdeg : ∀ log chal, ((A.batch log).withChallenges chal).ResidualsBounded chal b)
     [DecidablePred fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-      ¬A.SpongeClashes Q D τ T ∧ ¬A.PCBreaks cnt Q short τ D T] :
+      ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T] :
     ((tapes S D.length).filter fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-        ¬A.SpongeClashes Q D τ T ∧ ¬A.PCBreaks cnt Q short τ D T).card ≤
+        ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T).card ≤
       ((Q + V) * b + (Q + V') * m) * S.card ^ (D.length - 1) := by
   classical
   set dl : FSMessage F → List F := Function.invFun pfMsg
@@ -840,12 +841,12 @@ theorem deployed_soundness (S : Finset F) {b m : ℕ} (hb : 1 ≤ b) (short : F 
       (A.out (tableRun A.next (tableAns D T) Q))
       (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q)) = true
   · exact mem_union_left _ (mem_filter.2 ⟨hTt, sponge_hit S hb A.toAlgebraicProver cnt Q V hV D g
-      hg τ msgs hmsgs idx hstmt hout hrep' hdeg (fun q hq => hDT q (List.mem_append_left _ hq))
+      hg κ τ msgs hmsgs idx hstmt hout hrep' hdeg (fun q hq => hDT q (List.mem_append_left _ hq))
       hacc.msg hbr hnc⟩)
   by_cases hl : PCLucky τ (A.points cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))
       (A.xis cnt short (tableAns D T) (tableRun A.next (tableAns D T) Q))
       (A.rands cnt short τ pfMsg (tableAns D T) (tableRun A.next (tableAns D T) Q))
-  · exact mem_union_right _ (mem_filter.2 ⟨hTt, pc_hit S short A cnt Q V' hV' D g hg τ pfMsg dl
+  · exact mem_union_right _ (mem_filter.2 ⟨hTt, pc_hit S short A cnt Q V' hV' D g hg κ τ pfMsg dl
       hdl msgs hmsgs idx hstmt hout hrep hTt (fun q hq => hDT q (List.mem_append_right _ hq)) hl
       hnc⟩)
   · exact absurd (holds_of_deployedAccepts hacc (Bool.eq_false_iff.mpr hbr) hl hpb) hnot
@@ -861,10 +862,10 @@ theorem deployed_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 �
     (hD : ∀ T ∈ tapes S D.length, ∀ q ∈ elemQueries (A.spongeInit (tableRun A.next (tableAns D T) Q))
       [] (A.spongeShape cnt (tableRun A.next (tableAns D T) Q)) ++
         A.pcQueries cnt τ pfMsg (tableRun A.next (tableAns D T) Q), q ∈ D)
-    (g : G1) (hg : g ≠ 0) (msgs : ℕ → V3Batch F → List (FSMessage F))
+    (g : G1) (hg : g ≠ 0) (κ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -876,11 +877,11 @@ theorem deployed_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 �
       (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
     (hW : ∀ log, (A.batch log).Within d)
     [DecidablePred fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-      ¬A.SpongeClashes Q D τ T ∧ ¬A.PCBreaks cnt Q short τ D T] :
+      ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T] :
     ((tapes S D.length).filter fun T => A.DeployedFools cnt Q short τ pfMsg D S T ∧
-        ¬A.SpongeClashes Q D τ T ∧ ¬A.PCBreaks cnt Q short τ D T).card ≤
+        ¬A.SpongeClashes Q D τ κ T ∧ ¬A.PCBreaks cnt Q short τ D T).card ≤
       ((Q + V) * d.b + (Q + V') * m) * S.card ^ (D.length - 1) :=
-  deployed_soundness S d.one_le_b short hm A cnt Q V V' hV hV' D τ pfMsg hpf hD g hg msgs hmsgs
+  deployed_soundness S d.one_le_b short hm A cnt Q V V' hV hV' D τ pfMsg hpf hD g hg κ msgs hmsgs
     idx hstmt hout hrep fun log chal => ((hW log).withChallenges chal).residualsBounded hX chal
 
 end V3Batch

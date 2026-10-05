@@ -124,6 +124,25 @@ structure TrapdoorBreak (F : Type*) where
 def TrapdoorBreak.holds (b : TrapdoorBreak F) (τ : F) : Prop :=
   toPoly b.coeffs ≠ 0 ∧ (toPoly b.coeffs).eval τ = 0
 
+/-- A nonzero `A(X) + Y B(X)` whose roots include `(τ, κ)`, with `κ` the discrete log of
+`gamma_g` : the break when group elements are represented over the powers of both `g`
+and `gamma_g`. `B = 0` is a trapdoor break. Root finding with `κ` chosen by the
+reduction recovers `τ` unless `A = −κ B`, and then the coefficients give `κ`. -/
+structure SRSBreak (F : Type*) where
+  /-- Coefficients of `A`, along the powers of `g`. -/
+  g : List F
+  /-- Coefficients of `B`, along the powers of `gamma_g`. -/
+  gamma : List F
+
+/-- The certificate an SRS break carries: not both parts zero, and `(τ, κ)` is a root. -/
+def SRSBreak.holds (b : SRSBreak F) (τ κ : F) : Prop :=
+  (toPoly b.g ≠ 0 ∨ toPoly b.gamma ≠ 0) ∧ (toPoly b.g).eval τ + κ * (toPoly b.gamma).eval τ = 0
+
+/-- A trapdoor break is an SRS break with no `gamma_g` part. -/
+theorem TrapdoorBreak.srsBreak {b : TrapdoorBreak F} {τ : F} (h : b.holds τ) (κ : F) :
+    (⟨b.coeffs, []⟩ : SRSBreak F).holds τ κ :=
+  ⟨Or.inl h.1, by simp [h.2]⟩
+
 /-- Inspect an opening of the representation `p` at `z` with claimed value
 `v` and witness representation `q` : a wrong claim is returned as break data. -/
 def inspectOpening [DecidableEq F] (p q : List F) (z v : F) : Option (TrapdoorBreak F) :=
@@ -259,6 +278,26 @@ theorem toPoly_coeffList (p : F[X]) : toPoly (coeffList p) = p := by
     rw [List.getElem?_eq_none (by rw [hlen]; exact hi')]
     simp
     exact (coeff_eq_zero_of_natDegree_lt (Nat.lt_of_succ_le hi')).symm
+
+/-- A pair of polynomials, not both zero, with `A(τ) + κ B(τ) = 0` is an SRS break. -/
+theorem SRSBreak.of_polys {A B : F[X]} {τ κ : F} (hne : A ≠ 0 ∨ B ≠ 0)
+    (hev : A.eval τ + κ * B.eval τ = 0) : ∃ br : SRSBreak F, br.holds τ κ :=
+  ⟨⟨coeffList A, coeffList B⟩, by simpa only [SRSBreak.holds, toPoly_coeffList] using ⟨hne, hev⟩⟩
+
+/-- A commitment shifted by `X^s` determines the polynomial above the shift and the part
+below it. -/
+theorem shift_add_modByMonic (s : Nat) (p r : F[X]) :
+    (X ^ s * p + r %ₘ X ^ s) /ₘ X ^ s = p ∧ (X ^ s * p + r %ₘ X ^ s) %ₘ X ^ s = r %ₘ X ^ s :=
+  div_modByMonic_unique p (r %ₘ X ^ s) (monic_X_pow s)
+    ⟨by ring, degree_modByMonic_lt _ (monic_X_pow s)⟩
+
+theorem shift_add_modByMonic_inj {s : Nat} {p p' r r' : F[X]}
+    (h : X ^ s * p + r %ₘ X ^ s = X ^ s * p' + r' %ₘ X ^ s) :
+    p = p' ∧ r %ₘ X ^ s = r' %ₘ X ^ s := by
+  have h1 := shift_add_modByMonic s p r
+  have h2 := shift_add_modByMonic s p' r'
+  rw [h] at h1
+  exact ⟨h1.1.symm.trans h2.1, h1.2.symm.trans h2.2⟩
 
 /-- Whether some coefficient above degree `d` is nonzero. -/
 def exceedsBound [DecidableEq F] (p : List F) (d : Nat) : Bool :=

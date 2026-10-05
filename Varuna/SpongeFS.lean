@@ -510,15 +510,15 @@ def spongeRep (log : QueryLog F) : V3Batch F :=
   if log.length < Q then A.rep log else A.batch (log.take Q)
 
 /-- On the table `T`, a batch `A` represents with one of its queries and its output
-batch have two different polynomials with the same value at `τ` among what the first
+batch have two different representations of the same element among what the first
 `k` messages fix. -/
-def SpongeClashes (D : List (Transcript F)) (τ : F) (T : List F) : Prop :=
-  ∃ m < Q, ∃ k, Clash τ ((A.rep (tableRun A.next (tableAns D T) m)).absorbed k).committed
+def SpongeClashes (D : List (Transcript F)) (τ κ : F) (T : List F) : Prop :=
+  ∃ m < Q, ∃ k, Clash τ κ ((A.rep (tableRun A.next (tableAns D T) m)).absorbed k).committed
     ((A.batch (tableRun A.next (tableAns D T) Q)).absorbed k).committed
 
-/-- A clash is a trapdoor break. -/
-theorem SpongeClashes.trapdoorBreak {D : List (Transcript F)} {τ : F} {T : List F}
-    (h : A.SpongeClashes Q D τ T) : ∃ br : TrapdoorBreak F, br.holds τ := by
+/-- A clash is an SRS break. -/
+theorem SpongeClashes.trapdoorBreak {D : List (Transcript F)} {τ κ : F} {T : List F}
+    (h : A.SpongeClashes Q D τ κ T) : ∃ br : SRSBreak F, br.holds τ κ := by
   obtain ⟨_, _, _, hc⟩ := h
   exact Varuna.Clash.trapdoorBreak hc
 
@@ -538,11 +538,11 @@ is in its bad set and no represented batch clashes with the output batch, one of
 first `Q + V` queries is in `D`, asked for the first time, and answered in its bad set. -/
 theorem sponge_hit (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
-    (D : List (Transcript F)) (g : G1) (hg : g ≠ 0) (τ : F)
+    (D : List (Transcript F)) (g : G1) (hg : g ≠ 0) (κ τ : F)
     (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -561,7 +561,7 @@ theorem sponge_hit (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicProver 
           (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q))))
         (A.out (tableRun A.next (tableAns D T) Q))
         (A.spongeChal cnt (tableAns D T) (tableRun A.next (tableAns D T) Q)) = true)
-    (hnc : ¬A.SpongeClashes Q D τ T) :
+    (hnc : ¬A.SpongeClashes Q D τ κ T) :
     ∃ i < Q + V, TableHit D (A.spongeNext cnt Q) (A.spongeRB Q S b) T i := by
   unfold TableHit
   set H := tableAns D T
@@ -647,17 +647,17 @@ representing them (`rep`), as in `algebraic_soundness`. The verifier squeezes
 `cnt s c` elements for each squeeze `c` of the statement `s`, at most `V` in all, each
 the table's answer at its sponge state. Then at most `(Q + V) · b · | S | ^(n-1)` of the
 ` | S | ^n` tables, `n` the length of `D`, give an output the verifier accepts while the
-relation fails and no represented batch clashes with the output batch; a clash is a trapdoor break
+relation fails and no represented batch clashes with the output batch; a clash is an SRS break
 (`AlgebraicProver.SpongeClashes.trapdoorBreak`). -/
 theorem sponge_soundness (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
     (D : List (Transcript F))
     (hD : ∀ T ∈ tapes S D.length, ∀ q ∈ elemQueries (A.spongeInit (tableRun A.next (tableAns D T) Q))
       [] (A.spongeShape cnt (tableRun A.next (tableAns D T) Q)), q ∈ D)
-    (g : G1) (hg : g ≠ 0) (τ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
+    (g : G1) (hg : g ≠ 0) (κ τ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -668,9 +668,9 @@ theorem sponge_soundness (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicP
       P.absorbed 0 = idx s → ps.map Prod.fst = msgs ps.length P →
       (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
     (hdeg : ∀ log chal, ((A.batch log).withChallenges chal).ResidualsBounded chal b)
-    [DecidablePred fun T => A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ T] :
+    [DecidablePred fun T => A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ κ T] :
     ((tapes S D.length).filter fun T =>
-        A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ T).card ≤
+        A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ κ T).card ≤
       (Q + V) * b * S.card ^ (D.length - 1) := by
   classical
   refine (card_le_card fun T hT => ?_).trans (table_charge D S (A.spongeNext cnt Q)
@@ -678,7 +678,7 @@ theorem sponge_soundness (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicP
     (fun _ q H => card_spongeBad_le _ _ (fun _ _ => card_repBad_le S b _ _) q H)
     (fun _ q _ _ hH => spongeBad_congr _ _ _ q hH) (Q + V))
   obtain ⟨hTt, ⟨hacc, hnot⟩, hnc⟩ := mem_filter.1 hT
-  refine mem_filter.2 ⟨hTt, sponge_hit S hb A cnt Q V hV D g hg τ msgs hmsgs idx hstmt hout hrep hdeg
+  refine mem_filter.2 ⟨hTt, sponge_hit S hb A cnt Q V hV D g hg κ τ msgs hmsgs idx hstmt hout hrep hdeg
     (hD T hTt) hacc.msg ?_ hnc⟩
   by_contra hne
   exact hnot (holds_of_accepts hacc (Bool.eq_false_iff.mpr hne))
@@ -690,10 +690,10 @@ theorem sponge_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 ≤ 
     (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V) (D : List (Transcript F))
     (hD : ∀ T ∈ tapes S D.length, ∀ q ∈ elemQueries (A.spongeInit (tableRun A.next (tableAns D T) Q))
       [] (A.spongeShape cnt (tableRun A.next (tableAns D T) Q)), q ∈ D)
-    (g : G1) (hg : g ≠ 0) (τ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
+    (g : G1) (hg : g ≠ 0) (κ τ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -704,11 +704,11 @@ theorem sponge_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 ≤ 
       P.absorbed 0 = idx s → ps.map Prod.fst = msgs ps.length P →
       (A.rep log).absorbed 0 = idx s ∧ ps.map Prod.fst = msgs ps.length (A.rep log))
     (hW : ∀ log, (A.batch log).Within d)
-    [DecidablePred fun T => A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ T] :
+    [DecidablePred fun T => A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ κ T] :
     ((tapes S D.length).filter fun T =>
-        A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ T).card ≤
+        A.SpongeFools cnt Q D S T ∧ ¬A.SpongeClashes Q D τ κ T).card ≤
       (Q + V) * d.b * S.card ^ (D.length - 1) :=
-  sponge_soundness S d.one_le_b A cnt Q V hV D hD g hg τ msgs hmsgs idx hstmt hout hrep
+  sponge_soundness S d.one_le_b A cnt Q V hV D hD g hg κ τ msgs hmsgs idx hstmt hout hrep
     fun log chal => ((hW log).withChallenges chal).residualsBounded hX chal
 
 end V3Batch

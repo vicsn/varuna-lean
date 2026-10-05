@@ -18,13 +18,18 @@ The bad set of a query is then read off that batch (`repBad`), a function of the
 tape entries before the query, which `card_hits_le` still charges
 (`fs_view_rounds_charge`).
 
-A batch is what its messages carry in the clear (`V3Batch.shape`) and its committed
-polynomials (`V3Batch.committed`). The two determine it up to the representation of
-`h₀` (`V3Batch.normal_eq_of`), which no bad set reads (`V3Batch.badAt_normal`). Equal
-messages give the same clear part and the same commitments `p(τ) · g`. So the batch
-represented with a query and the output batch, on the same messages, have the same
-bad set unless two different polynomials have the same value at `τ` (`Clash`). A
-clash is a trapdoor break (`Clash.trapdoorBreak`).
+A batch is what its messages carry in the clear (`V3Batch.shape`) and the
+representations of its commitments (`V3Batch.committed`). A commitment is represented
+over the SRS powers of `g` and of `gamma_g = κ g` : a pair `(a, b)` of polynomials, the
+element `(a(τ) + κ b(τ)) · g`. Along `g` it is the polynomial, shifted by `X^{M−d}` with
+a part below the shift when it has degree bound `d` (`g₁` and the `g_M`), and along
+`gamma_g` its blinding. The two determine the batch up to the representation of `h₀`
+and the low parts' multiples of the shift (`V3Batch.normal_eq_of`), which no bad set
+reads (`V3Batch.badAt_normal`). Equal messages give the same clear part and the same
+commitments. So the batch represented with a query and the output batch, on the same
+messages, have the same bad set unless two different representations give the same
+element (`Clash`). A clash is a nonzero `A(X) + Y B(X)` with root `(τ, κ)`
+(`Clash.trapdoorBreak`).
 
 `V3Batch.algebraic_soundness` : on the tapes with no clash, at most
 `(Q + V) · b · | S | ^{Q+V-1}` give a run on which the verifier accepts while the
@@ -122,24 +127,111 @@ theorem eq_of_shape {c c' : BatchCircuit F} (h : c.shape = c'.shape)
       rw [h, hA, hB, hC, hi]
     _ = c' := rfl
 
-theorem list_eq_of_shape : ∀ {cs cs' : List (BatchCircuit F)}, cs.map shape = cs'.map shape →
-    cs.flatMap committed = cs'.flatMap committed → cs = cs'
-  | [], [], _, _ => rfl
-  | [], _ :: _, h, _ => by simp at h
-  | _ :: _, [], h, _ => by simp at h
-  | c :: cs, c' :: cs', h, hp => by
-    simp only [List.map_cons, List.cons.injEq] at h
-    simp only [List.flatMap_cons] at hp
-    obtain ⟨h1, h2⟩ := List.append_inj hp (length_committed_of_shape h.1)
-    rw [eq_of_shape h.1 h1, list_eq_of_shape h.2 h2]
+end BatchCircuit
+
+/-- A polynomial committed with degree bound `n − 2` under an SRS whose largest power is
+`M` : shifted by `X^{M−(n−2)}`, with `l` below the shift (`sonic_pc/mod.rs:233-240`). -/
+noncomputable def shiftedRep (M n : ℕ) (p l : F[X]) : F[X] :=
+  X ^ (M - (n - 2)) * p + l %ₘ X ^ (M - (n - 2))
+
+theorem shiftedRep_inj {M n : ℕ} {p p' l l' : F[X]} (h : shiftedRep M n p l = shiftedRep M n p' l') :
+    p = p' ∧ l %ₘ X ^ (M - (n - 2)) = l' %ₘ X ^ (M - (n - 2)) :=
+  shift_add_modByMonic_inj h
+
+namespace CircuitExtra
+
+variable (M : ℕ) (c : BatchCircuit F) (x : CircuitExtra F)
+
+/-- One blinding per instance, `0` past the given list. -/
+noncomputable def wBlinds : List F[X] :=
+  (List.range c.insts.length).map (x.wBlind.getD · 0)
+
+/-- The commitment data with as many `ŵ` blindings as instances and the low parts reduced
+below their shifts. -/
+noncomputable def normal : CircuitExtra F :=
+  { wBlind := x.wBlinds c
+    gALow := x.gALow %ₘ X ^ (M - (c.KA.n - 2))
+    gBLow := x.gBLow %ₘ X ^ (M - (c.KB.n - 2))
+    gCLow := x.gCLow %ₘ X ^ (M - (c.KC.n - 2))
+    gABlind := x.gABlind
+    gBBlind := x.gBBlind
+    gCBlind := x.gCBlind }
+
+end CircuitExtra
+
+namespace BatchCircuit
+
+variable (M : ℕ) (c : BatchCircuit F) (x : CircuitExtra F)
+
+/-- The representations of the circuit's commitments : each instance's `ŵ` with its
+blinding, then each matrix `g`, with degree bound the size of `K_M` less 2
+(`fourth.rs:65-67`). -/
+noncomputable def reps : List (F[X] × F[X]) :=
+  (c.insts.map BatchInstance.w).zip (x.wBlinds c) ++
+    [(shiftedRep M c.KA.n c.gA x.gALow, x.gABlind), (shiftedRep M c.KB.n c.gB x.gBLow, x.gBBlind),
+      (shiftedRep M c.KC.n c.gC x.gCLow, x.gCBlind)]
+
+theorem length_reps : (c.reps M x).length = c.insts.length + 3 := by
+  simp [reps, CircuitExtra.wBlinds]
+
+theorem eq_of_reps {c c' : BatchCircuit F} {x x' : CircuitExtra F} (h : c.shape = c'.shape)
+    (hp : c.reps M x = c'.reps M x') : c = c' ∧ x.normal M c = x'.normal M c' := by
+  have hn : c.insts.length = c'.insts.length := by
+    simpa [shape] using congrArg (fun c => c.insts.length) h
+  have hlen : ((c.insts.map BatchInstance.w).zip (x.wBlinds c)).length =
+      ((c'.insts.map BatchInstance.w).zip (x'.wBlinds c')).length := by
+    simp [CircuitExtra.wBlinds, hn]
+  obtain ⟨hz, hg⟩ := List.append_inj hp hlen
+  have hu := congrArg List.unzip hz
+  rw [List.unzip_zip (by simp [CircuitExtra.wBlinds]),
+    List.unzip_zip (by simp [CircuitExtra.wBlinds])] at hu
+  obtain ⟨hw, hb⟩ := Prod.mk.inj hu
+  simp only [List.cons.injEq, Prod.mk.injEq, and_true] at hg
+  obtain ⟨⟨hA, hAb⟩, ⟨hB, hBb⟩, ⟨hC, hCb⟩⟩ := hg
+  have hK : c.KA = c'.KA ∧ c.KB = c'.KB ∧ c.KC = c'.KC :=
+    show c.shape.KA = c'.shape.KA ∧ c.shape.KB = c'.shape.KB ∧ c.shape.KC = c'.shape.KC by
+      rw [h]; exact ⟨rfl, rfl, rfl⟩
+  rw [hK.1] at hA
+  rw [hK.2.1] at hB
+  rw [hK.2.2] at hC
+  obtain ⟨hA, hAl⟩ := shiftedRep_inj hA
+  obtain ⟨hB, hBl⟩ := shiftedRep_inj hB
+  obtain ⟨hC, hCl⟩ := shiftedRep_inj hC
+  have hcc : c = c' := eq_of_shape h (by rw [committed, committed, hw, hA, hB, hC])
+  subst hcc
+  refine ⟨rfl, ?_⟩
+  simp only [CircuitExtra.normal, hb, hAl, hBl, hCl, hAb, hBb, hCb]
 
 end BatchCircuit
 
+/-- `cs`'s circuits and commitment data determine the circuits, and the data up to
+`normal`, from the circuits' clear parts and the representations of their commitments. -/
+theorem circuitReps_eq (M : ℕ) :
+    ∀ {cs cs' : List (BatchCircuit F × CircuitExtra F)},
+      cs.map (fun p => p.1.shape) = cs'.map (fun p => p.1.shape) →
+      cs.flatMap (fun p => p.1.reps M p.2) = cs'.flatMap (fun p => p.1.reps M p.2) →
+      cs.map Prod.fst = cs'.map Prod.fst ∧
+        cs.map (fun p => p.2.normal M p.1) = cs'.map fun p => p.2.normal M p.1
+  | [], [], _, _ => ⟨rfl, rfl⟩
+  | [], _ :: _, h, _ => by simp at h
+  | _ :: _, [], h, _ => by simp at h
+  | p :: cs, p' :: cs', h, hp => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    simp only [List.flatMap_cons] at hp
+    have hlen : (p.1.reps M p.2).length = (p'.1.reps M p'.2).length := by
+      rw [BatchCircuit.length_reps, BatchCircuit.length_reps]
+      simpa [BatchCircuit.shape] using congrArg (fun c => c.insts.length) h.1
+    obtain ⟨h1, h2⟩ := List.append_inj hp hlen
+    obtain ⟨e1, e2⟩ := BatchCircuit.eq_of_reps M h.1 h1
+    obtain ⟨e3, e4⟩ := circuitReps_eq M h.2 h2
+    simp only [List.map_cons]
+    exact ⟨by rw [e1, e3], by rw [e2, e4]⟩
+
 namespace V3Batch
 
-/-- The batch with every committed polynomial cleared : the index, the public
-inputs, the sums its messages carry in the clear, the challenges, and the opened
-values. -/
+/-- The batch with every committed polynomial and its commitment data cleared : the
+index, the public inputs, the sums its messages carry in the clear, the challenges, and
+the opened values. -/
 noncomputable def shape (P : V3Batch F) : V3Batch F :=
   { P with
     circuits := P.circuits.map BatchCircuit.shape
@@ -147,30 +239,69 @@ noncomputable def shape (P : V3Batch F) : V3Batch F :=
     h0rep := []
     h1 := 0
     g1 := 0
-    h2 := 0 }
+    h2 := 0
+    ext := {} }
 
-/-- The committed polynomials : the mask, `h₀`, `h₁`, `g₁`, `h₂`, then each circuit's. -/
-noncomputable def committed (P : V3Batch F) : List F[X] :=
-  P.mask :: toPoly P.h0rep :: P.h1 :: P.g1 :: P.h2 :: P.circuits.flatMap BatchCircuit.committed
+/-- Each circuit with its commitment data, the default past the given list. -/
+noncomputable def circuitsExt (P : V3Batch F) : List (BatchCircuit F × CircuitExtra F) :=
+  P.circuits.mapIdx fun i c => (c, P.ext.circuits.getD i {})
 
-/-- The batch with `h₀` represented by its coefficients. -/
+theorem map_fst_circuitsExt (P : V3Batch F) : P.circuitsExt.map Prod.fst = P.circuits :=
+  List.ext_getElem (by simp [circuitsExt]) fun i _ _ => by simp [circuitsExt]
+
+theorem map_shape_circuitsExt (P : V3Batch F) :
+    P.circuitsExt.map (fun p => p.1.shape) = P.circuits.map BatchCircuit.shape := by
+  rw [← map_fst_circuitsExt P, List.map_map]
+  rfl
+
+/-- The representations of the commitments : the mask, `h₀`, `h₁`, `g₁` with degree
+bound the size of `C` less 2 (`third.rs:60`), `h₂`, then each circuit's, each with its
+blinding. -/
+noncomputable def committed (P : V3Batch F) : List (F[X] × F[X]) :=
+  (P.mask, P.ext.maskBlind) :: (toPoly P.h0rep, P.ext.h0Blind) :: (P.h1, P.ext.h1Blind) ::
+    (shiftedRep P.srsMax P.Cd.n P.g1 P.ext.g1Low, P.ext.g1Blind) :: (P.h2, P.ext.h2Blind) ::
+      P.circuitsExt.flatMap fun p => p.1.reps P.srsMax p.2
+
+/-- The batch with `h₀` represented by its coefficients and the commitment data in
+normal form. -/
 noncomputable def normal (P : V3Batch F) : V3Batch F :=
-  { P with h0rep := coeffList (toPoly P.h0rep) }
+  { P with
+    h0rep := coeffList (toPoly P.h0rep)
+    ext := { P.ext with
+      g1Low := P.ext.g1Low %ₘ X ^ (P.srsMax - (P.Cd.n - 2))
+      circuits := P.circuitsExt.map fun p => p.2.normal P.srsMax p.1 } }
 
-/-- The clear part and the committed polynomials determine the batch, up to the
-representation of `h₀`. -/
+/-- The clear part and the representations of the commitments determine the batch, up
+to the representation of `h₀` and the normal form of the commitment data. -/
 theorem normal_eq_of {P P' : V3Batch F} (h : P.shape = P'.shape)
     (hp : P.committed = P'.committed) : P.normal = P'.normal := by
-  simp only [committed, List.cons.injEq] at hp
-  obtain ⟨hm, h0, h1, hg1, h2, hc⟩ := hp
-  have hcs : P.circuits = P'.circuits :=
-    BatchCircuit.list_eq_of_shape (congrArg V3Batch.circuits h) hc
+  simp only [committed, List.cons.injEq, Prod.mk.injEq] at hp
+  obtain ⟨⟨hm, hmb⟩, ⟨h0, h0b⟩, ⟨h1, h1b⟩, ⟨hg1, hg1b⟩, ⟨h2, h2b⟩, hc⟩ := hp
+  have hM : P.srsMax = P'.srsMax := show P.shape.srsMax = P'.shape.srsMax by rw [h]
+  have hCd : P.Cd = P'.Cd := show P.shape.Cd = P'.shape.Cd by rw [h]
+  rw [hM, hCd] at hg1
+  obtain ⟨hg1, hg1l⟩ := shiftedRep_inj hg1
+  rw [hM] at hc
+  obtain ⟨hcs, hce⟩ := circuitReps_eq P'.srsMax
+    (by rw [map_shape_circuitsExt, map_shape_circuitsExt]; exact congrArg V3Batch.circuits h) hc
+  rw [map_fst_circuitsExt, map_fst_circuitsExt] at hcs
   calc P.normal = { P.shape with
           circuits := P.circuits, mask := P.mask, h0rep := coeffList (toPoly P.h0rep),
-          h1 := P.h1, g1 := P.g1, h2 := P.h2 } := rfl
+          h1 := P.h1, g1 := P.g1, h2 := P.h2,
+          ext :=
+            { maskBlind := P.ext.maskBlind, h0Blind := P.ext.h0Blind, h1Blind := P.ext.h1Blind
+              g1Low := P.ext.g1Low %ₘ X ^ (P.srsMax - (P.Cd.n - 2))
+              g1Blind := P.ext.g1Blind, h2Blind := P.ext.h2Blind
+              circuits := P.circuitsExt.map fun p => p.2.normal P.srsMax p.1 } } := rfl
     _ = { P'.shape with
           circuits := P'.circuits, mask := P'.mask, h0rep := coeffList (toPoly P'.h0rep),
-          h1 := P'.h1, g1 := P'.g1, h2 := P'.h2 } := by rw [h, hcs, hm, h0, h1, hg1, h2]
+          h1 := P'.h1, g1 := P'.g1, h2 := P'.h2,
+          ext :=
+            { maskBlind := P'.ext.maskBlind, h0Blind := P'.ext.h0Blind, h1Blind := P'.ext.h1Blind
+              g1Low := P'.ext.g1Low %ₘ X ^ (P'.srsMax - (P'.Cd.n - 2))
+              g1Blind := P'.ext.g1Blind, h2Blind := P'.ext.h2Blind
+              circuits := P'.circuitsExt.map fun p => p.2.normal P'.srsMax p.1 } } := by
+      rw [h, hcs, hm, hmb, h0, h0b, h1, h1b, hg1, hg1b, h2, h2b, hM, hCd, hg1l, hce]
     _ = P'.normal := rfl
 
 theorem squeezeBad_normal (P : V3Batch F) (S : Finset F) (chal : V2Challenge → List F) :
@@ -180,7 +311,7 @@ theorem squeezeBad_normal (P : V3Batch F) (S : Finset F) (chal : V2Challenge →
   rw [h]
   rfl
 
-/-- No bad set reads the representation of `h₀`. -/
+/-- No bad set reads the representation of `h₀` or the commitment data. -/
 theorem badAt_normal (P : V3Batch F) (S : Finset F) (chal : V2Challenge → List F)
     (c : V2Challenge) (w : List F) : P.normal.badAt S chal c w = P.badAt S chal c w :=
   congrFun (congrFun (squeezeBad_normal (P.withChallenges chal) S chal) c) w
@@ -189,22 +320,32 @@ end V3Batch
 
 /-! ## Commitments and clashes -/
 
-/-- Two different polynomials at the same position of `ps` and `qs` with the same
-value at `τ`. -/
-def Clash (τ : F) (ps qs : List F[X]) : Prop :=
-  ∃ i, ∃ hp : i < ps.length, ∃ hq : i < qs.length, ps[i] ≠ qs[i] ∧ ps[i].eval τ = qs[i].eval τ
+/-- The scalar `a(τ) + κ b(τ)` of the element with representation `(a, b)` over the
+powers of `g` and of `gamma_g = κ g`. -/
+noncomputable def repEval (τ κ : F) (r : F[X] × F[X]) : F :=
+  r.1.eval τ + κ * r.2.eval τ
 
-/-- A clash is a trapdoor break : the difference is nonzero and vanishes at `τ`. -/
-theorem Clash.trapdoorBreak {τ : F} {ps qs : List F[X]} (h : Clash τ ps qs) :
-    ∃ br : TrapdoorBreak F, br.holds τ := by
+/-- Two different representations at the same position of `ps` and `qs` of the same
+element. -/
+def Clash (τ κ : F) (ps qs : List (F[X] × F[X])) : Prop :=
+  ∃ i, ∃ hp : i < ps.length, ∃ hq : i < qs.length,
+    ps[i] ≠ qs[i] ∧ repEval τ κ ps[i] = repEval τ κ qs[i]
+
+/-- A clash is an SRS break : the difference is nonzero and vanishes at `(τ, κ)`. -/
+theorem Clash.trapdoorBreak {τ κ : F} {ps qs : List (F[X] × F[X])} (h : Clash τ κ ps qs) :
+    ∃ br : SRSBreak F, br.holds τ κ := by
   obtain ⟨i, hp, hq, hne, hev⟩ := h
-  refine ⟨⟨coeffList (ps[i] - qs[i])⟩, ?_, ?_⟩
-  · rw [toPoly_coeffList]
-    exact sub_ne_zero.mpr hne
-  · rw [toPoly_coeffList, eval_sub, hev, sub_self]
+  refine SRSBreak.of_polys (A := ps[i].1 - qs[i].1) (B := ps[i].2 - qs[i].2) ?_ ?_
+  · by_contra h0
+    push Not at h0
+    exact hne (Prod.ext (sub_eq_zero.mp h0.1) (sub_eq_zero.mp h0.2))
+  · simp only [repEval] at hev
+    simp only [eval_sub]
+    linear_combination hev
 
-theorem eq_of_not_clash {τ : F} {ps qs : List F[X]} (h : ps.map (eval τ) = qs.map (eval τ))
-    (hnc : ¬Clash τ ps qs) : ps = qs := by
+theorem eq_of_not_clash {τ κ : F} {ps qs : List (F[X] × F[X])}
+    (h : ps.map (repEval τ κ) = qs.map (repEval τ κ)) (hnc : ¬Clash τ κ ps qs) :
+    ps = qs := by
   have hlen : ps.length = qs.length := by simpa using congrArg List.length h
   refine List.ext_getElem hlen fun i hp hq => ?_
   by_contra hne
@@ -214,15 +355,15 @@ theorem eq_of_not_clash {τ : F} {ps qs : List F[X]} (h : ps.map (eval τ) = qs.
 
 variable {G1 : Type*} [AddCommGroup G1] [Module F G1]
 
-/-- The commitments `p(τ) · g` of the batch's committed polynomials. -/
-noncomputable def V3Batch.commitments (g : G1) (τ : F) (P : V3Batch F) : List G1 :=
-  P.committed.map fun p => p.eval τ • g
+/-- The commitments `(a(τ) + κ b(τ)) · g` the batch's messages carry, with `gamma_g = κ g`. -/
+noncomputable def V3Batch.commitments (g : G1) (κ τ : F) (P : V3Batch F) : List G1 :=
+  P.committed.map fun r => repEval τ κ r • g
 
-theorem V3Batch.map_eval_eq_of_commitments {g : G1} (hg : g ≠ 0) {τ : F} {P P' : V3Batch F}
-    (h : P.commitments g τ = P'.commitments g τ) :
-    P.committed.map (eval τ) = P'.committed.map (eval τ) := by
+theorem V3Batch.map_eval_eq_of_commitments {g : G1} (hg : g ≠ 0) {κ τ : F} {P P' : V3Batch F}
+    (h : P.commitments g κ τ = P'.commitments g κ τ) :
+    P.committed.map (repEval τ κ) = P'.committed.map (repEval τ κ) := by
   have hmap : ∀ Q : V3Batch F,
-      Q.commitments g τ = (Q.committed.map (eval τ)).map fun x => x • g := fun Q => by
+      Q.commitments g κ τ = (Q.committed.map (repEval τ κ)).map fun x => x • g := fun Q => by
     simp [V3Batch.commitments, Function.comp_def]
   rw [hmap, hmap] at h
   exact List.map_injective_iff.mpr (smul_left_injective F hg) h
@@ -288,15 +429,15 @@ noncomputable def repAt (v : List F) : V3Batch F :=
   else A.batch ((memoRun (withVerifier A.next Q (A.verifier cnt)) (Q + V) [] v).1.take Q)
 
 /-- On `tape`, a batch `A` represents with one of its queries and its output batch
-have two different polynomials with the same value at `τ` among what the first `k`
+have two different representations of the same element among what the first `k`
 messages fix. -/
-def Clashes (τ : F) (tape : List F) : Prop :=
-  ∃ m < Q, ∃ k, Clash τ ((A.rep ((A.run cnt Q V tape).take m)).absorbed k).committed
+def Clashes (τ κ : F) (tape : List F) : Prop :=
+  ∃ m < Q, ∃ k, Clash τ κ ((A.rep ((A.run cnt Q V tape).take m)).absorbed k).committed
     ((A.batch (A.view cnt Q V tape)).absorbed k).committed
 
-/-- A clash is a trapdoor break. -/
-theorem Clashes.trapdoorBreak {τ : F} {tape : List F} (h : A.Clashes cnt Q V τ tape) :
-    ∃ br : TrapdoorBreak F, br.holds τ := by
+/-- A clash is an SRS break. -/
+theorem Clashes.trapdoorBreak {τ κ : F} {tape : List F} (h : A.Clashes cnt Q V τ κ tape) :
+    ∃ br : SRSBreak F, br.holds τ κ := by
   obtain ⟨_, _, _, hc⟩ := h
   exact Varuna.Clash.trapdoorBreak hc
 
@@ -310,18 +451,18 @@ a random oracle with memory, counting form.
 The prover `A` makes `Q` queries, and with each one whose messages encode some batch
 it gives a batch representing them (`rep`). The first `k` messages of a batch are
 `msgs k`; given the index, they determine what the first `k` messages fix in the
-clear and the commitments `p(τ) · g` (the encoding floor). The output batch has the
+clear and the commitments, with `gamma_g = κ g` (the encoding floor). The output batch has the
 statement's index `idx` and the output's messages. The verifier recomputes the
 challenges with at most `V` queries. Then at most `(Q + V) · b · | S | ^{Q+V-1}` of the
 ` | S | ^{Q+V}` tapes give a run on which the verifier accepts while the relation
-fails and no represented batch clashes with the output batch; a clash is a trapdoor
-break (`AlgebraicProver.Clashes.trapdoorBreak`). -/
+fails and no represented batch clashes with the output batch; a clash is an SRS break
+(`AlgebraicProver.Clashes.trapdoorBreak`). -/
 theorem algebraic_soundness (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : AlgebraicProver F)
     (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ) (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V)
-    (g : G1) (hg : g ≠ 0) (τ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
+    (g : G1) (hg : g ≠ 0) (κ τ : F) (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -332,16 +473,16 @@ theorem algebraic_soundness (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : Algebra
       P.absorbed 0 = idx s → hist.map Prod.fst = msgs hist.length P →
       (A.rep log).absorbed 0 = idx s ∧ hist.map Prod.fst = msgs hist.length (A.rep log))
     (hdeg : ∀ log chal, ((A.batch log).withChallenges chal).ResidualsBounded chal b)
-    [DecidablePred fun tape => A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ tape] :
+    [DecidablePred fun tape => A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ κ tape] :
     ((tapes S (Q + V)).filter fun tape =>
-        A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ tape).card ≤
+        A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ κ tape).card ≤
       (Q + V) * b * S.card ^ (Q + V - 1) := by
   refine fs_view_rounds_charge (fun s => v3Init s.1 s.2) V3StmtWF
     (fun _ _ _ _ hs hs' hr hr' h => v3Init_rounds_inj hs hs' hr hr' h) S
     (memoAdversary (withVerifier A.next Q (A.verifier cnt)) (Q + V))
     (fun v _ hist => repBad S b (A.repAt cnt Q V v) hist) b
     (fun v _ hist => card_repBad_le S b _ hist) (Q + V)
-    (fun tape => A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ tape)
+    (fun tape => A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ κ tape)
     fun tape htape ⟨hfool, hnc⟩ => ?_
   obtain ⟨hacc, hnot⟩ := hfool
   have hlen : (A.run cnt Q V tape).length = Q + V :=
@@ -414,11 +555,11 @@ theorem algebraic_soundness (S : Finset F) {b : ℕ} (hb : 1 ≤ b) (A : Algebra
 `adaptive_soundness_concrete`. -/
 theorem algebraic_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 ≤ d.X)
     (A : AlgebraicProver F) (cnt : V3Stmt F → V2Challenge → ℕ) (Q V : ℕ)
-    (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V) (g : G1) (hg : g ≠ 0) (τ : F)
+    (hV : ∀ s, (v2Challenges.map (cnt s)).sum ≤ V) (g : G1) (hg : g ≠ 0) (κ τ : F)
     (msgs : ℕ → V3Batch F → List (FSMessage F))
     (hmsgs : ∀ k (P P' : V3Batch F), P.absorbed 0 = P'.absorbed 0 → msgs k P = msgs k P' →
       (P.absorbed k).shape = (P'.absorbed k).shape ∧
-        (P.absorbed k).commitments g τ = (P'.absorbed k).commitments g τ)
+        (P.absorbed k).commitments g κ τ = (P'.absorbed k).commitments g κ τ)
     (idx : V3Stmt F → V3Batch F)
     (hstmt : ∀ log,
       (A.out log).init = v3Init (A.stmt log).1 (A.stmt log).2 ∧ V3StmtWF (A.stmt log))
@@ -429,11 +570,11 @@ theorem algebraic_soundness_concrete (S : Finset F) (d : DegreeBounds) (hX : 1 �
       P.absorbed 0 = idx s → hist.map Prod.fst = msgs hist.length P →
       (A.rep log).absorbed 0 = idx s ∧ hist.map Prod.fst = msgs hist.length (A.rep log))
     (hW : ∀ log, (A.batch log).Within d)
-    [DecidablePred fun tape => A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ tape] :
+    [DecidablePred fun tape => A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ κ tape] :
     ((tapes S (Q + V)).filter fun tape =>
-        A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ tape).card ≤
+        A.Fools cnt Q V S tape ∧ ¬A.Clashes cnt Q V τ κ tape).card ≤
       (Q + V) * d.b * S.card ^ (Q + V - 1) :=
-  algebraic_soundness S d.one_le_b A cnt Q V hV g hg τ msgs hmsgs idx hstmt hout hrep
+  algebraic_soundness S d.one_le_b A cnt Q V hV g hg κ τ msgs hmsgs idx hstmt hout hrep
     fun log chal => ((hW log).withChallenges chal).residualsBounded hX chal
 
 end V3Batch

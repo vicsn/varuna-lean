@@ -176,6 +176,44 @@ theorem sum_linPoly {c : BatchCircuit F} (hA : c.A.Bounded c.R c.Cd)
 
 end BatchCircuit
 
+/-- What a circuit's commitments carry besides its polynomials : each instance's `ŵ`
+blinding (its part along the powers of `gamma_g`), and for each degree-bounded `g_M` the
+part of its commitment below the shift, and its blinding. -/
+structure CircuitExtra (F : Type*) [Field F] where
+  /-- Each instance's `ŵ` blinding. -/
+  wBlind : List F[X] := []
+  /-- `g_A`'s commitment below the shift. -/
+  gALow : F[X] := 0
+  /-- `g_B`'s commitment below the shift. -/
+  gBLow : F[X] := 0
+  /-- `g_C`'s commitment below the shift. -/
+  gCLow : F[X] := 0
+  /-- `g_A`'s blinding. -/
+  gABlind : F[X] := 0
+  /-- `g_B`'s blinding. -/
+  gBBlind : F[X] := 0
+  /-- `g_C`'s blinding. -/
+  gCBlind : F[X] := 0
+
+/-- What the batch's commitments carry besides its polynomials : the blindings of the
+mask, `h₀`, `h₁`, `g₁` and `h₂`, the part of `g₁`'s commitment below the shift, and each
+circuit's. -/
+structure BatchExtra (F : Type*) [Field F] where
+  /-- The mask's blinding. -/
+  maskBlind : F[X] := 0
+  /-- `h₀`'s blinding. -/
+  h0Blind : F[X] := 0
+  /-- `h₁`'s blinding. -/
+  h1Blind : F[X] := 0
+  /-- `g₁`'s commitment below the shift. -/
+  g1Low : F[X] := 0
+  /-- `g₁`'s blinding. -/
+  g1Blind : F[X] := 0
+  /-- `h₂`'s blinding. -/
+  h2Blind : F[X] := 0
+  /-- Each circuit's, in order. -/
+  circuits : List (CircuitExtra F) := []
+
 /-- A V3 batch proof as algebraic / post-decoding data. -/
 structure V3Batch (F : Type*) [Field F] where
   /-- The circuits, in order. -/
@@ -220,6 +258,11 @@ structure V3Batch (F : Type*) [Field F] where
   vG1 : F
   /-- Opened `h₂(γ)`. -/
   vH2 : F
+  /-- The SRS's largest power `M` : a commitment with degree bound `d` is shifted by
+  `X^{M−d}`. -/
+  srsMax : ℕ := 0
+  /-- What the commitments carry besides the polynomials. -/
+  ext : BatchExtra F := {}
 
 namespace V3Batch
 
